@@ -1,0 +1,3 @@
+#!/bin/bash
+wget https://coredump.ws/files/cell.db.gz
+zcat cell.db.gz > cell.db
