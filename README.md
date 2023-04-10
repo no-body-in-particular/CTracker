@@ -3,7 +3,10 @@
  
  Protocol/device manuals are included - as well as the c-based server ( device_server folder ).
  The server can be installed by running "make && make install" in the device_server folder. Then the application should be run under the webserver user, with for instance "nohup su -c jimitrack hiawatha" for the user hiawatha.
- The website that shows the data is contained in the var folder, there is also a /var/gps directory this contains all the databases necessary to run the webserver. This includes a mostly complete database of worldwide LBS stations for quick lookup ( nanoseconds ) .
+ The /var/gps folder has a script to fetch the cell phone tower database - since GitHub isn't too great with large files ( it's 500mb ).
+ You don't *need* to run this for the server to work, however it's a really nice speedup to have.
+ 
+ The website that shows the data is contained in the /var/www folder. Both /var/www and /var/gps should be chown'd to your webserver's user.
  
  A default google API key is included for your (ab)use - and there are some sensible defaults set in "config.h" for file sizes on the device server - you should check yourself if these will work for you. 
 
