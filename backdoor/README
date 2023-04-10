@@ -1,0 +1,2 @@
+This is a simple executable you can drop on any device's firmware, and as long as they have a WiFi card you can use it to determine the device's location. Use wisely to for instance track an android phone.
+This one uses the BASIC protocol to send basic information an an android phone back to the tracking server.
