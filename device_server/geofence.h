@@ -9,8 +9,7 @@
 
 #include "connection.h"
 void read_geofence(connection * conn) ;
-void move_to(connection * conn, bool alarms, double lat, double lon, double speed);
-
+void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon);
 
 
 #endif // GEOFENCE_H_INCLUDED

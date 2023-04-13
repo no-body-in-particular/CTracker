@@ -34,8 +34,14 @@ function utcTime(timeString) {
     dt.setTime(dt.getTime() + (tzOffset * 60000));
     let totalMinutes = (parseInt(hour, 10) * 60) + parseInt(minute, 10) + tzOffset;
     let ret = timePad(dt.getHours()) + ':' + timePad(dt.getMinutes());
-    return ret;
+    let dayLT=dt.getDay()<new Date().getDay();
+    let dayGT=dt.getDay()>new Date().getDay();
+    let offset=dayLT?-1:0;
+    offset=dayGT?1:dayLT;
+ 
+    return [offset,ret];
 }
+
 
 function localTime(timeString) {
     let [hour, minute] = timeString.split(':');
@@ -45,8 +51,12 @@ function localTime(timeString) {
     dt.setMinutes(minute);
     dt.setSeconds(0);
     dt.setTime(dt.getTime() - (tzOffset * 60000));
-
-    return timePad(dt.getHours()) + ':' + timePad(dt.getMinutes());
+    let dayLT=dt.getDay()<new Date().getDay();
+    let dayGT=dt.getDay()>new Date().getDay();
+    let offset=dayLT?-1:0;
+    offset=dayGT?1:dayLT;
+ 
+    return [offset,timePad(dt.getHours()) + ':' + timePad(dt.getMinutes())];
 }
 
 function deg2rad(deg) {

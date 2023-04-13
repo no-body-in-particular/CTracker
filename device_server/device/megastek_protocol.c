@@ -122,7 +122,7 @@ void process_message(connection * conn, char * string, size_t length) {
     if (battery_level < 20 && (( time(0) - conn->since_battalm) > 600)) {
         conn->since_battalm = time(0);
         conn->WARNING_FUNCTION(conn, "low battery");
-        log_event(conn, conn->current_lat, conn->current_lon, 0, "low battery");
+        log_event(conn,  "low battery");
     }
 
     uint8_t year = parse_int( dtstr + 4, 2);
@@ -152,7 +152,7 @@ void process_message(connection * conn, char * string, size_t length) {
                 db_entry.network_buffer[i].mac_addr[5] = values[5];
             }
 
-            db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count, conn->since_last_position, conn->current_lat, conn->current_lon);
+            db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count);
 
             if (db_entry.result.valid) {
                 position_type = 2;
@@ -171,57 +171,12 @@ void process_message(connection * conn, char * string, size_t length) {
         }
     }
 
-    if (strcmp(data_buffers[34], "Timer") == 0) {
-        move_to(conn, (time(0) - dt) < 30, lat, lon, spd);
-        gpsprintf(conn,
-                  "20%02u-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%u,%u,%u,%s,%s\n",
-                  year,
-                  month,
-                  day,
-                  hour,
-                  min,
-                  sec,
-                  lat,
-                  lon,
-                  (int)spd,
-                  position_type,
-                  num_sats,
-                  data_buffers[32],
-                  data_buffers[16]);
-        statsprintf(conn,
-                    "20%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                    year,
-                    month,
-                    day,
-                    hour,
-                    min,
-                    sec,
-                    "speed",
-                    spd);
-        statsprintf(conn,
-                    "20%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                    year,
-                    month,
-                    day,
-                    hour,
-                    min,
-                    sec,
-                    "gps_sats",
-                    num_sats);
 
+    if (strcmp(data_buffers[34], "Timer") == 0) {
+        move_to(conn, dt,position_type, lat, lon);
+                write_sat_count(conn, position_type, num_sats);
     } else {
-        eventprintf(conn,
-                    "20%02u-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%u,%s\n",
-                    year,
-                    month,
-                    day,
-                    hour,
-                    min,
-                    sec,
-                    lat,
-                    lon,
-                    (int)spd,
-                    data_buffers[34]);
+        log_event(conn,data_buffers[34]);
     }
 
     int rssi = parse_int(data_buffers[23], 2) * 3.33f;
@@ -230,36 +185,9 @@ void process_message(connection * conn, char * string, size_t length) {
                  rssi,
                  0,
                  num_sats);
-    statsprintf(conn,
-                "20%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                year,
-                month,
-                day,
-                hour,
-                min,
-                sec,
-                "battery_level",
-                battery_level);
-    statsprintf(conn,
-                "20%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                year,
-                month,
-                day,
-                hour,
-                min,
-                sec,
-                "gps_sats",
-                num_sats);
-    statsprintf(conn,
-                "20%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                year,
-                month,
-                day,
-                hour,
-                min,
-                sec,
-                "signal",
-                rssi);
+
+                 write_stat(conn,"battery_level",battery_level);
+                 write_stat(conn,"signal",rssi);
 }
 
 void megastek_process(void * vp) {

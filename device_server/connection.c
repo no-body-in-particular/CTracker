@@ -46,7 +46,7 @@ connection new_connection(int socket) {
     result.log_disconnect = true;
     result.log_connect = true;
     result.packet_index = 1;
-    result.since_last_position = time(0);
+    result.device_time = time(0);
     return result;
 }
 
@@ -117,10 +117,10 @@ void init_position(connection * conn) {
         size_t cnt = split_to(',', last_line, strlen(last_line), &p_list, 4);
 
         if (cnt > 3) {
-            conn->since_last_position = parse_date(p_list[0]);
+            conn->device_time = parse_date(p_list[0]);
             conn->current_lat = parse_float(p_list[1]);
             conn->current_lon = parse_float(p_list[2]);
-            fprintf(stdout, " current lat/long: %f %f %u %u\n", conn->current_lat, conn->current_lon, conn->since_last_position, time(0));
+            fprintf(stdout, " current lat/long: %f %f %u %u\n", conn->current_lat, conn->current_lon, conn->device_time, time(0));
         }
     }
 
@@ -157,10 +157,10 @@ void init_imei(connection * conn) {
     read_disabled_alarms(conn);
     read_geofence(conn);
     char message[1024] = {0};
-    sprintf(message, "device reconnected after %lu seconds.", time(0) - conn->since_last_position);
+    sprintf(message, "device reconnected after %lu seconds.", time(0) - conn->device_time);
 
     if (conn->log_connect) {
-        log_event(conn, conn->current_lat, conn->current_lon, conn->current_speed, message);
+        log_event(conn,  message);
     }
 }
 

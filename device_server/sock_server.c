@@ -196,7 +196,7 @@ void * process_thread(void * int_ptr) {
 
             if ( time(0) > conn.timeout_time ) {
                 if (conn.log_disconnect) {
-                    log_event(&conn, conn.current_lat, conn.current_lon, 0, "device disconnected");
+                    log_event(&conn, "device disconnected");
                 }
 
                 fprintf(stdout, "client disconnected\n");

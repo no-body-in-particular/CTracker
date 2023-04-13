@@ -55,6 +55,17 @@ void gpsprintf( connection * conn, const char * format, ... ) {
     va_end( arglist );
 }
 
+void log_position(connection * conn, int type, float lat, float lng, float spd) {
+    struct tm tm = *gmtime(&conn->device_time);
+    gpsprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%f,%u\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+              lat,
+              lng,
+              spd,
+              type);
+}
+
+
+
 void logvfprintf( connection * conn, const char * format, va_list arglist) {
     connFilePrintf(conn, conn->log_outfile, &conn->log_filehandle, format, arglist);
 }
@@ -89,12 +100,24 @@ void statsprintf( connection * conn, const char * format, ... ) {
     va_end( arglist );
 }
 
-void write_stat(connection * conn, time_t timestamp, char * value_name, float value) {
-    struct tm tm = *gmtime(&timestamp);
+void write_stat(connection * conn, char * value_name, float value) {
+    struct tm tm = *gmtime(&conn->device_time);
     statsprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%s,%.2f\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, value_name, value);
 }
 
+void write_sat_count(connection * conn, int position_type, int num_sats) {
+    if (position_type == 0) {
+        write_stat(conn, "gps_sats", num_sats);
+    }
 
+    if (position_type == 1) {
+        write_stat(conn, "lbs_stations", num_sats);
+    }
+
+    if (position_type == 2) {
+        write_stat(conn, "wifi_networks", num_sats);
+    }
+}
 void statusvfprintf(connection * conn, const char * format, va_list args) {
     FILE * fp;
 
@@ -120,8 +143,7 @@ void statusprintf(connection * conn, const char * format, ...) {
 }
 
 void log_command_response(connection * conn, const unsigned char * response) {
-    time_t t = time(NULL);
-    struct tm tm = *gmtime(&t);
+    struct tm tm = *gmtime(&conn->device_time);
     commandprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
     for (size_t i = 0; i < strlen(response); i++) {
@@ -140,8 +162,7 @@ void log_command_response(connection * conn, const unsigned char * response) {
 /* va_list, va_start, va_arg, va_end */
 
 void log_time(connection * conn) {
-    time_t t = time(NULL);
-    struct tm tm = *gmtime(&t);
+    struct tm tm = *gmtime(&conn->device_time);
     logprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
@@ -166,11 +187,11 @@ void log_buffer(connection * conn) {
 }
 
 
-void log_event(connection * conn, float lat, float lon, float speed, const unsigned char * response) {
-    time_t t = time(NULL);
+void log_event(connection * conn, const unsigned char * response) {
+    time_t t = conn->device_time;
     struct tm tm = *gmtime(&t);
     eventprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%f,%s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                lat, lon, speed, response);
+                conn->current_lat, conn->current_lon, conn->current_speed, response);
 }
 
 //if a file grows over 30mb reduce it's size

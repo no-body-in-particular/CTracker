@@ -20,6 +20,9 @@ const char * decode_alarm_code(uint8_t code) {
         case 0x5:
             return "Fence left";
 
+        case 0x6:
+            return "Speeding";
+
         case 0x9:
             return "Tow/theft";
 

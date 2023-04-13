@@ -34,7 +34,7 @@ wifi_db;
 
 
 
-location_result wifi_lookup(wifi_network * first, size_t network_count, time_t last_position_measured, float  last_lat, float  last_lng);
+location_result wifi_lookup(wifi_network * first, size_t network_count) ;
 void init_wifi() ;
 location_result wifi_to_cache(wifi_db_entry  networks);
 

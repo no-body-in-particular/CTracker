@@ -50,7 +50,6 @@ void basic_process_message(connection * conn, char * string, size_t length) {
     unsigned char * wifi_split[16];
     unsigned char * coord_split[2];
     time_t t = time(NULL);
-    struct tm tm = *gmtime(&t);
     unsigned int num_sats = 0;
     unsigned int position_type = 0;
     float lat = 0;
@@ -114,10 +113,6 @@ void basic_process_message(connection * conn, char * string, size_t length) {
 
     unsigned int battery_level = parse_int( data_buffers[2], 3);
 
-    if (battery_level < 20 && (( time(0) - conn->since_battalm) > 600)) {
-        log_event(conn, lat, lon, 0, "low battery");
-    }
-
     if ( strlen(data_buffers[4]) > 1 ) {
         db_entry.network_count = split_to('|', data_buffers[4], strlen(data_buffers[4]) + 1, wifi_split, 16);
 
@@ -135,7 +130,7 @@ void basic_process_message(connection * conn, char * string, size_t length) {
                 db_entry.network_buffer[i].mac_addr[5] = values[5];
             }
 
-            db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count, conn->since_last_position, conn->current_lat, conn->current_lon);
+            db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count);
 
             if (db_entry.result.valid) {
                 position_type = 2;
@@ -155,34 +150,17 @@ void basic_process_message(connection * conn, char * string, size_t length) {
     }
 
     if (num_sats > 0) {
-        speed = haversineDistance(conn->current_lat, conn->current_lon, lat, lon);
-        over_time = ((time(0) - conn->since_last_position) / 3600);
-        over_time = over_time <= 0 ? 0.166666f : over_time;
-        speed = speed / over_time;
-        move_to(conn, true, lat, lon, speed);
-        gpsprintf(conn,
-                  "%u-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%u,%u,%u,0,0\n",
-                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                  lat,
-                  lon,
-                  (int)speed,
-                  position_type,
-                  num_sats);
-        statsprintf(conn,
-                    "%u-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                    tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                    "speed",
-                    speed);
+        move_to(conn, t, position_type, lat, lon);
+        write_stat(conn, "battery_level", battery_level);
         statusprintf(conn, "%u,%u,%u,%u\n",
                      battery_level,
                      0,//gsm signal level
                      position_type,
                      num_sats);//number of satelites
-        statsprintf(conn,
-                    "%u-%02u-%02uT%02u:%02u:%02uZ,%s,%u\n",
-                    tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                    "battery_level",
-                    battery_level);
+    }
+
+    if (battery_level < 20 && (( time(0) - conn->since_battalm) > 600)) {
+        log_event(conn, "low battery");
     }
 }
 

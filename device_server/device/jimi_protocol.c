@@ -61,13 +61,6 @@ void print_gps_info(connection * conn, information_package package) {
     }
 
     log_line(conn, "got gps info, lat/long: %f %f\n", lat, lon);
-    sprintf(time_prefix, "20%02u-%02u-%02uT%02u:%02u:%02uZ",
-            package.date_time.year,
-            package.date_time.month,
-            package.date_time.day,
-            package.date_time.hour,
-            package.date_time.minute,
-            package.date_time.second);
     time_t dt = date_to_time(package.date_time.year,
                              package.date_time.month,
                              package.date_time.day,
@@ -75,44 +68,11 @@ void print_gps_info(connection * conn, information_package package) {
                              package.date_time.minute,
                              package.date_time.second);
 
-    if ((info.num_satelites & 0x0f) > 5 ) {
-        move_to(conn, (time(0) - dt) < 30, lat, lon, info.speed);
+    if ((info.num_satelites & 0x0f) >= 4 ) {
+        move_to(conn, dt, 0, lat, lon);
     }
 
-    conn->current_position_type = 0;
-    conn->current_sat_count = info.num_satelites & 0x0f;
-    gpsprintf(conn,
-              "20%02u-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%u,0,%u,%u,%u\n",
-              package.date_time.year,
-              package.date_time.month,
-              package.date_time.day,
-              package.date_time.hour,
-              package.date_time.minute,
-              package.date_time.second,
-              lat,
-              lon,
-              info.speed,
-              0,
-              info.num_satelites & 0x0f,
-              info.status_and_course, 0);
-    statsprintf(conn, "20%02u-%02u-%02uT%02u:%02u:%02uZ,%s,%f\n",
-                package.date_time.year,
-                package.date_time.month,
-                package.date_time.day,
-                package.date_time.hour,
-                package.date_time.minute,
-                package.date_time.second,
-                "speed",
-                info.speed);
-    statsprintf(conn, "20%02u-%02u-%02uT%02u:%02u:%02uZ,%s,%f\n",
-                package.date_time.year,
-                package.date_time.month,
-                package.date_time.day,
-                package.date_time.hour,
-                package.date_time.minute,
-                package.date_time.second,
-                "gps_sats",
-                info.num_satelites & 0x0f);
+    write_stat(conn, "gps_sats", info.num_satelites & 0x0f);
 }
 
 void process_lbs_info(connection * conn, information_package package) {
@@ -153,22 +113,19 @@ void process_lbs_info(connection * conn, information_package package) {
         }
     }
 
+    time_t dt = date_to_time(package.date_time.year,
+                             package.date_time.month,
+                             package.date_time.day,
+                             package.date_time.hour,
+                             package.date_time.minute,
+                             package.date_time.second);
+
     if (point_count > 0) {
         multilaterate_point result = multilaterate(points, point_count);
         conn->current_position_type = 1;
         conn->current_sat_count = point_count;
-        gpsprintf(conn,
-                  "20%02u-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%u,1\n",
-                  package.date_time.year,
-                  package.date_time.month,
-                  package.date_time.day,
-                  package.date_time.hour,
-                  package.date_time.minute,
-                  package.date_time.second,
-                  result.lat,
-                  result.lng,
-                  0);
-        write_stat(conn, time(0), "num_lbs_stations", point_count);
+        move_to(conn, dt, 1, result.lat, result.lng);
+        write_sat_count(conn, 1, point_count);
     }
 }
 
@@ -187,14 +144,14 @@ void print_status_info(connection * conn, status_information status) {
                  status.gsm_strength * 25,
                  conn->current_position_type,
                  conn->current_sat_count);
-    write_stat(conn, time(0), "battery_level", voltage);
-    write_stat(conn, time(0), "signal", status.gsm_strength * 25);
+    write_stat(conn, "battery_level", voltage);
+    write_stat(conn, "signal", status.gsm_strength * 25);
 
     if (status.voltage < 20 && (( time(0) - conn->since_battalm) > 600)) {
         //low voltage alarm
         conn->since_battalm = time(0);
         conn->WARNING_FUNCTION(conn, "low battery");
-        log_event(conn, conn->current_lat, conn->current_lon, 0, "low battery");
+        log_event(conn, "low battery");
     }
 }
 
@@ -209,14 +166,14 @@ void print_heartbeat_info(connection * conn, heartbeat_information hbt) {
                  hbt.rssi * 25,
                  conn->current_position_type,
                  conn->current_sat_count);
-    write_stat(conn, time(0), "battery_level", voltage);
-    write_stat(conn, time(0), "signal", hbt.rssi * 25);
+    write_stat(conn, "battery_level", voltage);
+    write_stat(conn, "signal", hbt.rssi * 25);
 
     if (voltage < 20 && (( time(0) - conn->since_battalm) > 600)) {
         //low voltage alarm
         conn->since_battalm = time(0);
         conn->WARNING_FUNCTION(conn, "low battery");
-        log_event(conn, conn->current_lat, conn->current_lon, 0, "low battery");
+        log_event(conn,  "low battery");
     }
 }
 
@@ -228,6 +185,12 @@ void process_alarm(connection * conn, information_package package) {
     memcpy(&info.status_info, package.information  + sizeof(gps_information) + lbs_size, sizeof(status_information));
     float lat = COORD(info.gps_info.lattitude);
     float lon = COORD(info.gps_info.longitude);
+    time_t dt = date_to_time(package.date_time.year,
+                             package.date_time.month,
+                             package.date_time.day,
+                             package.date_time.hour,
+                             package.date_time.minute,
+                             package.date_time.second);
     info.gps_info.status_and_course = SWAP_UINT16(info.gps_info.status_and_course);
 
     if (info.gps_info.status_and_course & 8192) {
@@ -241,18 +204,8 @@ void process_alarm(connection * conn, information_package package) {
     const char * typemsg = decode_alarm_code(info.status_info.alert);
     log_line(conn, "got alarm, info %x %x %x %x\n", info.status_info.terminal_info, info.status_info.voltage, info.status_info.gsm_strength, info.status_info.alert);
     log_line(conn, "got alarm, lat/long: %f %f\n", lat, lon);
-    eventprintf(conn,
-                "20%02u-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%u,%s\n",
-                package.date_time.year,
-                package.date_time.month,
-                package.date_time.day,
-                package.date_time.hour,
-                package.date_time.minute,
-                package.date_time.second,
-                lat,
-                lon,
-                info.gps_info.speed,
-                typemsg);
+    move_to(conn, dt, 0, lat, lon);
+    log_event(conn, typemsg);
     print_status_info(conn, info.status_info);
 
     if (!is_alarm_disabled(conn, typemsg)) {
@@ -309,7 +262,6 @@ void process_location_modular(connection * conn, uint8_t * data, size_t data_len
     float lat = 0;
     float lon = 0;
     uint16_t status_and_course = 0;
-    uint8_t speed = 0;
     time_t t = time(NULL);
     struct tm tm = *gmtime(&t);
     uint16_t event_len = 0;
@@ -399,7 +351,7 @@ void process_location_modular(connection * conn, uint8_t * data, size_t data_len
                 data += 4;
                 lon = COORD(*((uint32_t *) data));
                 data += 4;
-                speed = *data;
+                //speed = *data;
                 data++;
                 status_and_course = SWAP_UINT16(*((uint16_t *) data));
                 data += 2;
@@ -426,26 +378,10 @@ void process_location_modular(connection * conn, uint8_t * data, size_t data_len
     }
 
     if (location_valid) {
-        gpsprintf(conn,
-                  "%u-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%u,%u,%u,0,0\n",
-                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                  lat,
-                  lon,
-                  speed,
-                  location_type,
-                  num_satelites);
+        move_to(conn, t, location_type, lat, lon);
 
-        if (location_type == 0) {
-            statsprintf(conn,
-                        "%u-%02u-%02uT%02u:%02u:%02uZ,%s,%u\n",
-                        tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                        "speed", speed);
-
-            if (num_satelites)
-                statsprintf(conn,
-                            "%u-%02u-%02uT%02u:%02u:%02uZ,%s,%u\n",
-                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                            "gps_sats", num_satelites);
+        if (num_satelites) {
+            write_stat(conn, "gps_sats", num_satelites);
         }
     }
 

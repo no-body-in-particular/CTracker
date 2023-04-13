@@ -204,7 +204,7 @@ location_result wifi_to_cache( wifi_db_entry  networks) {
 }
 
 //first must always point to a list of at least 2 wifi networks.
-location_result wifi_lookup(wifi_network * first, size_t network_count, time_t last_position_measured, float  last_lat, float  last_lng) {
+location_result wifi_lookup(wifi_network * first, size_t network_count) {
     //create a sorted network entry
     wifi_db_entry entry;
     memset(&entry, 0, sizeof(wifi_db_entry));

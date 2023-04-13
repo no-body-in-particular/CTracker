@@ -167,7 +167,7 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
             }
 
             if (!valid_position) {
-                db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count, conn->since_last_position, conn->current_lat, conn->current_lon);
+                db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count);
 
                 if (db_entry.result.valid) {
                     valid_position = true;
@@ -212,80 +212,11 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
     }
 
     if (valid_position) {
-        if (position_type != 1) {
-            speed = haversineDistance(conn->current_lat, conn->current_lon, lat, lng);
-            double over_time = ((time(0) - conn->since_last_position) / 3600);
-            over_time = over_time <= 0 ? 0.166666f : over_time;
-            speed = speed / over_time;
-            //if we're fairly certain about our location do trigger fences
-            move_to(conn, true, lat, lng, speed);
-            conn->since_last_position = time(0);
-        }
-
-        /*   time_t tv = date_to_time(year, month, day, hour, minute, second);
-           struct tm tm = *gmtime(&tv);*/
-        time_t timestamp = time(0);
-        struct tm tm = *gmtime(&timestamp);
-        gpsprintf(conn,
-                  "%d-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%.1f,%x\n",
-                  tm.tm_year + 1900,
-                  tm.tm_mon + 1,
-                  tm.tm_mday,
-                  tm.tm_hour,
-                  tm.tm_min,
-                  tm.tm_sec,
-                  lat,
-                  lng,
-                  speed,
-                  position_type);
-        statusprintf(conn, "%u,%u,%u,%u\n",
-                     battery_level,
-                     signal_strength,
-                     position_type,
-                     num_sats);
-        statsprintf(conn,
-                    "%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                    tm.tm_year + 1900,
-                    tm.tm_mon + 1,
-                    tm.tm_mday,
-                    tm.tm_hour,
-                    tm.tm_min,
-                    tm.tm_sec,
-                    "speed",
-                    speed);
-        statsprintf(conn,
-                    "%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                    tm.tm_year + 1900,
-                    tm.tm_mon + 1,
-                    tm.tm_mday,
-                    tm.tm_hour,
-                    tm.tm_min,
-                    tm.tm_sec,
-                    "battery_level",
-                    battery_level);
-
-        if (position_type == 0)
-            statsprintf(conn,
-                        "%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                        tm.tm_year + 1900,
-                        tm.tm_mon + 1,
-                        tm.tm_mday,
-                        tm.tm_hour,
-                        tm.tm_min,
-                        tm.tm_sec,
-                        "gps_sats",
-                        num_sats);
-
-        statsprintf(conn,
-                    "%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                    tm.tm_year + 1900,
-                    tm.tm_mon + 1,
-                    tm.tm_mday,
-                    tm.tm_hour,
-                    tm.tm_min,
-                    tm.tm_sec,
-                    "signal",
-                    signal_strength);
+        //if we're fairly certain about our location do trigger fences
+        move_to(conn, time(0), position_type, lat, lng);
+        write_stat(conn, "battery_level", battery_level);
+        write_sat_count(conn, position_type, num_sats);
+        write_stat(conn, "signal", signal_strength);
         conn->timeout_time = time(0) + THINKRACE_TIMEOUT;
     }
 }
@@ -357,7 +288,7 @@ void thinkrace_process_event(connection * conn, size_t parse_count, unsigned cha
             break;
     }
 
-    log_event(conn, conn->current_lat, conn->current_lon, conn->current_speed, name);
+    log_event(conn,  name);
 }
 
 
@@ -377,9 +308,9 @@ void thinkrace_process_heartrate(connection * conn, size_t parse_count, unsigned
         return;
     }
 
-    write_stat(conn, time(0), "heartrate", parse_float(data_buffers[1]));
-    write_stat(conn, time(0), "systole", parse_float(data_buffers[2]));
-    write_stat(conn, time(0), "diastole", parse_float(data_buffers[3]));
+    write_stat(conn, "heartrate", parse_float(data_buffers[1]));
+    write_stat(conn, "systole", parse_float(data_buffers[2]));
+    write_stat(conn,  "diastole", parse_float(data_buffers[3]));
 }
 
 
@@ -389,7 +320,7 @@ void thinkrace_process_temperature(connection * conn, size_t parse_count, unsign
         return;
     }
 
-    write_stat(conn, time(0), "temperature", parse_float(data_buffers[1]));
+    write_stat(conn,  "temperature", parse_float(data_buffers[1]));
 }
 
 
@@ -401,7 +332,7 @@ void thinkrace_process_saturation(connection * conn, size_t parse_count, unsigne
         return;
     }
 
-    write_stat(conn, time(0), "SPO2", parse_float(data_buffers[1]));
+    write_stat(conn,  "SPO2", parse_float(data_buffers[1]));
 }
 
 

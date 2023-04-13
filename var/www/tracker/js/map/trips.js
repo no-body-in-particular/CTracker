@@ -145,6 +145,7 @@ function convert_to_trips(table, rows) {
                     travelFeature.getGeometry().setCoordinates(coordVar);
                     travelFeature.setStyle(travelLayerStyle(travelFeature));
                     distanceDiv.innerHTML = distanceText;
+                    noUpdateCurrentPosition=true;
                     map.getView().animate({
                         center: coordVar[0],
                         duration: 1000

@@ -53,20 +53,20 @@ int main(int argc, char * argv[]) {
     init_wifi();
     wifi_cache_to_database(&wifi_database);
     //            radix_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), wifi_network_bit, wifi_network_compare);
-    location_result result = wifi_lookup(network, 5, time(0), 52.522202, 13.285512);
+    location_result result = wifi_lookup(network, 5);
     fprintf(stdout, "%u %f %f\n", result.valid, result.lat, result.lng);
     wifi_cache_to_database(&wifi_database);
-    result = wifi_lookup(network, 5, time(0), 52.522202, 13.285512);
+    result = wifi_lookup(network, 5);
     fprintf(stdout, "%u %f %f\n", result.valid, result.lat, result.lng);
     /*   set_network2(network);
-       result = wifi_lookup(network, 5, time(0), 52.522202, 13.285512);
+       result = wifi_lookup(network, 5);
        fprintf(stdout, "%u %f %f\n", result.valid, result.lat, result.lng);
        wifi_cache_to_database(&wifi_database);
        set_network1(network);
-       result = wifi_lookup(network, 5, time(0), 52.522202, 13.285512);
+       result = wifi_lookup(network, 5);
        fprintf(stdout, "%u %f %f\n", result.valid, result.lat, result.lng);
        set_network2(network);
-       result = wifi_lookup(network, 5, time(0), 52.522202, 13.285512);
+       result = wifi_lookup(network, 5);
        fprintf(stdout, "%u %f %f\n", result.valid, result.lat, result.lng);*/
     return 0;
 }

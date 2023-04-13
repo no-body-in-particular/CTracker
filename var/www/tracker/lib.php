@@ -78,7 +78,7 @@ function validateName($code)
 
 function validatePassword($pwd)
 {
-    return preg_match_all('/^\S*(?=\S{8,32})(?=\S*[a-z])(?=\S*[A-Z])(?=\S*[\d])\S*$/', $pwd);
+   return preg_match_all('/^\S*(?=\S{8,31})(?=\S*[a-z])(?=\S*[A-Z])(?=\S*[\d])\S*$/', $pwd);
 }
 
 function compareCaptcha($v1,$v2){

@@ -220,7 +220,7 @@ size_t xex_process_alarm(connection * c, alarm_data * d) {
     *((uint32_t *)d) = SWAP_UINT32(*((uint32_t *)d));
     log_line(c, "got alarm bytes: %x\n", *((uint32_t *)d));
     char * msg = xex_translate_alarm(d);
-    log_event(c, c->current_lat, c->current_lon, 0, msg);
+    log_event(c,   msg);
     return sizeof(alarm_data);
 }
 
@@ -247,26 +247,15 @@ size_t process_gps_data(connection * c, time_t timestamp,  position_packet * pac
     d->lat = parseCoordinate(d->lat);
     d->lon = parseCoordinate(d->lon);
     log_line(c, "got GPS position lat/long/timestamp: %f/%f/%llu\n", d->lat, d->lon, timestamp);
-    speed = haversineDistance(c->current_lat, c->current_lon, d->lat, d->lon);
-    over_time = ((time(0) - c->since_last_position) / 3600);
-    over_time = over_time <= 0 ? 0.166666f : over_time;
-    speed = speed / over_time;
-    gpsprintf(c, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%f,0,%u\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-              d->lat,
-              d->lon,
-              speed,
-              d->sat_count
-             );
     statusprintf(c, "%u,%f,%u,%u\n",
                  packet->batt_attributes & 0xFF,
                  packet->csq * 3.33f,
                  0,
                  d->sat_count);
-    write_stat(c, timestamp, "speed", speed);
-    write_stat(c, timestamp, "gps_sats", d->sat_count);
-    write_stat(c, timestamp, "signal", packet->csq * 3.33f);
-    move_to(c, true, d->lat, d->lon, speed);
-    c->since_last_position = time(0);
+    move_to(c, t, 0, d->lat, d->lon);
+    write_stat(c, "gps_sats", d->sat_count);
+    write_stat(c, "signal", packet->csq * 3.33f);
+    c->device_time = time(0);
     return sizeof(gps_data);
 }
 
@@ -322,32 +311,16 @@ size_t process_wifi_data(connection * c, time_t timestamp, position_packet * pac
         networks[i].rssi = d->networks[i].rssi;
     }
 
-    location_result result =  wifi_lookup(networks, d->network_count, c->since_last_position, c->current_lat, c->current_lon);
+    location_result result =  wifi_lookup(networks, d->network_count);
 
     if (result.valid) {
-        speed = haversineDistance(c->current_lat, c->current_lon, result.lat, result.lng);
-        over_time = ((time(0) - c->since_last_position) / 3600);
-        over_time = over_time <= 0 ? 0.166666f : over_time;
-        speed = speed / over_time;
-        gpsprintf(c, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%.2f,2\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                  result.lat,
-                  result.lng,
-                  speed,
-                  0
-                 );
+        move_to(c, t, 2, result.lat, result.lng);
         statusprintf(c, "%u,%.2f,%u,%u\n",
                      SWAP_UINT16(packet->batt_attributes) & 0xFF,
                      packet->csq * 3.33f,
                      2,
                      d->network_count);
-        write_stat(c, timestamp, "speed", speed);
-
-        //if we're fairly certain about our location do trigger fences
-        if (result.radius < 500) {
-            move_to(c, true, result.lat, result.lng, 0);
-        }
-
-        c->since_last_position = time(0);
+        c->device_time = time(0);
     }
 
     //multilaterate here
@@ -403,14 +376,14 @@ size_t process_position_data(connection * c, time_t timestamp, position_packet *
 
 size_t process_human_body_data(connection * c, time_t timestamp, human_body_data * d) {
     d->step_count = SWAP_UINT16(d->step_count);
-    write_stat(c, timestamp, "heart_rate", d->heart_rate);
+    write_stat(c, "heart_rate", d->heart_rate);
     log_line(c, "body data [ hr, diastole,systole, steps, oxygen]: %u %u %u %u %u\n", d->heart_rate, d->low_pressure, d->high_pressure, d->step_count, d->blood_oxygen);
     return sizeof(human_body_data);
 }
 
 size_t process_temperature_data(connection * c, time_t timestamp, temperature_data * d) {
     SWAP_FLOAT(d->temperature);
-    write_stat(c, timestamp, "body_temperature", d->temperature);
+    write_stat(c, "body_temperature", d->temperature);
     log_line(c, "body temperature %f \n", d->temperature);
     return sizeof(temperature_data);
 }
@@ -449,7 +422,7 @@ size_t process_nfc_data(connection * c, nfc_data * p) {
 size_t process_position(connection * c, position_packet * p) {
     size_t offset = 0;
     log_line(c, "got position type:%x battery percent: %u\n", p->position_type, SWAP_UINT16(p->batt_attributes) & 0xFF);
-    write_stat(c, p->timestamp, "battery_level", SWAP_UINT16(p->batt_attributes) & 0xFF);
+    write_stat(c,  "battery_level", SWAP_UINT16(p->batt_attributes) & 0xFF);
     p->timestamp = SWAP_UINT32(p->timestamp);
 
     if (p->position_type & 1) {

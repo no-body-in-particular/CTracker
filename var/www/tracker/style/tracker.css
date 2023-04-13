@@ -554,3 +554,11 @@ section:target h1 {
 .crosshair {
     background-image: url('../icons/crosshair.svg');
 }
+
+.faster {
+    background-image: url('../icons/faster.svg');
+}
+
+.slower {
+    background-image: url('../icons/slower.svg');
+}

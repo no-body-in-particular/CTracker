@@ -115,7 +115,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
     int minute;
     int second;
     float heading;
-    int num_sats;
+    int num_sats = 0;
     int working_mode;
     int fortification_state;
     //program data
@@ -146,6 +146,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
         lat = gps_split[5][0] == 'W' ? -lat : lat;
         speed = parse_float(gps_split[6]);
         valid_position = true;
+        num_sats = 4;
 
     } else {
         db_entry.network_count = split_to('/', data_buffers[9], strlen(data_buffers[9]) + 1, wifi_split, 16) / 2;
@@ -164,7 +165,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
                 db_entry.network_buffer[i].mac_addr[5] = values[5];
             }
 
-            db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count, conn->since_last_position, conn->current_lat, conn->current_lon);
+            db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count);
 
             if (db_entry.result.valid) {
                 valid_position = true;
@@ -212,47 +213,14 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
                 lat = result.lat;
                 lng = result.lng;
                 valid_position = true;
+                num_sats = point_count;
             }
         }
     }
 
     if (valid_position) {
-        if (position_type != 1) {
-            speed = haversineDistance(conn->current_lat, conn->current_lon, lat, lng);
-            double over_time = ((time(0) - conn->since_last_position) / 3600);
-            over_time = over_time <= 0 ? 0.166666f : over_time;
-            speed = speed / over_time;
-            //if we're fairly certain about our location do trigger fences
-            move_to(conn, true, lat, lng, speed);
-            conn->since_last_position = time(0);
-        }
-
-        /*   time_t tv = date_to_time(year, month, day, hour, minute, second);
-           struct tm tm = *gmtime(&tv);*/
-        time_t timestamp = time(0);
-        struct tm tm = *gmtime(&timestamp);
-        gpsprintf(conn,
-                  "%d-%02u-%02uT%02u:%02u:%02uZ,%f,%f,%.1f,%x\n",
-                  tm.tm_year + 1900,
-                  tm.tm_mon + 1,
-                  tm.tm_mday,
-                  tm.tm_hour,
-                  tm.tm_min,
-                  tm.tm_sec,
-                  lat,
-                  lng,
-                  speed,
-                  position_type);
-        statsprintf(conn,
-                    "%d-%02u-%02uT%02u:%02u:%02uZ,%s,%.2f\n",
-                    tm.tm_year + 1900,
-                    tm.tm_mon + 1,
-                    tm.tm_mday,
-                    tm.tm_hour,
-                    tm.tm_min,
-                    tm.tm_sec,
-                    "speed",
-                    speed);
+        move_to(conn, time(0), position_type, lat, lng);
+        write_sat_count(conn, position_type, num_sats);
 
         if (strlen(data_buffers[10]) > 0) {
             char * alm = "unknown";
@@ -269,7 +237,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
                 alm = "low battery";
             }
 
-            log_event(conn, conn->current_lat, conn->current_lon, conn->current_speed, alm);
+            log_event(conn, alm);
         }
     }
 
@@ -289,8 +257,8 @@ void myrope_process_heartbeat(connection * conn, size_t parse_count, unsigned ch
                  data_buffers[5] + 3,
                  0,//position type
                  0);//num sats
-    write_stat(conn, time(0), "battery_level", parse_float(data_buffers[4] + 3));
-    write_stat(conn, time(0), "signal", parse_float(data_buffers[5] + 3));
+    write_stat(conn, "battery_level", parse_float(data_buffers[4] + 3));
+    write_stat(conn, "signal", parse_float(data_buffers[5] + 3));
     conn->timeout_time = time(0) + MYROPE_TIMEOUT;
 }
 
@@ -307,7 +275,7 @@ void myrope_process_temperature(connection * conn, size_t parse_count, unsigned 
         return;
     }
 
-    write_stat(conn, time(0), "temperature", temp);
+    write_stat(conn, "temperature", temp);
     conn->timeout_time = time(0) + MYROPE_TIMEOUT;
 }
 

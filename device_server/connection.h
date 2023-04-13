@@ -69,7 +69,7 @@ typedef struct {
     float current_speed;
     size_t current_position_type;
     size_t current_sat_count;
-    time_t since_last_position;
+    time_t device_time;
     time_t since_last_locate;
     const char * SINGLE_WARNING;
     unsigned int device_extra;

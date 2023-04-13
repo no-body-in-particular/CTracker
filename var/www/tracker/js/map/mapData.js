@@ -23,46 +23,14 @@ function toggleSat() {
 }
 
 var newImei = new Date().getTime();
-
-map.on('singleclick', function(evt) {
-    var name = '';
-
-    var fenceLat = document.getElementById("fenceLat");
-    var fenceLong = document.getElementById("fenceLong");
-
-    if (fenceLat && fenceLong) {
-        var lonlat = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326');
-
-        fenceLat.value = lonlat[1];
-        fenceLong.value = lonlat[0];
-        moveDemoFeature();
-    }
-    map.forEachFeatureAtPixel(evt.pixel, function(feature) {
-        if (!!feature.name)
-            name = feature.name;
-
-        if (!!feature.CAPTION)
-            name = feature.CAPTION;
-    })
-
-
-    if (name != '') {
-        container.style.display = "block";
-        var coordinate = evt.coordinate;
-        content.innerHTML = name;
-        overlay.setPosition(coordinate);
-    } else {
-        container.style.display = "none";
-    }
-});
-
+var animateSpeed=200;
 
 function animateTo(long, lat) {
     setfocus = 0;
     var lonlat = ol.proj.fromLonLat([long, lat]);
     map.getView().animate({
         center: lonlat,
-        duration: 2000
+        duration: animateSpeed
     });
 }
 
@@ -83,11 +51,28 @@ function computeLogRow(cols) {
 }
 
 function computeFenceRow(cols) {
-    var dayOfWeek = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', '', 'Every'];
+    var dayOfWeek = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', 'Every'];
     var fenceType = ['In', 'Out', 'In+Out', 'Stay in', 'Exclusion zone'];
     var alarmEnabled = ['Off', 'On'];
+    var dateMod=localTime(cols[0])[0] ;
+    var dateInt=parseInt(cols[2]);
+    var displayDate=dateInt + dateMod;
 
-    return "<tr onclick='animateTo(" + cols[5] + "," + cols[4] + ")'><td>" + localTime(cols[0]) + "</td><td>" + localTime(cols[1]) + "</td><td>" + dayOfWeek[cols[2]] + "</td><td>" + fenceType[cols[3]] + "</td><td>" + cols[6] + "m</td><td>" + alarmEnabled[cols[7]] + "</td><td>" + cols[8] + "</td><td><button onClick='deleteFence(\"" + cols.join(',') + "\")' >delete</button></td></tr>";
+    if( displayDate==0 ){
+          displayDate=7;   
+    }
+
+    if( displayDate==8 ){
+        displayDate=1;
+    }
+
+    if( dateInt>=8){
+        displayDate=8;
+    }
+
+
+
+    return "<tr onclick='animateTo(" + cols[5] + "," + cols[4] + ")'><td>" + localTime(cols[0])[1] + "</td><td>" + localTime(cols[1])[1] + "</td><td>" + dayOfWeek[displayDate] + "</td><td>" + fenceType[cols[3]] + "</td><td>" + cols[6] + "m</td><td>" + alarmEnabled[cols[7]] + "</td><td>" + cols[8] + "</td><td><button onClick='deleteFence(\"" + cols.join(',') + "\")' >delete</button></td></tr>";
 }
 
 
@@ -333,7 +318,15 @@ function sendCommand(cmd) {
 }
 
 function addFence() {
-    var f = [utcTime(document.getElementById("fenceStart").value), utcTime(document.getElementById("fenceEnd").value), document.getElementById("fenceDay").value, document.getElementById("fenceType").value,
+    var startTime=utcTime(document.getElementById("fenceStart").value);
+    var endTime=utcTime(document.getElementById("fenceEnd").value)[1];
+    var dayInt=parseInt(document.getElementById("fenceDay").value);
+    var fenceDay=dayInt-startTime[0];
+    if(fenceDay==0)fenceDay=7;
+    if(fenceDay==8)fenceDay=1;
+    if(dayInt>7)fenceDay=8;
+
+    var f = [startTime[1], endTime, parseInt(document.getElementById("fenceDay").value)-startTime[0], document.getElementById("fenceType").value,
         document.getElementById("fenceLat").value, document.getElementById("fenceLong").value, document.getElementById("fenceRadius").value,
         document.getElementById("alarmEnable").value, document.getElementById("fenceName").value
     ];
@@ -414,15 +407,6 @@ function fetchFence() {
 }
 
 
-function saveSettings() {
-    $.ajax({
-        url: "disabled_alarms.php?imei=" + imei + "&action=write&alarms=" + document.getElementById("disabledAlarms").value,
-        success: function(result) {
-            alert('settings saved.');
-            showSettings();
-        }
-    });
-}
 
 function refreshSettings() {
     $.ajax({
@@ -437,7 +421,20 @@ function refreshSettings() {
 }
 
 
+function saveSettings() {
+    $.ajax({
+        url: "disabled_alarms.php?imei=" + imei + "&action=write&alarms=" + document.getElementById("disabledAlarms").value,
+        success: function(result) {
+            alert('settings saved.');
+            refreshSettings();
+        }
+    });
+}
+
 var lineChart = null;
+
+var stepIndex = 0;
+var isPlaying = 0;
 
 function makeChart(datasets) {
     var ctx = document.getElementById("lineChart");
@@ -453,6 +450,9 @@ function makeChart(datasets) {
                 const dataX = lineChart.scales.x.getValueForPixel(canvasPosition.x);
                 for (var i = 0; i < (historyItems.length - 1); i++) {
                     if (dataX >= historyItems[i][0] && dataX <= historyItems[i + 1][0]) {
+                        stepIndex=i;
+                        isPlaying=0;
+                        noUpdateCurrentPosition=true;
                         updateMarker(historyItems[i][1], historyItems[i][2], historyItems[i][0], true);
                     }
                 }
@@ -592,10 +592,7 @@ function setMarker(lat, lng, move, text) {
     pointFeature.getGeometry().setCoordinates(ol.proj.fromLonLat([lng, lat]));
 
     if (move) {
-        map.getView().animate({
-            center: ol.proj.fromLonLat([lng, lat]),
-            duration: 200
-        });
+        animateTo(lng,lat);
     }
 }
 
@@ -646,8 +643,9 @@ function updateMarker(lat, lng, dt, forceMove = false) {
     updateSpeed(spd);
 }
 
+var noUpdateCurrentPosition=false;
 function updateCurrentPosition(force = false) {
-    if (imei == null || imei == '')
+    if (imei == null || imei == '' || noUpdateCurrentPosition)
         return;
 
     if (historyItems.length && !force) {
@@ -680,7 +678,7 @@ function updateCurrentPosition(force = false) {
 
 function refreshData() {
     fetchFence();
-
+    refreshSettings();
     if (!tripActive && (getSelectedEndDate() >= new Date() || !historyItems.length)) {
         fetchEvents();
         fetchCommandResults()
@@ -701,7 +699,7 @@ function searchdateChange() {
 }
 
 setInterval(updateCurrentPosition, 10000);
-setInterval(refreshData, 80000);
+setInterval(refreshData, 20000);
 setInterval(fetchLogging, 280000);
 
 setBeginDate(120);
@@ -721,15 +719,19 @@ function setBeginDate(offsetMinutes) {
     document.getElementById("beginTime").value = hour.padStart(2, '0') + ":" + minutes.padStart(2, '0') + ":" + seconds.padStart(2, '0');
 }
 
+var moveSpeed=500;
 
-var stepIndex = 0;
-var isPlaying = 0;
 
 function moveStep() {
+    setTimeout(moveStep, moveSpeed);
+
     if (historyItems.length == 0) return;
 
     if (isPlaying) {
-        if (stepIndex >= historyItems.length) stepIndex = 0;
+        if (stepIndex >= historyItems.length) {
+            isPlaying = 0;
+            stepIndex = 0;
+        }
         var dt = historyItems[stepIndex][0];
         var lat = historyItems[stepIndex][1];
         var lng = historyItems[stepIndex][2];
@@ -738,18 +740,17 @@ function moveStep() {
     }
 }
 
-setInterval(moveStep, 500);
+setTimeout(moveStep, moveSpeed);
 
 function startPlaying() {
-    stepIndex = 0;
     isPlaying = 1;
+    noUpdateCurrentPosition=true;
 }
 
 function stopPlaying() {
     stepIndex = 0;
     isPlaying = 0;
 }
-
 
 function pausePlaying() {
     isPlaying = 0;
@@ -758,5 +759,71 @@ function pausePlaying() {
 function recenter() {
     stopPlaying();
     exitTrip();
+    noUpdateCurrentPosition=false;
     updateCurrentPosition(true);
 }
+
+function playFaster(){
+    moveSpeed/=1.5;
+    animateSpeed=moveSpeed/1.5;
+}
+
+function playSlower(){
+    moveSpeed*=1.5;
+    animateSpeed=moveSpeed/1.5;
+}
+
+map.on('singleclick', function(evt) {
+    var name = '';
+
+    var fenceLat = document.getElementById("fenceLat");
+    var fenceLong = document.getElementById("fenceLong");
+    var lonlat = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326');
+
+    if (fenceLat && fenceLong) {
+        fenceLat.value = lonlat[1];
+        fenceLong.value = lonlat[0];
+        moveDemoFeature();
+    }
+
+    var hasFeature=false;
+    map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+        hasFeature=true;
+        if (!!feature.name)
+            name = feature.name;
+
+        if (!!feature.CAPTION)
+            name = feature.CAPTION;
+    })
+
+
+    if (name != '') {
+        container.style.display = "block";
+        var coordinate = evt.coordinate;
+        content.innerHTML = name;
+        overlay.setPosition(coordinate);
+    } else {
+        if(hasFeature){
+            var nearestItem=null;
+
+            var closestDistance=Number.MAX_VALUE;
+
+            for(var i=0;i<historyItems.length;i++){
+                var newDistance=haversineDistance(lonlat[1],lonlat[0],historyItems[i][1],historyItems[i][2]);
+                if(newDistance<closestDistance){
+                    nearestItem=i;
+                    closestDistance=newDistance;
+                }
+            }
+
+            if(nearestItem){
+                noUpdateCurrentPosition=true;
+                isPlaying=false;
+                stepIndex=nearestItem;
+                updateMarker(historyItems[nearestItem][1], historyItems[nearestItem][2], historyItems[nearestItem][0], true);
+            }
+        }
+        //show marker at current click point, and update index to click point
+        container.style.display = "none";
+    }
+});

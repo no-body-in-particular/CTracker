@@ -29,7 +29,7 @@ validateSession();
          <div id="aroundNav" align="left">
             <nav>
                <a href="#account" class="tooltip"> <span class="tooltiptext"  >Account</span><i class="icon user"></i></a>
-               <a href="#history" class="tooltip" ><span class="tooltiptext">History</span><i class="icon clock"></i></a>
+               <a href="#history" class="tooltip" ><span class="tooltiptext">Playback</span><i class="icon clock"></i></a>
                <a href="#stats" class="tooltip" ><span class="tooltiptext">Statistics</span><i class="icon chart-line"></i></a>
                <a href="#alarms" class="tooltip"><span class="tooltiptext">Alarms</span><i class="icon exclamation-triangle"></i></a>
                <a href="#geofence" class="tooltip"><span class="tooltiptext">Geofence</span><i class="icon map-marked-alt"></i></a>
@@ -70,14 +70,12 @@ validateSession();
                <input placeholder="Password" id="password" name="password" class="input" type="password" onfocus="this.value=''"/>
                <button onclick="updateUser()" class="button">Update</button>
             </section>
-            <section id='history' align="left" style="width:30vw;height:8vh;display: table;">
-            <a onclick="startPlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;"><i class="icon play"></i></a>
-            <a onclick="pausePlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;">   <i class="icon pause"></i></a>
-            <a onclick="stopPlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;">  <i class="icon stop"></i></a>
-
-               <!--
-                  <span class="narrow"></span>
-                  <button id="downloadbtn" class="button">Download as CSV</button><span id="distance"></span>--> 
+            <section id='history' align="left" style="width:70vw;height:8vh;display: table;">
+               <a onclick="playSlower()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;"><i class="icon slower"></i></a>
+               <a onclick="startPlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;"><i class="icon play"></i></a>
+               <a onclick="pausePlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;">   <i class="icon pause"></i></a>
+               <a onclick="stopPlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;">  <i class="icon stop"></i></a>
+               <a onclick="playFaster()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;"><i class="icon faster"></i></a>
             </section>
 
             <section id='stats' align="left">
@@ -126,7 +124,7 @@ validateSession();
                                  <option value="5">Fri</option>
                                  <option value="6">Sat</option>
                                  <option value="7">Sun</option>
-                                 <option value="8" selected>Every</option>
+                                 <option value="9" selected>Every</option>
                               </select>
                            </th>
                            <th>

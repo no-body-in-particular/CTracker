@@ -63,6 +63,17 @@ double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
     return d;
 }
 
+double compute_speed(time_t dt, double lat1, double lon1, double lat2, double lon2) {
+    double   speed = haversineDistance(lat1, lon1, lat2, lon2);
+    fprintf(stdout,"compute_speed distance: %f time: %llu\n",speed,dt);
+    double over_time = (fabs(dt) / 3600);
+        fprintf(stdout,"compute_speed over_time %f\n",over_time);
+
+    over_time = over_time < 0.0f ? 0.166666f : over_time;
+    speed = speed / over_time;
+    return speed;
+}
+
 /* msleep(): Sleep for the requested number of milliseconds. */
 int msleep(long msec) {
     struct timespec ts;
@@ -138,7 +149,9 @@ void pad_imei(char * imei) {
 }
 
 float voltage_to_soc(float voltage) {
-    if(voltage>4.15) return 100;
+    if (voltage > 4.15) {
+        return 100;
+    }
 
     return exp(3.4f * (voltage - 2.74f));
 }

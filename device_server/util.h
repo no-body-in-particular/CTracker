@@ -51,6 +51,7 @@ time_t fileModifiedAgo(char * path) ;
 double haversineDistance(double lat1, double lon1, double lat2, double lon2) ;
 void strip_unprintable(char * from);
 bool file_exists (char * filename) ;
+double compute_speed(time_t since, double lat1, double lon1, double lat2, double lon2);
 int msleep(long msec);
 size_t binary_replace(uint8_t * from, size_t fromlen, uint8_t * to, size_t tolen, uint8_t * in, size_t length, size_t safelength);
 time_t parse_date(const char * dt);
