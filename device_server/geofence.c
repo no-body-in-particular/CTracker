@@ -205,8 +205,6 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
 }
 
 void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon) {
-    time_t t = time(NULL);
-    struct tm tm = *gmtime(&t);
     time_t dt = device_time - conn->device_time;
     double speed = compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
 
@@ -214,9 +212,11 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
         speed = 0;
     }
 
-    fprintf(stdout, "time: %u since: %u speed: %f\n", device_time, conn->device_time, speed);
     log_position(conn, position_type, lat, lon, speed);
-    write_stat(conn, "speed", speed);
+
+    if (position_type != 1 &&  conn->current_position_type != 1) {
+        write_stat(conn, "speed", speed);
+    }
 
     if ( position_type != 1 && (conn->current_lat != 0 || conn->current_lon != 0) && conn->fence_count > 0) {
         bool fence_mandatory = false;
@@ -287,6 +287,7 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     conn->current_lon = lon;
     conn->current_speed = speed;
     conn->device_time = device_time;
+    conn->current_position_type = position_type;
 
     if (conn->just_connected) {
         conn->just_connected = false;

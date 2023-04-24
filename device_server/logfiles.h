@@ -10,6 +10,7 @@ void log_position(connection * conn, int type, float lat, float lng, float spd);
 void eventprintf( connection * conn, const char * format, ... ) ;
 void statusvfprintf(connection * conn, const char * format, va_list args) ;
 void statusprintf(connection * conn, const char * format, ...) ;
+void set_status(connection * conn, int battery_level, int gsm_signal, int position_type, int num_sats );
 void log_command_response(connection * conn, const unsigned char * response) ;
 void log_time(connection * conn);
 void log_line( connection * conn, const char * format, ... );

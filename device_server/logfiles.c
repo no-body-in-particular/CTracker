@@ -142,6 +142,14 @@ void statusprintf(connection * conn, const char * format, ...) {
     va_end( arglist );
 }
 
+void set_status(connection * conn, int battery_level, int gsm_signal, int position_type, int num_sats ) {
+    statusprintf(conn, "%u,%u,%u,%u\n",
+                 battery_level,
+                 gsm_signal,
+                 position_type,
+                 num_sats);
+}
+
 void log_command_response(connection * conn, const unsigned char * response) {
     struct tm tm = *gmtime(&conn->device_time);
     commandprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
@@ -190,7 +198,7 @@ void log_buffer(connection * conn) {
 void log_event(connection * conn, const unsigned char * response) {
     time_t t = conn->device_time;
     struct tm tm = *gmtime(&t);
-    eventprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%f,%s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+    eventprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%.2f,%s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
                 conn->current_lat, conn->current_lon, conn->current_speed, response);
 }
 

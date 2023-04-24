@@ -139,11 +139,11 @@ void print_status_info(connection * conn, status_information status) {
     uint8_t voltage = 0;
     log_line(conn, "got status package, acc: %u  charged: %u alarm:%u located: %u power: %u voltage: %u terminal info: %u\n", fortified, acc, charged, alm, located, status.voltage, status.terminal_info);
     voltage = status.voltage;
-    statusprintf(conn, "%u,%u,%u,%u\n",
-                 voltage,
-                 status.gsm_strength * 25,
-                 conn->current_position_type,
-                 conn->current_sat_count);
+    set_status(conn,
+               voltage,
+               status.gsm_strength * 25,
+               conn->current_position_type,
+               conn->current_sat_count);
     write_stat(conn, "battery_level", voltage);
     write_stat(conn, "signal", status.gsm_strength * 25);
 
@@ -161,11 +161,7 @@ void print_heartbeat_info(connection * conn, heartbeat_information hbt) {
     hbt.voltage = SWAP_UINT16(hbt.voltage);
     log_line(conn, "got heartbeat package [status: %x voltage: %f rssi: %x]\n", hbt.status, hbt.voltage / 100.0f, hbt.rssi);
     float voltage = voltage_to_soc(hbt.voltage / 100.0f) ;
-    statusprintf(conn, "%.1f,%u,%u,%u\n",
-                 voltage,
-                 hbt.rssi * 25,
-                 conn->current_position_type,
-                 conn->current_sat_count);
+    set_status(conn, voltage, hbt.rssi * 25, conn->current_position_type, conn->current_sat_count );
     write_stat(conn, "battery_level", voltage);
     write_stat(conn, "signal", hbt.rssi * 25);
 
@@ -378,11 +374,9 @@ void process_location_modular(connection * conn, uint8_t * data, size_t data_len
     }
 
     if (location_valid) {
+        //location_type
         move_to(conn, t, location_type, lat, lon);
-
-        if (num_satelites) {
-            write_stat(conn, "gps_sats", num_satelites);
-        }
+        write_sat_count(conn, location_type, num_satelites);
     }
 
     send_data_packet(conn, create_response(0x70, *((uint16_t *) data)));

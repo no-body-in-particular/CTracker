@@ -177,6 +177,8 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
         }
     }
 
+    time_t dt = date_to_time(year,month,day,hour,minute, second);
+
     if (!valid_position) {
         //when falling back to LBS try to force GPS geolocation
         if ( (time(0) - conn->since_last_locate ) > 60) {
@@ -219,7 +221,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
     }
 
     if (valid_position) {
-        move_to(conn, time(0), position_type, lat, lng);
+        move_to(conn, dt, position_type, lat, lng);
         write_sat_count(conn, position_type, num_sats);
 
         if (strlen(data_buffers[10]) > 0) {
@@ -252,11 +254,11 @@ void myrope_process_heartbeat(connection * conn, size_t parse_count, unsigned ch
         return;
     }
 
-    statusprintf(conn, "%s,%s,%u,%u\n",
-                 data_buffers[4] + 3,
-                 data_buffers[5] + 3,
-                 0,//position type
-                 0);//num sats
+    set_status(conn,
+               parse_float(data_buffers[4] + 3),
+               parse_float(data_buffers[5] + 3),
+               0,
+               0);
     write_stat(conn, "battery_level", parse_float(data_buffers[4] + 3));
     write_stat(conn, "signal", parse_float(data_buffers[5] + 3));
     conn->timeout_time = time(0) + MYROPE_TIMEOUT;

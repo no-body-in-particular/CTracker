@@ -211,9 +211,11 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
         }
     }
 
+    time_t dt = date_to_time(year,month,day,hour,minute, second);
+
     if (valid_position) {
         //if we're fairly certain about our location do trigger fences
-        move_to(conn, time(0), position_type, lat, lng);
+        move_to(conn, dt, position_type, lat, lng);
         write_stat(conn, "battery_level", battery_level);
         write_sat_count(conn, position_type, num_sats);
         write_stat(conn, "signal", signal_strength);

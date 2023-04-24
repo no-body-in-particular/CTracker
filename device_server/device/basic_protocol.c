@@ -152,11 +152,7 @@ void basic_process_message(connection * conn, char * string, size_t length) {
     if (num_sats > 0) {
         move_to(conn, t, position_type, lat, lon);
         write_stat(conn, "battery_level", battery_level);
-        statusprintf(conn, "%u,%u,%u,%u\n",
-                     battery_level,
-                     0,//gsm signal level
-                     position_type,
-                     num_sats);//number of satelites
+        set_status(conn, battery_level, 0, position_type, num_sats );
     }
 
     if (battery_level < 20 && (( time(0) - conn->since_battalm) > 600)) {

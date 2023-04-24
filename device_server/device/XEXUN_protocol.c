@@ -247,11 +247,7 @@ size_t process_gps_data(connection * c, time_t timestamp,  position_packet * pac
     d->lat = parseCoordinate(d->lat);
     d->lon = parseCoordinate(d->lon);
     log_line(c, "got GPS position lat/long/timestamp: %f/%f/%llu\n", d->lat, d->lon, timestamp);
-    statusprintf(c, "%u,%f,%u,%u\n",
-                 packet->batt_attributes & 0xFF,
-                 packet->csq * 3.33f,
-                 0,
-                 d->sat_count);
+    set_status(c, packet->batt_attributes & 0xFF, packet->csq * 3.33f, 0, d->sat_count);
     move_to(c, t, 0, d->lat, d->lon);
     write_stat(c, "gps_sats", d->sat_count);
     write_stat(c, "signal", packet->csq * 3.33f);
@@ -315,11 +311,7 @@ size_t process_wifi_data(connection * c, time_t timestamp, position_packet * pac
 
     if (result.valid) {
         move_to(c, t, 2, result.lat, result.lng);
-        statusprintf(c, "%u,%.2f,%u,%u\n",
-                     SWAP_UINT16(packet->batt_attributes) & 0xFF,
-                     packet->csq * 3.33f,
-                     2,
-                     d->network_count);
+        set_status(c,  SWAP_UINT16(packet->batt_attributes) & 0xFF, packet->csq * 3.33f, 2, d->network_count);
         c->device_time = time(0);
     }
 

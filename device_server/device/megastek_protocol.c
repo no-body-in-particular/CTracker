@@ -171,23 +171,18 @@ void process_message(connection * conn, char * string, size_t length) {
         }
     }
 
-
     if (strcmp(data_buffers[34], "Timer") == 0) {
-        move_to(conn, dt,position_type, lat, lon);
-                write_sat_count(conn, position_type, num_sats);
+        move_to(conn, dt, position_type, lat, lon);
+        write_sat_count(conn, position_type, num_sats);
+
     } else {
-        log_event(conn,data_buffers[34]);
+        log_event(conn, data_buffers[34]);
     }
 
     int rssi = parse_int(data_buffers[23], 2) * 3.33f;
-    statusprintf(conn, "%s,%f,%u,%u\n",
-                 data_buffers[33],
-                 rssi,
-                 0,
-                 num_sats);
-
-                 write_stat(conn,"battery_level",battery_level);
-                 write_stat(conn,"signal",rssi);
+    set_status(conn, parse_float( data_buffers[33]), rssi, 0, num_sats);
+    write_stat(conn, "battery_level", battery_level);
+    write_stat(conn, "signal", rssi);
 }
 
 void megastek_process(void * vp) {

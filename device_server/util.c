@@ -64,11 +64,8 @@ double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
 }
 
 double compute_speed(time_t dt, double lat1, double lon1, double lat2, double lon2) {
-    double   speed = haversineDistance(lat1, lon1, lat2, lon2);
-    fprintf(stdout,"compute_speed distance: %f time: %llu\n",speed,dt);
+    double speed = haversineDistance(lat1, lon1, lat2, lon2);
     double over_time = (fabs(dt) / 3600);
-        fprintf(stdout,"compute_speed over_time %f\n",over_time);
-
     over_time = over_time < 0.0f ? 0.166666f : over_time;
     speed = speed / over_time;
     return speed;
