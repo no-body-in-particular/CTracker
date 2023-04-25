@@ -6,7 +6,7 @@ function tounix(date) {
         return 0;
     }
 
-    return parseInt((date.getTime() / 1000).toFixed(0)) + (new Date(0, 1).getTimezoneOffset() * 60);
+    return Math.ceil((date.getTime()/1000));
 }
 
 function timePad(num) {

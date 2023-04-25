@@ -31,7 +31,7 @@ time_t time_on_day(int day, int hour, int minute) {
     tm.tm_hour = hour;
     tm.tm_min = minute ;
     tm.tm_sec = 0;
-    time_t ret = mktime(&tm) - timezone;
+    time_t ret = timegm(&tm);
     return ret;
 }
 
@@ -44,6 +44,7 @@ geofence fence_from_str(char * str) {
     time_t t = time(NULL);
     struct tm tm = *gmtime(&t);
     time_t today_begin = time_on_day(tm.tm_wday, 0, 0) ;
+    time_t tomorrow_begin = time_on_day(tm.tm_wday + 1, 0, 0) ;
 
     if (str_count < 9) {
         return ret;
@@ -111,41 +112,29 @@ geofence fence_from_str(char * str) {
 
     strcpy(ret.name, data_buffers[8]);
     strip_unprintable(ret.name);
-    bool start_is_end = (ret.start_hour * 60 + ret.start_minute) == ( ret.end_hour * 60 + ret.end_minute);
 
-    if ( !start_is_end ) {
-        if (ret.day_of_week >= 8) {
-            ret.fence_start_today =  time_on_day(tm.tm_wday, ret.start_hour, ret.start_minute);
-            ret.fence_end_today =  time_on_day(tm.tm_wday, ret.end_hour, ret.end_minute);
-
-            if (ret.fence_start_today > ( today_begin +  60 * 60 * 24)) {
-                ret.fence_start_today -=  60 * 60 * 24;
-            }
-
-            if (ret.fence_end_today > ( today_begin +  60 * 60 * 24)) {
-                ret.fence_end_today -=  60 * 60 * 24;
-            }
-
-        } else {
-            ret.fence_start_today = time_on_day(ret.day_of_week, ret.start_hour, ret.start_minute);
-            ret.fence_end_today =  time_on_day(ret.day_of_week, ret.end_hour, ret.end_minute);
-        }
-
-        if ((ret.end_hour * 60 + ret.end_minute) <= (ret.start_hour * 60 + ret.start_minute)) {
-            ret.fence_end_today += 60 * 60 * 24 ;
-        }
-
-    } else {
-        if (ret.day_of_week >= 8) {
-            ret.fence_start_today =  time_on_day(tm.tm_wday, 0, 0);
-            ret.fence_end_today =  time_on_day(tm.tm_wday, 23, 59);
-
-        } else {
-            ret.fence_start_today =  time_on_day(ret.day_of_week, 0, 0);
-            ret.fence_end_today =  time_on_day(ret.day_of_week, 23, 59);
-        }
+    //all day fence
+    if ( (ret.start_hour * 60 + ret.start_minute) == ( ret.end_hour * 60 + ret.end_minute)) {
+        ret.start_hour = 0;
+        ret.start_minute = 0;
+        ret.end_hour = 23;
+        ret.end_minute = 59;
     }
 
+    //every day fence, set the start date to today
+    if (ret.day_of_week >= 8) {
+        ret.day_of_week = tm.tm_wday;
+    }
+
+    ret.fence_start_today = time_on_day(ret.day_of_week, ret.start_hour, ret.start_minute);
+    ret.fence_end_today =  time_on_day(ret.day_of_week, ret.end_hour, ret.end_minute);
+
+    if (ret.fence_start_today > ret.fence_end_today) {
+        ret.fence_start_today = time_on_day(ret.day_of_week - 1, ret.start_hour, ret.start_minute);
+        ret.fence_end_today =  time_on_day(ret.day_of_week, ret.end_hour, ret.end_minute);
+    }
+
+   // fprintf(stdout, "fence name: %s start: %u end: %u, current time: %u\n", ret.name, ret.fence_start_today, ret.fence_end_today, time(0));
     ret.valid = true;
     return ret;
 }
@@ -205,8 +194,9 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
 }
 
 void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon) {
-    time_t dt = device_time - conn->device_time;
+    time_t dt = fabs(device_time - conn->device_time);
     double speed = compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
+bool allow_trigger=dt>5 && dt<1200;
 
     if ( speed < 0 | speed > 1600) {
         speed = 0;
@@ -229,20 +219,20 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
             if ( time(0) > f.fence_start_today && time(0) < f.fence_end_today  ) {
                 if ((f.type == FENCE_IN || f.type == FENCE_IN_OUT) && (haversineDistance(f.lat, f.lon, lat, lon) < f.radius) &&
                         (haversineDistance(f.lat, f.lon, conn->current_lat, conn->current_lon) >= f.radius)) {
-                    fence_alert(conn, dt > 20, f, "entered fence area", lat, lon, speed);
+                    fence_alert(conn, allow_trigger, f, "entered fence area", lat, lon, speed);
                     got_alert = true;
                     break;
                 }
 
                 if ((f.type == FENCE_OUT || f.type == FENCE_IN_OUT) && (haversineDistance(f.lat, f.lon, lat, lon) > f.radius) &&
                         (haversineDistance(f.lat, f.lon, conn->current_lat, conn->current_lon) <= f.radius)) {
-                    fence_alert(conn, dt > 20, f, "left fence area", lat, lon, speed);
+                    fence_alert(conn, allow_trigger, f, "left fence area", lat, lon, speed);
                     got_alert = true;
                     break;
                 }
 
                 if ((f.type == FENCE_EXCLUDE ) && (haversineDistance(f.lat, f.lon, lat, lon) < f.radius) ) {
-                    fence_alert(conn, dt > 20,  f, "inside exclusion zone", lat, lon, speed);
+                    fence_alert(conn, allow_trigger,  f, "inside exclusion zone", lat, lon, speed);
                     got_alert = true;
                     break;
                 }
@@ -279,7 +269,7 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
         }
 
         if (fence_mandatory && false == in_mandatory && false == got_alert) {
-            fence_alert(conn, dt > 20, f_outside, "outside of inclusion zone", lat, lon, 0);
+            fence_alert(conn, allow_trigger, f_outside, "outside of inclusion zone", lat, lon, 0);
         }
     }
 

@@ -51,25 +51,19 @@ function computeLogRow(cols) {
 }
 
 function computeFenceRow(cols) {
-    var dayOfWeek = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', 'Every'];
+    var dayOfWeek = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', '', 'Every'];
     var fenceType = ['In', 'Out', 'In+Out', 'Stay in', 'Exclusion zone'];
     var alarmEnabled = ['Off', 'On'];
     var dateMod=localTime(cols[0])[0] ;
-    var dateInt=parseInt(cols[2]);
-    var displayDate=dateInt + dateMod;
+    var displayDate=parseInt(cols[2]) + dateMod;
 
-    if( displayDate==0 ){
+    if(displayDate==0 ){
           displayDate=7;   
     }
 
-    if( displayDate==8 ){
-        displayDate=1;
+    if(displayDate==8){
+        displayDate=0;
     }
-
-    if( dateInt>=8){
-        displayDate=8;
-    }
-
 
 
     return "<tr onclick='animateTo(" + cols[5] + "," + cols[4] + ")'><td>" + localTime(cols[0])[1] + "</td><td>" + localTime(cols[1])[1] + "</td><td>" + dayOfWeek[displayDate] + "</td><td>" + fenceType[cols[3]] + "</td><td>" + cols[6] + "m</td><td>" + alarmEnabled[cols[7]] + "</td><td>" + cols[8] + "</td><td><button onClick='deleteFence(\"" + cols.join(',') + "\")' >delete</button></td></tr>";
@@ -320,11 +314,9 @@ function sendCommand(cmd) {
 function addFence() {
     var startTime=utcTime(document.getElementById("fenceStart").value);
     var endTime=utcTime(document.getElementById("fenceEnd").value)[1];
-    var dayInt=parseInt(document.getElementById("fenceDay").value);
-    var fenceDay=dayInt-startTime[0];
+    var fenceDay=parseInt(document.getElementById("fenceDay").value)-startTime[0];
     if(fenceDay==0)fenceDay=7;
     if(fenceDay==8)fenceDay=1;
-    if(dayInt>7)fenceDay=8;
 
     var f = [startTime[1], endTime, parseInt(document.getElementById("fenceDay").value)-startTime[0], document.getElementById("fenceType").value,
         document.getElementById("fenceLat").value, document.getElementById("fenceLong").value, document.getElementById("fenceRadius").value,
@@ -597,13 +589,13 @@ function setMarker(lat, lng, move, text) {
 }
 
 function setBattery(batlvl) {
-    if (batlvl >= 90) {
+    if (batlvl >= 75) {
         document.getElementById("batt").className = "icon battery-full";
-    } else if (batlvl >= 75) {
+    } else if (batlvl >= 51) {
         document.getElementById("batt").className = "icon battery-three-quarters";
-    } else if (batlvl >= 50) {
+    } else if (batlvl >= 25) {
         document.getElementById("batt").className = "icon battery-half";
-    } else if (batlvl >= 20) {
+    } else if (batlvl >= 10) {
         document.getElementById("batt").className = "icon battery-quarter";
     } else {
         document.getElementById("batt").className = "icon battery-empty";
@@ -699,7 +691,7 @@ function searchdateChange() {
 }
 
 setInterval(updateCurrentPosition, 10000);
-setInterval(refreshData, 20000);
+setInterval(refreshData, 80000);
 setInterval(fetchLogging, 280000);
 
 setBeginDate(120);

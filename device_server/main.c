@@ -46,6 +46,7 @@ int main(int argc, char * argv[]) {
     signal(SIGFPE, handler);
     curl_global_init(CURL_GLOBAL_DEFAULT);
     setbuf(stdout, NULL);
+    tzset();
     server_loop();
     curl_global_cleanup();
     return 0;

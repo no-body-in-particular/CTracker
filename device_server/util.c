@@ -115,10 +115,7 @@ time_t parse_date(const char * dt) {
     if (sscanf(dt, "%d-%d-%dT%d:%d:%dZ", &tmVar.tm_year, &tmVar.tm_mon, & tmVar.tm_mday, &tmVar.tm_hour, &tmVar.tm_min, &tmVar.tm_sec) == 6) {
         tmVar.tm_year -= 1900;
         tmVar.tm_mon -= 1;
-        tzset();
-        timeVar = mktime(&tmVar) - timezone;
-        return timeVar;
-
+        return timegm(&tmVar);
     } else {
         return -1;
     }
@@ -134,7 +131,7 @@ time_t date_to_time(uint8_t year, uint8_t month, uint8_t day, uint8_t hour, uint
     tmVar.tm_min = min;
     tmVar.tm_sec = sec;
     tzset();
-    timeVar = mktime(&tmVar) - timezone;
+    timeVar = timegm(&tmVar);
     return timeVar;
 }
 

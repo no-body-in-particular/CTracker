@@ -92,6 +92,8 @@ function convert_to_trips(table, rows) {
 
     const tripBeforeAfter = 2;
 
+    if( ! rows || rows.length <2) return;
+
     for (var i = 0; i < (rows.length - 1); i++) {
         if (!inTrip && isTripStart(rows, i) && !isStop(rows, i, true)) {
             tripBeginIndex = walkToStop(rows, i, true);
