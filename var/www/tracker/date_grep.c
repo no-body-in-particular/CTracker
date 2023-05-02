@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <time.h>
+
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -17,8 +18,8 @@ long long parse_date(const char * dt) {
     if (sscanf(dt, "%d-%d-%dT%d:%d:%dZ", &tmVar.tm_year, &tmVar.tm_mon, & tmVar.tm_mday, &tmVar.tm_hour, &tmVar.tm_min, &tmVar.tm_sec) == 6) {
         tmVar.tm_year -= 1900;
         tmVar.tm_mon -= 1;
-        tzset();
-        timeVar = mktime(&tmVar) - __timezone;
+        timeVar=timegm(&tmVar);
+       //timeVar = mktime(&tmVar);
         return timeVar;
 
     } else {
