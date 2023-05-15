@@ -177,7 +177,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
         }
     }
 
-    time_t dt = date_to_time(year,month,day,hour,minute, second);
+    time_t dt = date_to_time(year, month, day, hour, minute, second);
 
     if (!valid_position) {
         //when falling back to LBS try to force GPS geolocation

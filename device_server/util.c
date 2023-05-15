@@ -116,6 +116,7 @@ time_t parse_date(const char * dt) {
         tmVar.tm_year -= 1900;
         tmVar.tm_mon -= 1;
         return timegm(&tmVar);
+
     } else {
         return -1;
     }
@@ -134,6 +135,21 @@ time_t date_to_time(uint8_t year, uint8_t month, uint8_t day, uint8_t hour, uint
     timeVar = timegm(&tmVar);
     return timeVar;
 }
+
+time_t local_date_to_time(uint8_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec) {
+    struct tm tmVar = {0};
+    time_t timeVar = 0;
+    tmVar.tm_year = year + 100;
+    tmVar.tm_mon = month - 1;
+    tmVar.tm_mday = day;
+    tmVar.tm_hour = hour;
+    tmVar.tm_min = min;
+    tmVar.tm_sec = sec;
+    tzset();
+    timeVar = time(&tmVar);
+    return timeVar;
+}
+
 
 void pad_imei(char * imei) {
     for (; strlen(imei) < 16;) {

@@ -56,6 +56,7 @@ int msleep(long msec);
 size_t binary_replace(uint8_t * from, size_t fromlen, uint8_t * to, size_t tolen, uint8_t * in, size_t length, size_t safelength);
 time_t parse_date(const char * dt);
 time_t date_to_time(uint8_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec) ;
+time_t local_date_to_time(uint8_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec);
 void pad_imei(char * imei) ;
 float voltage_to_soc(float voltage);
 #endif

@@ -30,7 +30,19 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, conn->imei);
         send_string(conn, ",080835#");
 
-    } else if (strcmp(cmd, "SHUTDOWN#") == 0) {
+    } else if (strcmp(cmd, "SYNCTIME#") == 0) {
+            char response[128]={0};
+            time_t now = time(NULL);
+            struct tm * t = gmtime(&now); //gmtime for gmt
+            struct tm lt = {0};
+            localtime_r(&now, &lt);
+            int tz = lt.tm_gmtoff / 3600 ;
+
+            strftime(response, BUF_SIZE - 1, "IWBP00,%Y%m%d%H%M%S,", t);
+            sprintf(buffer, "%i#", tz);
+            strcat(response, buffer);
+            send_string(conn, response);
+    } else  if (strcmp(cmd, "SHUTDOWN#") == 0) {
         send_string(conn, "IWBP31,");
         send_string(conn, conn->imei);
         send_string(conn, ",080835#");
@@ -211,7 +223,7 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
         }
     }
 
-    time_t dt = date_to_time(year,month,day,hour,minute, second);
+    time_t dt = local_date_to_time(year, month, day, hour, minute, second);
 
     if (valid_position) {
         //if we're fairly certain about our location do trigger fences
@@ -430,12 +442,7 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
     //send responses
     switch (message_type) {
         case 0:
-            tzset();
-            int tz = timezone / -3600 ;
-            strftime(response, BUF_SIZE - 1, "IWBP00,%Y%m%d%H%M%S,", t);
-            sprintf(bufstr, "%i#", tz);
-            strcat(response, bufstr);
-            send_string(conn, response);
+            thinkrace_send_command(conn, "SYNCTIME#");
             thinkrace_send_command(conn, "TIMES=0000@2359#");
             break;
 
@@ -492,6 +499,7 @@ void thinkrace_identify(void * vp) {
 
     if (strstr(first_bytes, thinkrace_start_contains) != 0) {
         fprintf(stdout, "  device type is thinkrace\n");
+        thinkrace_send_command(conn, "SYNCTIME#");
         conn->PROCESS_FUNCTION = thinkrace_process;
         conn->COMMAND_FUNCTION = thinkrace_send_command;
         conn->WARNING_FUNCTION = thinkrace_warn;

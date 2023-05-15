@@ -308,8 +308,8 @@ void myrope_r18_process_position(connection * conn, size_t parse_count, unsigned
             valid_position = true;
         }
     }
-    
-    time_t dt = date_to_time(year,month,day,hour,minute, second);
+
+    time_t dt = date_to_time(year, month, day, hour, minute, second);
 
     if (valid_position) {
         //if we're fairly certain about our location do trigger fences
