@@ -134,7 +134,7 @@ geofence fence_from_str(char * str) {
         ret.fence_end_today =  time_on_day(ret.day_of_week, ret.end_hour, ret.end_minute);
     }
 
-   // fprintf(stdout, "fence name: %s start: %u end: %u, current time: %u\n", ret.name, ret.fence_start_today, ret.fence_end_today, time(0));
+    // fprintf(stdout, "fence name: %s start: %u end: %u, current time: %u\n", ret.name, ret.fence_start_today, ret.fence_end_today, time(0));
     ret.valid = true;
     return ret;
 }
@@ -196,7 +196,7 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
 void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon) {
     time_t dt = fabs(device_time - conn->device_time);
     double speed = compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
-bool allow_trigger=dt>5 && dt<1200;
+    bool allow_trigger = dt > 5 && dt < 1200;
 
     if ( speed < 0 | speed > 1600) {
         speed = 0;

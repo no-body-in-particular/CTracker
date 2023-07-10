@@ -122,8 +122,19 @@ void lbs_cache_to_database(cell_db * database) {
     size_t tower_idx =   database->tower_count;
     database->tower_count += database->cache_size;
 
-    if (database->tower_count > database->tower_memory_size) {
-        database->tower_memory_size *= 2;
+    bool resize = false;
+
+    if(database->tower_memory_size<5){
+        database->tower_memory_size=5;
+        resize=true;
+    }
+
+    while (database->tower_count > database->tower_memory_size) {
+        database->tower_memory_size *= 1.2;
+        resize = true;
+    }
+
+    if (resize) {
         database->tower_buffer = realloc(database->tower_buffer, sizeof(cell_tower) * database->tower_memory_size);
     }
 

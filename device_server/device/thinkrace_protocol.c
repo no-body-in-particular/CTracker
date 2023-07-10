@@ -31,17 +31,17 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, ",080835#");
 
     } else if (strcmp(cmd, "SYNCTIME#") == 0) {
-            char response[128]={0};
-            time_t now = time(NULL);
-            struct tm * t = gmtime(&now); //gmtime for gmt
-            struct tm lt = {0};
-            localtime_r(&now, &lt);
-            int tz = lt.tm_gmtoff / 3600 ;
+        char response[128] = {0};
+        time_t now = time(NULL);
+        struct tm * t = gmtime(&now); //gmtime for gmt
+        struct tm lt = {0};
+        localtime_r(&now, &lt);
+        int tz = lt.tm_gmtoff / 3600 ;
+        strftime(response, BUF_SIZE - 1, "IWBP00,%Y%m%d%H%M%S,", t);
+        sprintf(buffer, "%i#", tz);
+        strcat(response, buffer);
+        send_string(conn, response);
 
-            strftime(response, BUF_SIZE - 1, "IWBP00,%Y%m%d%H%M%S,", t);
-            sprintf(buffer, "%i#", tz);
-            strcat(response, buffer);
-            send_string(conn, response);
     } else  if (strcmp(cmd, "SHUTDOWN#") == 0) {
         send_string(conn, "IWBP31,");
         send_string(conn, conn->imei);

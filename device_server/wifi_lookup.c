@@ -161,9 +161,20 @@ void wifi_cache_to_database(wifi_db * database) {
     //
     size_t tower_idx =   database->network_count;
     database->network_count += database->cache_count;
+    bool resize = false;
 
-    if (database->network_count > database->network_buffer_size) {
-        database->network_buffer_size *= 2;
+    if(database->network_buffer_size<5){
+        database->network_buffer_size=5;
+        resize=true;
+    }
+
+    while (database->network_count > database->network_buffer_size) {
+
+        database->network_buffer_size *= 1.2;
+        resize = true;
+    }
+
+    if (resize) {
         database->network_buffer = realloc(database->network_buffer, sizeof(wifi_db_entry) * database->network_buffer_size);
     }
 

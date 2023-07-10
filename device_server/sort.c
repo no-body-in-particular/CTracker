@@ -14,11 +14,18 @@ size_t radix_sort(void * entities, size_t count, size_t entity_size, size_t sort
 
     if (radix_sort_buffer == 0) {
         radix_sort_buffer_size = entity_size * count * 2;
+        radix_sort_buffer_size = radix_sort_buffer_size < 5 ? 5 : radix_sort_buffer_size;
         radix_sort_buffer = malloc(radix_sort_buffer_size);
     }
 
+    bool resize = false;
+
     while ((entity_size * count * 2) > radix_sort_buffer_size) {
-        radix_sort_buffer_size *= 2;
+        radix_sort_buffer_size *= 1.2f;
+        resize = true;
+    }
+
+    if (resize) {
         radix_sort_buffer = realloc(radix_sort_buffer, radix_sort_buffer_size);
     }
 
@@ -58,6 +65,10 @@ size_t radix_sort(void * entities, size_t count, size_t entity_size, size_t sort
     }
 
     memcpy(bytes, bucket_a, bucket_a_size * entity_size);
+    memset(radix_sort_buffer,0,radix_sort_buffer_size);
+
     pthread_mutex_unlock(&radix_sort_mutex);
+
+
     return bucket_a_size;
 }
