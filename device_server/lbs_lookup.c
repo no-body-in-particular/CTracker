@@ -23,8 +23,8 @@ int8_t lbs_bit(void * db_entry, size_t bit) {
     return (value[bit / 8] & (1 << (7 - (bit % 8)))) > 0;
 }
 
-void lbs_radix_sort(cell_db * database) {
-    database->tower_count = radix_sort(database->tower_buffer, database->tower_count, sizeof(cell_tower), 72, lbs_bit, compare_lbs);
+void lbs_sort(cell_db * database) {
+    database->tower_count = quick_sort(database->tower_buffer, database->tower_count, sizeof(cell_tower), 72, lbs_bit, compare_lbs);
 }
 
 //create mutex and read from file
@@ -91,7 +91,7 @@ void read_lbs_file(cell_db * database, char * file) {
     }
 
     fprintf(stdout, "Read all towers: %u\n", tower_idx);
-    lbs_radix_sort(database);
+    lbs_sort(database);
     fprintf(stdout, "size in memory:%lu\n", database->tower_count * sizeof(cell_tower));
     fclose(fp);
 }
@@ -121,12 +121,11 @@ void lbs_cache_to_database(cell_db * database) {
 
     size_t tower_idx =   database->tower_count;
     database->tower_count += database->cache_size;
-
     bool resize = false;
 
-    if(database->tower_memory_size<5){
-        database->tower_memory_size=5;
-        resize=true;
+    if (database->tower_memory_size < 5) {
+        database->tower_memory_size = 5;
+        resize = true;
     }
 
     while (database->tower_count > database->tower_memory_size) {
@@ -140,7 +139,7 @@ void lbs_cache_to_database(cell_db * database) {
 
     memcpy(database->tower_buffer + tower_idx, database->current_cache, database->cache_size * sizeof(cell_tower));
     database->cache_size = 0;
-    lbs_radix_sort(database);
+    lbs_sort(database);
     lbs_database_to_file(database, CELLDB_FILE);
     fprintf(stdout, "Done writing LBS database.\n");
 }

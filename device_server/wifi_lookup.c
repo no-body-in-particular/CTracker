@@ -85,12 +85,12 @@ double is_same(void * a, void * b) {
 }
 
 
-void wifi_radix_sort(wifi_db * db) {
+void wifi_sort(wifi_db * db) {
     for (size_t i = 0; i < db->network_count; i++) {
-        radix_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
+        quick_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
     }
 
-    db->network_count = radix_sort(db->network_buffer, db->network_count, sizeof(wifi_db_entry), 64, wifi_db_entry_bit, is_same );
+    db->network_count = quick_sort(db->network_buffer, db->network_count, sizeof(wifi_db_entry), 64, wifi_db_entry_bit, is_same );
 }
 
 double wifi_hash_compare(void * db_entry, void * db_entry_b) {
@@ -145,7 +145,7 @@ void wifi_database_from_file(wifi_db * database, char * file) {
     database->network_buffer_size = database->network_count;
     fread(database->network_buffer, database->network_count * sizeof(wifi_db_entry), 1, fp);
     fclose(fp);
-    wifi_radix_sort(database);
+    wifi_sort(database);
     fprintf(stdout, "   done.\n");
 }
 
@@ -163,13 +163,12 @@ void wifi_cache_to_database(wifi_db * database) {
     database->network_count += database->cache_count;
     bool resize = false;
 
-    if(database->network_buffer_size<5){
-        database->network_buffer_size=5;
-        resize=true;
+    if (database->network_buffer_size < 5) {
+        database->network_buffer_size = 5;
+        resize = true;
     }
 
     while (database->network_count > database->network_buffer_size) {
-
         database->network_buffer_size *= 1.2;
         resize = true;
     }
@@ -180,7 +179,7 @@ void wifi_cache_to_database(wifi_db * database) {
 
     memcpy(database->network_buffer + tower_idx, database->network_cache, database->cache_count * sizeof(wifi_db_entry));
     database->cache_count = 0;
-    wifi_radix_sort(database);
+    wifi_sort(database);
     wifi_database_to_file(database, WIFIDB_FILE);
     fprintf(stdout, "Done writing WiFi database. Old count: %u New count: %u\n", tower_idx, database->network_count);
 }
@@ -195,7 +194,7 @@ void init_wifi() {
 location_result wifi_to_cache( wifi_db_entry  networks) {
     pthread_mutex_unlock(&wifi_database.mutex);
     //sort our networks first
-    radix_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
+    quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
 
     for (size_t network_idx = 0; network_idx < wifi_database.cache_count; network_idx++) {
         if (is_same(&wifi_database.network_cache[network_idx], &networks) == 0) {
@@ -221,7 +220,7 @@ location_result wifi_lookup(wifi_network * first, size_t network_count) {
     memset(&entry, 0, sizeof(wifi_db_entry));
     memcpy(entry.network_buffer, first, network_count * sizeof(wifi_network));
     entry.network_count = network_count;
-    radix_sort(entry.network_buffer, entry.network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
+    quick_sort(entry.network_buffer, entry.network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
     entry.result.valid = false;
     pthread_mutex_unlock(&wifi_database.mutex);
     wifi_db_entry * network_ptr = wifi_database.network_count == 0 ? 0 : (wifi_db_entry *) binary_search(wifi_database.network_buffer, (wifi_database.network_buffer + wifi_database.network_count),  &entry,  sizeof(wifi_db_entry), wifi_hash_compare) ;
