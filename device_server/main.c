@@ -41,7 +41,6 @@ void server_loop() {
     }
 }
 
-
 int main(int argc, char * argv[]) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGSEGV, handler);

@@ -23,16 +23,6 @@ int8_t wifi_db_entry_bit(void * db_entry, size_t bit) {
 }
 
 
-int8_t wifi_network_bit(void * db_entry, size_t bit) {
-    uint8_t * value = (uint8_t *)db_entry;
-
-    if (bit >= 48) {
-        return -1;
-    }
-
-    return (value[bit / 8] & (1 << (7 - (bit % 8)))) > 0;
-}
-
 double wifi_network_compare(void * a, void * b) {
     return memcmp(b, a, 6);
 }
@@ -87,10 +77,10 @@ double is_same(void * a, void * b) {
 
 void wifi_sort(wifi_db * db) {
     for (size_t i = 0; i < db->network_count; i++) {
-        quick_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
+        quick_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), 48, wifi_network_compare);
     }
 
-    db->network_count = quick_sort(db->network_buffer, db->network_count, sizeof(wifi_db_entry), 64, wifi_db_entry_bit, is_same );
+    db->network_count = quick_sort(db->network_buffer, db->network_count, sizeof(wifi_db_entry), 64, is_same );
 }
 
 double wifi_hash_compare(void * db_entry, void * db_entry_b) {
@@ -194,7 +184,7 @@ void init_wifi() {
 location_result wifi_to_cache( wifi_db_entry  networks) {
     pthread_mutex_unlock(&wifi_database.mutex);
     //sort our networks first
-    quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
+    quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), 48, wifi_network_compare);
 
     for (size_t network_idx = 0; network_idx < wifi_database.cache_count; network_idx++) {
         if (is_same(&wifi_database.network_cache[network_idx], &networks) == 0) {
@@ -220,7 +210,7 @@ location_result wifi_lookup(wifi_network * first, size_t network_count) {
     memset(&entry, 0, sizeof(wifi_db_entry));
     memcpy(entry.network_buffer, first, network_count * sizeof(wifi_network));
     entry.network_count = network_count;
-    quick_sort(entry.network_buffer, entry.network_count, sizeof(wifi_network), 48, wifi_network_bit, wifi_network_compare);
+    quick_sort(entry.network_buffer, entry.network_count, sizeof(wifi_network), 48, wifi_network_compare);
     entry.result.valid = false;
     pthread_mutex_unlock(&wifi_database.mutex);
     wifi_db_entry * network_ptr = wifi_database.network_count == 0 ? 0 : (wifi_db_entry *) binary_search(wifi_database.network_buffer, (wifi_database.network_buffer + wifi_database.network_count),  &entry,  sizeof(wifi_db_entry), wifi_hash_compare) ;
@@ -255,22 +245,10 @@ location_result wifi_lookup(wifi_network * first, size_t network_count) {
     pthread_mutex_unlock(&wifi_database.mutex);
 
     if (!entry.result.valid) {
-        entry.result = google_geolocate_wifi(entry.network_buffer, entry.network_count);
+        entry.result = geolocate_wifi(entry.network_buffer, entry.network_count);
 
         if (entry.result.valid) {
             wifi_to_cache( entry);
-        }
-    }
-
-    //test distance as here is not always accurate.
-    if (!entry.result.valid) {
-        entry.result = here_geolocate_wifi(entry.network_buffer, entry.network_count);
-
-        if (entry.result.valid && entry.result.radius < 200) {
-            wifi_to_cache( entry);
-
-        } else {
-            entry.result.valid = false;
         }
     }
 

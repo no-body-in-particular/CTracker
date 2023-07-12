@@ -33,4 +33,7 @@ location_result google_geolocate_tower(cell_tower * tower) ;
 location_result here_geolocate_tower(cell_tower * tower) ;
 location_result google_geolocate_wifi(wifi_network * network, size_t network_count) ;
 location_result here_geolocate_wifi(wifi_network * network, size_t network_count);
+location_result geolocate_tower(cell_tower * tower);
+location_result geolocate_wifi(wifi_network * network, size_t network_count);
+
 #endif

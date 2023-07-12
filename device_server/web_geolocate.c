@@ -135,7 +135,7 @@ location_result google_geolocate_wifi(wifi_network * network, size_t network_cou
     }
 
     strcat(postData, "]}");
-    char url[BUF_SIZE] = "https://www.googleapis.com/geolocation/v1/geolocate?key=";
+    char url[BUF_SIZE] = "https://www.googleapis.com/geolocation/v1/geolocate?fallback=any&key=";
     strcat(url, GOOGLE_API_KEY);
     return  do_geolocate(url, postData);
 }
@@ -236,3 +236,30 @@ location_result google_geolocate_tower(cell_tower * tower) {
     return ret;
 }
 
+location_result geolocate_tower(cell_tower * tower) {
+    location_result ret = google_geolocate_tower(tower);
+
+    if (!ret.valid) {
+        ret = here_geolocate_tower(tower);
+
+        if (ret.radius > 10000) {
+            ret.valid = false;
+        }
+    }
+
+    return ret;
+}
+
+location_result geolocate_wifi(wifi_network * network, size_t network_count) {
+    location_result ret = google_geolocate_wifi(network, network_count);
+
+    if (!ret.valid) {
+        ret = here_geolocate_wifi(network, network_count);
+
+        if (ret.valid && ret.radius > 200) {
+            ret.valid = false;
+        }
+    }
+
+    return ret;
+}

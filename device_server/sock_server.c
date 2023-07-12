@@ -227,7 +227,7 @@ void run_server() {
         server_socket = create_server_sock(LISTEN_ON, LISTEN_PORT);
 
         if (server_socket <= 0) {
-            sleep(10000);
+            msleep(10000);
         }
     }
 

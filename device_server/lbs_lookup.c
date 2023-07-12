@@ -13,18 +13,9 @@ double compare_lbs_partial(void  * tower_a, void * tower_b) {
     return memcmp(tower_a, tower_b, 5);
 }
 
-int8_t lbs_bit(void * db_entry, size_t bit) {
-    uint8_t * value = db_entry;
-
-    if (bit >= 72) {
-        return -1;
-    }
-
-    return (value[bit / 8] & (1 << (7 - (bit % 8)))) > 0;
-}
 
 void lbs_sort(cell_db * database) {
-    database->tower_count = quick_sort(database->tower_buffer, database->tower_count, sizeof(cell_tower), 72, lbs_bit, compare_lbs);
+    database->tower_count = quick_sort(database->tower_buffer, database->tower_count, sizeof(cell_tower), 72, compare_lbs);
 }
 
 //create mutex and read from file
@@ -228,15 +219,7 @@ location_result lbs_lookup(cell_tower * to_find, float last_lat, float last_lng)
     }
 
     if (!ret.valid || (ret.last_tried > 0 && ( (time(0) - ret.last_tried) > CACHE_ENTRY_RETRY))) {
-        ret = google_geolocate_tower(to_find);
-
-        if (!ret.valid) {
-            ret = here_geolocate_tower(to_find) ;
-
-            if (ret.radius > 10000) {
-                ret.valid = false;
-            }
-        }
+        ret = geolocate_tower(to_find);
 
         if (ret.valid )  {
             ret.last_tried = 0;

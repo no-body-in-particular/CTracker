@@ -52,7 +52,6 @@ int main(int argc, char * argv[]) {
     set_network1(network);
     init_wifi();
     wifi_cache_to_database(&wifi_database);
-    //            radix_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), wifi_network_bit, wifi_network_compare);
     location_result result = wifi_lookup(network, 5);
     fprintf(stdout, "%u %f %f\n", result.valid, result.lat, result.lng);
     wifi_cache_to_database(&wifi_database);
