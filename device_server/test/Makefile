@@ -32,16 +32,16 @@ fuzzer: jimitrack
 
 
 
-thinkrace: thinkrace_test.o ../lbs_lookup.o ../wifi_lookup.o ../web_geolocate.o ../multilaterate.o ../sort.o ../search.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/AM01_protocol.o ../device/AM01_packet.o ../string.o ../device/AM01_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/MT200x_protocol.o ../device/XEXUN_protocol.o ../device/thinkrace_protocol.o ../crc64.o
+thinkrace: thinkrace_test.o ../lbs_lookup.o ../wifi_lookup.o ../web_geolocate.o ../multilaterate.o ../sort.o ../search.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/jimi_protocol.o ../device/jimi_packet.o ../string.o ../device/jimi_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/megastek_protocol.o ../device/XEXUN_protocol.o ../device/thinkrace_protocol.o ../crc64.o  ../device/myrope_r18_protocol.o ../device/basic_protocol.o ../device/myrope_protocol.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-xexun: xexun_test.o ../lbs_lookup.o ../wifi_lookup.o ../web_geolocate.o ../multilaterate.o ../sort.o ../search.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/AM01_protocol.o ../device/AM01_packet.o ../string.o ../device/AM01_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/MT200x_protocol.o ../device/XEXUN_protocol.o ../crc64.o ../device/thinkrace_protocol.o
+xexun: xexun_test.o ../lbs_lookup.o ../wifi_lookup.o ../web_geolocate.o ../multilaterate.o ../sort.o ../search.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/jimi_protocol.o ../device/jimi_packet.o ../string.o ../device/jimi_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/megastek_protocol.o ../device/XEXUN_protocol.o ../crc64.o ../device/thinkrace_protocol.o  ../device/myrope_r18_protocol.o ../device/basic_protocol.o ../device/myrope_protocol.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-wifi: test_wifi_lookup.o  ../lbs_lookup.o ../multilaterate.o ../sort.o ../search.o ../web_geolocate.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/AM01_protocol.o ../device/AM01_packet.o ../string.o ../device/AM01_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/MT200x_protocol.o ../device/XEXUN_protocol.o ../device/thinkrace_protocol.o ../crc64.o
+wifi: test_wifi_lookup.o  ../lbs_lookup.o ../multilaterate.o ../sort.o ../search.o ../web_geolocate.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/jimi_protocol.o ../device/jimi_packet.o ../string.o ../device/jimi_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/megastek_protocol.o ../device/XEXUN_protocol.o ../device/thinkrace_protocol.o ../crc64.o  ../device/myrope_r18_protocol.o ../device/basic_protocol.o ../device/myrope_protocol.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-lbs: test_lbs_lookup.o ../sort.o ../search.o ../web_geolocate.o ../wifi_lookup.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/AM01_protocol.o ../device/AM01_packet.o ../string.o ../device/AM01_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/MT200x_protocol.o ../device/XEXUN_protocol.o ../crc64.o ../multilaterate.o ../device/thinkrace_protocol.o
+lbs: test_lbs_lookup.o ../sort.o ../search.o ../web_geolocate.o ../wifi_lookup.o ../crc16.o ../util.o ../sock_server.o ../connection.o ../device/jimi_protocol.o ../device/jimi_packet.o ../string.o ../device/jimi_util.o ../commands.o ../events.o ../geofence.o ../logfiles.o ../device/megastek_protocol.o ../device/XEXUN_protocol.o ../crc64.o ../multilaterate.o ../device/thinkrace_protocol.o ../device/myrope_r18_protocol.o ../device/basic_protocol.o ../device/myrope_protocol.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 style:
