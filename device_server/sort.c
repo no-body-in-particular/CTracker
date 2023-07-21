@@ -45,20 +45,21 @@ size_t partition(void * entities, int count, size_t entity_size, size_t sort_siz
 }
 
 
-size_t quick_sort(void * entities, size_t count, size_t entity_size, size_t sort_size,   double (*COMPARE_FUNCTION)(void *, void *) ) {
+size_t quick_sort(void * entities, size_t count, size_t entity_size, size_t sort_size, double (*COMPARE_FUNCTION)(void *, void *), double (*EXACT_COMPARE_FUNCTION)(void *, void *)) {
     if (count <= 1) {
         return count;
     }
 
     uint8_t * bytes = (uint8_t *)entities;
     size_t store_index = partition(entities, count, entity_size, sort_size, COMPARE_FUNCTION) ;
-    quick_sort(entities, store_index, entity_size, sort_size, COMPARE_FUNCTION);
-    quick_sort(entities + (entity_size * (store_index + 1)), count - store_index - 1, entity_size, sort_size, COMPARE_FUNCTION);
+    quick_sort(entities, store_index, entity_size, sort_size, COMPARE_FUNCTION,EXACT_COMPARE_FUNCTION);
+    quick_sort(entities + (entity_size * (store_index + 1)), count - store_index - 1, entity_size, sort_size, COMPARE_FUNCTION,EXACT_COMPARE_FUNCTION);
 
-    for (size_t n = 0; n < (count - 1) ; n++) {
-        if (count == 0 || (COMPARE_FUNCTION((bytes +  (n * entity_size)), bytes + ((n + 1) * entity_size) ) == 0)) {
-            memmove(bytes +  (n * entity_size), bytes +  ((n + 1)* entity_size), (count - n - 1));
+    for (size_t n = 0; EXACT_COMPARE_FUNCTION!= 0 && n < (count - 1) ; n++) {
+        if ( EXACT_COMPARE_FUNCTION((bytes +  (n * entity_size)), (bytes + ((n + 1) * entity_size)) ) == 0) {
+            memmove(bytes +  (n * entity_size), bytes +  ((n + 1)* entity_size), (count - n - 1)*entity_size);
             count--;
+            n--;
         }
     }
 

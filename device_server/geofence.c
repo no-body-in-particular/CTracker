@@ -273,11 +273,17 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
         }
     }
 
+
     conn->current_lat = lat;
     conn->current_lon = lon;
     conn->current_speed = speed;
     conn->device_time = device_time;
     conn->current_position_type = position_type;
+
+    if(position_type == 0){
+        conn->last_gps_lat = lat;
+        conn->last_gps_lon = lon;
+    }
 
     if (conn->just_connected) {
         conn->just_connected = false;

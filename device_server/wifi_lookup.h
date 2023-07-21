@@ -37,5 +37,5 @@ wifi_db;
 location_result wifi_lookup(wifi_network * first, size_t network_count) ;
 void init_wifi() ;
 location_result wifi_to_cache(wifi_db_entry  networks);
-
+void test();
 #endif // WIFI_LOOKUP_H_INCLUDED

@@ -15,7 +15,7 @@ double compare_lbs_partial(void  * tower_a, void * tower_b) {
 
 
 void lbs_sort(cell_db * database) {
-    database->tower_count = quick_sort(database->tower_buffer, database->tower_count, sizeof(cell_tower), 72, compare_lbs);
+    database->tower_count = quick_sort(database->tower_buffer, database->tower_count, sizeof(cell_tower), 72, compare_lbs,0);
 }
 
 //create mutex and read from file

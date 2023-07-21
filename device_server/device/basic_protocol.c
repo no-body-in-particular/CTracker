@@ -104,7 +104,6 @@ void basic_process_message(connection * conn, char * string, size_t length) {
             lat = parse_float(coord_split[0]);
             lon = parse_float(coord_split[1]);
             num_sats = 1;
-
         } else {
             log_line(conn, "  missing lat or longitude.\n");
             num_sats = 0;
@@ -149,8 +148,13 @@ void basic_process_message(connection * conn, char * string, size_t length) {
         }
     }
 
+    //test if GPS is equal to last GPS coordinates - if so don't update position
+
     if (num_sats > 0) {
-        move_to(conn, t, position_type, lat, lon);
+        if(position_type!=0 || ((conn->last_gps_lat != lat || conn->last_gps_lon!=lon) && (conn->last_gps_lat>-999)) ){
+            move_to(conn, t, position_type, lat, lon);
+        }
+
         write_stat(conn, "battery_level", battery_level);
         set_status(conn, battery_level, 0, position_type, num_sats );
     }

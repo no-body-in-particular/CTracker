@@ -34,6 +34,10 @@ int parse_int(char * str, size_t count) {
         return 0;
     }
 
+    if(0 == str){
+        return 0;
+    }
+
     for (size_t i = 0; i < count && is_special(*str); i++) {
         str++;
     }
@@ -48,8 +52,13 @@ float parse_float(char * string) {
     float num = 0, divisor = 10;;
     char ch;
     bool neg = false;
-    size_t count = strlen(string);
 
+    if(0 == string){
+        return num;
+    }
+
+    size_t count = strlen(string);
+    
     for (size_t i = 0; i < count && is_special(*string); i++) {
         string++;
     }
@@ -91,12 +100,12 @@ size_t split_to(unsigned char delim, unsigned char * src, size_t len, unsigned c
     size_t prev_idx = 0;
     size_t str_count = 0;
 
-    for (size_t i = 0; i < len && str_count < dest_count; i++) {
-        if (src[i] == delim || src[i] == 0) {
+    for (size_t i = 0; i <= len && str_count < dest_count; i++) {
+        if (src[i] == delim || src[i] == 0 || i == len) {
             size_t cur_len = i - prev_idx;
             dest[str_count] = src + prev_idx;
 
-            for (; cur_len > 0 && isspace(dest[str_count][0]) ;)  {
+            for (; cur_len > 0 && isspace(dest[str_count][0]) && dest[str_count][0]<(src+len)  ;)  {
                 dest[str_count]++;
                 cur_len--;
             }
@@ -104,7 +113,7 @@ size_t split_to(unsigned char delim, unsigned char * src, size_t len, unsigned c
             str_count++;
             prev_idx = i + 1;
 
-            if (src[i] == 0) {
+            if (src[i] == 0 || i == len) {
                 return str_count;
             }
 

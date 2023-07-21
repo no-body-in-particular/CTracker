@@ -50,7 +50,10 @@ void set_network2(wifi_network * network) {
 int main(int argc, char * argv[]) {
     wifi_network network[6];
     set_network1(network);
+        fprintf(stdout,"test\n");
+
     init_wifi();
+    fprintf(stdout,"test\n");
     wifi_cache_to_database(&wifi_database);
     location_result result = wifi_lookup(network, 5);
     fprintf(stdout, "%u %f %f\n", result.valid, result.lat, result.lng);

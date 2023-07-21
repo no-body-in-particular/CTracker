@@ -5,4 +5,7 @@
 void basic_process(void * conn);
 void basic_identify(void * vp);
 
+
+#include <float.h>
+
 #endif
