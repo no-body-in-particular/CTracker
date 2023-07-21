@@ -67,6 +67,8 @@ typedef struct {
     float current_lat;
     float current_lon;
     float current_speed;
+    float last_gps_lat;
+    float last_gps_lon;
     size_t current_position_type;
     size_t current_sat_count;
     time_t device_time;
