@@ -47,6 +47,8 @@ float parseLong(char * str) {
 }
 
 void process_message(connection * conn, char * string, size_t length) {
+    fprintf(stdout, "string: \n", string);
+    msleep(1000);
     unsigned char bufstr[BUF_SIZE];
     unsigned char * data_buffers[40];
     unsigned char imei[64] = {0};
@@ -55,11 +57,13 @@ void process_message(connection * conn, char * string, size_t length) {
     unsigned char * current_network[3];
     string = strip_whitespace(string);
     memset(imei, 0, 64);
-    memset(bufstr, 0, sizeof(bufstr));
+    memset(bufstr, 0, BUF_SIZE);
     memset(data_buffers, 0, sizeof(data_buffers));
-    memcpy(bufstr, string, min(strlen(string), BUF_SIZE - 1));
-    log_line(conn, "message recieved: %s\n", bufstr);
-    size_t str_count = split_to(',', bufstr, BUF_SIZE, data_buffers, 40);
+    size_t len = min(length, strlen(string));
+    len = min(len, BUF_SIZE - 1);
+    memcpy(bufstr, string, len);
+
+    size_t str_count = split_to(',', bufstr, strlen(bufstr), data_buffers, 40);
     conn->timeout_time = time(0) + MTEK_TIMEOUT;
 
     if (strstr(data_buffers[0], "CMV001") || strstr(data_buffers[0], ";")) {
@@ -76,8 +80,8 @@ void process_message(connection * conn, char * string, size_t length) {
 
     logprintf(conn, "\n");
 
-    if ( str_count < 35) {
-        log_line(conn, "  invalid response length.\n");
+    if ( str_count < 2) {
+        log_line(conn, "  invalid response length - no imei.\n");
         return;
     }
 
@@ -90,6 +94,11 @@ void process_message(connection * conn, char * string, size_t length) {
         //default wifi on
         megastek_send_command(conn, "W040,0");
         megastek_send_command(conn, "W039,1");
+    }
+
+    if ( str_count < 35) {
+        log_line(conn, "  invalid response length - less than 35: %i.\n", str_count);
+        return;
     }
 
     if ( strlen(data_buffers[7]) < 5 || strlen(data_buffers[9]) < 6 ) {
@@ -171,11 +180,19 @@ void process_message(connection * conn, char * string, size_t length) {
         }
     }
 
-    if (strcmp(data_buffers[34], "Timer") == 0) {
+    double spo2 = parse_float(data_buffers[31]);
+    double temp = parse_float(data_buffers[29]);
+    double hr = parse_float(data_buffers[24]);
+    double steps = parse_float(data_buffers[25]);
+    double activity_time = parse_float(data_buffers[26]);
+    double shallow_sleep_time = parse_float(data_buffers[27]);
+    double deep_sleep_time = parse_float(data_buffers[28]);
+
+    if (strlen(data_buffers[34])>=5 && memcmp(data_buffers[34], "Timer",5) == 0) {
         move_to(conn, dt, position_type, lat, lon);
         write_sat_count(conn, position_type, num_sats);
-
     } else {
+        move_to(conn, dt, position_type, lat, lon);
         log_event(conn, data_buffers[34]);
     }
 
@@ -183,6 +200,34 @@ void process_message(connection * conn, char * string, size_t length) {
     set_status(conn, parse_float( data_buffers[33]), rssi, 0, num_sats);
     write_stat(conn, "battery_level", battery_level);
     write_stat(conn, "signal", rssi);
+
+    if (spo2 > 0) {
+        write_stat(conn, "spo2", spo2);
+    }
+
+    if (temp > 0) {
+        write_stat(conn, "temperature", temp);
+    }
+
+    if (hr > 0) {
+        write_stat(conn, "heart_rate", hr);
+    }
+
+    if (steps > 0) {
+        write_stat(conn, "step_count", steps);
+    }
+
+    if (activity_time > 0) {
+        write_stat(conn, "activity_time", activity_time);
+    }
+
+    if (shallow_sleep_time > 0) {
+        write_stat(conn, "shallow_sleep_time", shallow_sleep_time);
+    }
+
+    if (deep_sleep_time > 0) {
+        write_stat(conn, "deep_sleep_time", shallow_sleep_time);
+    }
 }
 
 void megastek_process(void * vp) {
@@ -195,9 +240,9 @@ void megastek_process(void * vp) {
         size_t index = idx(conn->recv_buffer, '!');
 
         if (index > 0 && index < conn->read_count) {
+            process_message(conn, conn->recv_buffer, index -1);
             index++;
-            process_message(conn, conn->recv_buffer, index);
-            memmove(conn->recv_buffer, conn->recv_buffer + index, conn->read_count - index);
+            memmove(conn->recv_buffer, conn->recv_buffer + index , conn->read_count - index);
             conn->read_count -= index;
             return;
         }

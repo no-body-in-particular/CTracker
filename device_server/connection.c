@@ -48,9 +48,8 @@ connection new_connection(int socket) {
     result.log_connect = true;
     result.packet_index = 1;
     result.device_time = time(0);
-    result.last_gps_lat=-999;
-    result.last_gps_lon=-999;
-
+    result.last_gps_lat = -999;
+    result.last_gps_lon = -999;
     return result;
 }
 
@@ -117,16 +116,16 @@ void init_position(connection * conn) {
     if (last_line) {
         fprintf(stdout, " for imei: %s\n", conn->imei);
         fprintf(stdout, " last position: %s\n", last_line);
-        uint8_t * p_list[6]={0};
+        uint8_t * p_list[6] = {0};
         size_t cnt = split_to(',', last_line, strlen(last_line), &p_list, 6);
 
         if (cnt > 3) {
             conn->device_time = parse_date(p_list[0]);
             conn->current_lat = parse_float(p_list[1]);
             conn->current_lon = parse_float(p_list[2]);
-            conn->current_position_type = parse_int(p_list[4],1);
+            conn->current_position_type = parse_int(p_list[4], 1);
 
-            if(conn->current_position_type==0){
+            if (conn->current_position_type == 0) {
                 conn->last_gps_lat = conn->current_lat;
                 conn->last_gps_lon = conn->current_lon;
             }
