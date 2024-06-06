@@ -128,7 +128,7 @@ void determine_device(connection * conn) {
 }
 
 void * process_thread(void * int_ptr) {
-    connection conn = new_connection(int_ptr);
+    connection conn = new_connection((int)int_ptr);
     struct timeval to = { 0, 100 };
     time_t since_packet = time(0);
 

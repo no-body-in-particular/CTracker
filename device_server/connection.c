@@ -117,7 +117,7 @@ void init_position(connection * conn) {
         fprintf(stdout, " for imei: %s\n", conn->imei);
         fprintf(stdout, " last position: %s\n", last_line);
         uint8_t * p_list[6] = {0};
-        size_t cnt = split_to(',', last_line, strlen(last_line), &p_list, 6);
+        size_t cnt = split_to(',', last_line, strlen(last_line), (unsigned char**)&p_list, 6);
 
         if (cnt > 3) {
             conn->device_time = parse_date(p_list[0]);

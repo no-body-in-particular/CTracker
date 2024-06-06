@@ -35,7 +35,8 @@ bool myrope_send_string( void * c,  char * cmd) {
     send_string(conn, buffer);
 }
 
-bool myrope_send_command( void * c,  char * cmd) {
+bool myrope_send_command( void * c,  const char * command ) {
+    char * cmd=(char*)command;
     connection * conn = (connection *)c;
     char buffer[BUF_SIZE] = {0};
     size_t start = conn->send_count;

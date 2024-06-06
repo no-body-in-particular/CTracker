@@ -360,7 +360,7 @@ size_t process_position_data(connection * c, time_t timestamp, position_packet *
     }
 
     if (d->data_type & 32) {
-        offset += process_differential_gps(c, (d->data + offset));
+        offset += process_differential_gps(c, (differential_gps_data*)(d->data + offset));
     }
 
     return offset + 1;

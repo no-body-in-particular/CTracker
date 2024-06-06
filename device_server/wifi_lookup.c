@@ -86,7 +86,7 @@ double is_same(void * a, void * b) {
 
 void wifi_sort(wifi_db * db) {
     for (size_t i = 0; i < db->network_count; i++) {
-        quick_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), wifi_network_compare, 0);
+        db->network_buffer[i].network_count = quick_sort(db->network_buffer[i].network_buffer, db->network_buffer[i].network_count, sizeof(wifi_network), wifi_network_compare, 0);
     }
 
     db->network_count = quick_sort(db->network_buffer, db->network_count, sizeof(wifi_db_entry), wifi_hash_compare, is_same);
@@ -190,7 +190,7 @@ void test() {
 location_result wifi_to_cache( wifi_db_entry  networks) {
     pthread_mutex_unlock(&wifi_database.mutex);
     //sort our networks first
-    quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), wifi_network_compare, wifi_network_compare);
+    networks.network_count=quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), wifi_network_compare, wifi_network_compare);
 
     for (size_t network_idx = 0; network_idx < wifi_database.cache_count; network_idx++) {
         if (is_same(&wifi_database.network_cache[network_idx], &networks) == 0) {

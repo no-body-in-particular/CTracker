@@ -40,7 +40,7 @@ geofence fence_from_str(char * str) {
     char * data_buffers[40];
     char * time_buffers[4] = {0};
     ret.valid = false;
-    size_t str_count = split_to(',', str, BUF_SIZE, data_buffers, 39);
+    size_t str_count = split_to(',', str, BUF_SIZE, (unsigned char**)data_buffers, 39);
     time_t t = time(NULL);
     struct tm tm = *gmtime(&t);
     time_t today_begin = time_on_day(tm.tm_wday, 0, 0) ;
@@ -54,7 +54,7 @@ geofence fence_from_str(char * str) {
         return ret;
     }
 
-    str_count = split_to(':', data_buffers[0], BUF_SIZE, time_buffers, 3);
+    str_count = split_to(':', data_buffers[0], BUF_SIZE, (unsigned char**)time_buffers, 3);
 
     if (str_count < 2) {
         return ret;
@@ -62,7 +62,7 @@ geofence fence_from_str(char * str) {
 
     ret.start_hour =      parse_int( time_buffers[0], 3);
     ret.start_minute = parse_int( time_buffers[1], 3);
-    str_count = split_to(':', data_buffers[1], BUF_SIZE, time_buffers, 3);
+    str_count = split_to(':', data_buffers[1], BUF_SIZE, (unsigned char**)time_buffers, 3);
 
     if (str_count < 2) {
         return ret;

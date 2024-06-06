@@ -23,7 +23,8 @@
 
 //most info from
 // https://archive.ph/NO8KX
-bool myrope_r18_send_command( void * c,  char * cmd) {
+bool myrope_r18_send_command( void * c,  const char * command) {
+    char * cmd=(char*)command;
     connection * conn = (connection *)c;
     char buffer[BUF_SIZE] = {0};
     size_t start = conn->send_count;

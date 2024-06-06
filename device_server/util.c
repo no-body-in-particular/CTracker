@@ -146,7 +146,7 @@ time_t local_date_to_time(uint8_t year, uint8_t month, uint8_t day, uint8_t hour
     tmVar.tm_min = min;
     tmVar.tm_sec = sec;
     tzset();
-    timeVar = time(&tmVar);
+    timeVar = mktime(&tmVar);
     return timeVar;
 }
 
