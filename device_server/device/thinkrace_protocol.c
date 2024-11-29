@@ -29,7 +29,6 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, "IWBPXL,");
         send_string(conn, conn->imei);
         send_string(conn, ",080835#");
-
     } else if (strcmp(cmd, "SYNCTIME#") == 0) {
         char response[128] = {0};
         time_t now = time(NULL);
@@ -269,17 +268,36 @@ void thinkrace_process_event(connection * conn, size_t parse_count, unsigned cha
             name = "Speeding";
             break;
 
+        case 7:
+            name = "Abnormal heart rate";
+            break;
+
         case 9:
             name = "Device has moved";
             break;
 
         case 10:
-            name = "Low battery";
+            name = "High Systolic blood pressure";
             break;
 
-        case 12:
-            name = "Enter GPS blind zone";
+        case 11:
+            name = "Low Systolic blood pressure";
             break;
+
+
+     case 12:
+            name = "High Diastolic blood pressure";
+            break;
+
+        case 13:
+            name = "Low Diastolic blood pressure";
+            break;
+
+
+        case 14:
+            name = "Sedentary reminder";
+            break;
+
 
         case 15:
             name = "Exit GPS blind zone";
@@ -290,11 +308,15 @@ void thinkrace_process_event(connection * conn, size_t parse_count, unsigned cha
             break;
 
         case 20:
-            name = "External low power alarm";
+            name = "Geofence exit";
             break;
 
         case 21:
-            name = "External power protection alarm";
+            name = "Geofence enter";
+            break;
+
+        case 22:
+            name = "Message read";
             break;
 
         default:
@@ -349,6 +371,29 @@ void thinkrace_process_saturation(connection * conn, size_t parse_count, unsigne
     write_stat(conn,  "SPO2", parse_float(data_buffers[1]));
 }
 
+void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char * data_buffers[40]) {
+    if (parse_count < 4) {
+        log_line(conn, "   invalid temperature package.\n");
+        return;
+    }
+
+    int type=parse_int(data_buffers[2],1);
+   int systole=0;
+   int diastole=0;
+    switch(type){
+      case 1:
+               sscanf(data_buffers[3],"%d|%d",&diastole,&systole);
+               write_stat(conn,  "diastole", diastole);
+               write_stat(conn,  "systole", systole);
+      break;
+      case 2:   write_stat(conn,  "heartrate", parse_int(data_buffers[3],3)); break;
+case 3:   write_stat(conn,  "temperature", parse_float(data_buffers[3])); break;
+case 4:   write_stat(conn,  "SPO2", parse_int(data_buffers[3],3)); break;
+default:   break;
+    } 
+}
+
+
 
 void thinkrace_process_message(connection * conn, char * string, size_t length) {
     time_t now = time(NULL);
@@ -400,6 +445,10 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
 
     if (memcmp(string, "IWAPSP", 6) == 0) {
         thinkrace_process_saturation(conn, str_count, data_buffers);
+    }
+
+    if (memcmp(string, "IWAPJK", 6) == 0) {
+        thinkrace_process_stat(conn, str_count, data_buffers);
     }
 
     if (!isdigit(string[4]) || !isdigit(string[5])) {
