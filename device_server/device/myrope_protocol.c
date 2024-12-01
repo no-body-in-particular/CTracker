@@ -36,7 +36,7 @@ bool myrope_send_string( void * c,  char * cmd) {
 }
 
 bool myrope_send_command( void * c,  const char * command ) {
-    char * cmd=(char*)command;
+    char * cmd = (char *)command;
     connection * conn = (connection *)c;
     char buffer[BUF_SIZE] = {0};
     size_t start = conn->send_count;
@@ -182,7 +182,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
 
     if (!valid_position) {
         //when falling back to LBS try to force GPS geolocation
-        if ( (time(0) - conn->since_last_locate ) > 60) {
+        if ((time(0) - conn->since_last_locate ) > 60) {
             conn->since_last_locate = time(0);
             //   myrope_send_command(conn, "LOCATE#");
         }

@@ -4,6 +4,7 @@
 uint16_t crc16_init() {
     return 0xffff;
 }
+
 // calculate 16 bits CRC of the given length data.
 
 uint16_t crc16_addbyte(uint16_t crc, uint8_t bt) {

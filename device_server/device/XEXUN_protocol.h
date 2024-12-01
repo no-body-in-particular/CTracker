@@ -12,12 +12,14 @@ typedef struct __attribute__((packed)) {
     uint16_t ecc;
     uint8_t data[BUF_SIZE];
 }
+
 xexun_data;
 
 typedef struct __attribute__((packed)) {
     uint8_t packet_count;
     uint16_t packet_size[BUF_SIZE];
 }
+
 position_header;
 
 typedef struct __attribute__((packed)) {
@@ -28,12 +30,14 @@ typedef struct __attribute__((packed)) {
     uint8_t position_type;
     uint8_t data[BUF_SIZE];
 }
+
 position_packet;
 
 typedef struct __attribute__((packed)) {
     uint8_t data_type;
     uint8_t data[BUF_SIZE];
 }
+
 position_data;
 
 typedef struct __attribute__((packed)) {
@@ -41,6 +45,7 @@ typedef struct __attribute__((packed)) {
     float lon;
     float lat;
 }
+
 gps_data;
 
 
@@ -48,12 +53,14 @@ typedef struct __attribute__((packed)) {
     uint8_t mac_addr[6];
     uint8_t rssi;
 }
+
 xex_wifi_network;
 
 typedef struct __attribute__((packed)) {
     uint8_t network_count;
     xex_wifi_network networks[6];
 }
+
 wifi_data;
 
 typedef struct __attribute__((packed)) {
@@ -63,6 +70,7 @@ typedef struct __attribute__((packed)) {
     uint32_t cid;
     uint8_t rssi;
 }
+
 lbs_network;
 
 
@@ -70,6 +78,7 @@ typedef struct __attribute__((packed)) {
     uint8_t network_count;
     lbs_network networks[6];
 }
+
 lbs_data;
 
 typedef struct __attribute__((packed)) {
@@ -78,6 +87,7 @@ typedef struct __attribute__((packed)) {
     uint16_t rangind_distance;
     uint16_t base_station_battery_status;
 }
+
 tof_network;
 
 
@@ -85,23 +95,27 @@ typedef struct __attribute__((packed)) {
     uint8_t tof_count;
     tof_network networks[4];
 }
+
 tof_data;
 
 typedef struct __attribute__((packed)) {
     uint16_t speed;
     uint16_t direction;
 }
+
 speed_data;
 
 typedef struct __attribute__((packed)) {
     double lon;
     double lat;
 }
+
 differential_gps_data;
 
 typedef struct __attribute__((packed)) {
     uint32_t fingerprint;
 }
+
 fingerprint_data;
 
 typedef struct __attribute__((packed)) {
@@ -109,6 +123,7 @@ typedef struct __attribute__((packed)) {
     uint8_t imsi[8];
     uint8_t iccid[10];
 }
+
 version_data;
 
 
@@ -122,6 +137,7 @@ typedef struct __attribute__((packed)) {
     uint8_t ranging_treshold;
     uint32_t binding_id;
 }
+
 tof_parameters;
 
 typedef struct __attribute__((packed)) {
@@ -129,12 +145,14 @@ typedef struct __attribute__((packed)) {
     uint8_t number_of_cards;
     uint8_t card_id[3];
 }
+
 nfc_data;
 
 typedef struct __attribute__((packed)) {
     uint32_t extended_data_type;
     uint8_t data[BUF_SIZE];
 }
+
 extended_data;
 
 typedef struct __attribute__((packed)) {
@@ -142,6 +160,7 @@ typedef struct __attribute__((packed)) {
     float raw_temperature;
     float temperature_calibration_value;
 }
+
 temperature_data;
 
 typedef struct __attribute__((packed)) {
@@ -151,6 +170,7 @@ typedef struct __attribute__((packed)) {
     uint16_t step_count;
     uint8_t blood_oxygen;
 }
+
 human_body_data;
 
 
@@ -179,6 +199,7 @@ typedef struct __attribute__((packed)) {
     uint32_t coordinates_out_of_bounds: 1;
     uint32_t car_power_down: 1;
 }
+
 alarm_data;
 
 

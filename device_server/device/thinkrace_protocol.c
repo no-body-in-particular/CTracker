@@ -19,7 +19,8 @@
 #include "../multilaterate.h"
 #include "thinkrace_protocol.h"
 
-#define THINKRACE_TIMEOUT 600
+#define THINKRACE_TIMEOUT 1200
+
 bool thinkrace_send_command( void * c, const char * cmd) {
     connection * conn = (connection *)c;
     char buffer[4] = {0};
@@ -29,6 +30,7 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, "IWBPXL,");
         send_string(conn, conn->imei);
         send_string(conn, ",080835#");
+
     } else if (strcmp(cmd, "SYNCTIME#") == 0) {
         char response[128] = {0};
         time_t now = time(NULL);
@@ -201,7 +203,7 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
 
     if (!valid_position) {
         //when falling back to LBS try to force GPS geolocation
-        if ( (time(0) - conn->since_last_locate ) > 60) {
+        if ((time(0) - conn->since_last_locate ) > 60) {
             conn->since_last_locate = time(0);
             thinkrace_send_command(conn, "LOCATE#");
         }
@@ -222,7 +224,7 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
         }
     }
 
-    time_t dt = local_date_to_time(year, month, day, hour, minute, second);
+    time_t dt = date_to_time(year, month, day, hour, minute, second);
 
     if (valid_position) {
         //if we're fairly certain about our location do trigger fences
@@ -284,8 +286,7 @@ void thinkrace_process_event(connection * conn, size_t parse_count, unsigned cha
             name = "Low Systolic blood pressure";
             break;
 
-
-     case 12:
+        case 12:
             name = "High Diastolic blood pressure";
             break;
 
@@ -293,11 +294,9 @@ void thinkrace_process_event(connection * conn, size_t parse_count, unsigned cha
             name = "Low Diastolic blood pressure";
             break;
 
-
         case 14:
             name = "Sedentary reminder";
             break;
-
 
         case 15:
             name = "Exit GPS blind zone";
@@ -377,20 +376,33 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
         return;
     }
 
-    int type=parse_int(data_buffers[2],1);
-   int systole=0;
-   int diastole=0;
-    switch(type){
-      case 1:
-               sscanf(data_buffers[3],"%d|%d",&diastole,&systole);
-               write_stat(conn,  "diastole", diastole);
-               write_stat(conn,  "systole", systole);
-      break;
-      case 2:   write_stat(conn,  "heartrate", parse_int(data_buffers[3],3)); break;
-case 3:   write_stat(conn,  "temperature", parse_float(data_buffers[3])); break;
-case 4:   write_stat(conn,  "SPO2", parse_int(data_buffers[3],3)); break;
-default:   break;
-    } 
+    int type = parse_int(data_buffers[2], 1);
+    int systole = 0;
+    int diastole = 0;
+    conn->device_time =     parse_date(data_buffers[1]);
+
+    switch (type) {
+        case 1:
+            sscanf(data_buffers[3], "%d|%d", &diastole, &systole);
+            write_stat(conn,  "diastole", diastole);
+            write_stat(conn,  "systole", systole);
+            break;
+
+        case 2:
+            write_stat(conn,  "heartrate", parse_int(data_buffers[3], 3));
+            break;
+
+        case 3:
+            write_stat(conn,  "temperature", parse_float(data_buffers[3]));
+            break;
+
+        case 4:
+            write_stat(conn,  "SPO2", parse_int(data_buffers[3], 3));
+            break;
+
+        default:
+            break;
+    }
 }
 
 
@@ -447,8 +459,10 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
         thinkrace_process_saturation(conn, str_count, data_buffers);
     }
 
-    if (memcmp(string, "IWAPJK", 6) == 0) {
+    if (memcmp(string, "IWAPJK", 6) == 0 && str_count > 2) {
         thinkrace_process_stat(conn, str_count, data_buffers);
+        sprintf(response, "IWBPJK,%c#", string[2]);
+        send_string(conn, response);
     }
 
     if (!isdigit(string[4]) || !isdigit(string[5])) {
@@ -497,7 +511,7 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
 
         case 1:
             send_string(conn, "IWBP01#");
-            thinkrace_send_command(conn, "HEARTRATE#");
+//            thinkrace_send_command(conn, "HEARTRATE#");
             break;
 
         default:
@@ -527,6 +541,7 @@ void thinkrace_process(void * vp) {
         }
     }
 }
+
 void thinkrace_warn(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
     sprintf(buffer, "MSG=%s", reason);
