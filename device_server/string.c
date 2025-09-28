@@ -106,7 +106,7 @@ size_t split_to(unsigned char delim, unsigned char * src, size_t len, unsigned c
             size_t cur_len = i - prev_idx;
             dest[str_count] = src + prev_idx;
 
-            for (; cur_len > 0 && isspace(dest[str_count][0]) && dest[str_count][0] < (src + len)  ;)  {
+            for (; cur_len > 0 && isspace(dest[str_count][0]) && dest[str_count] < (src + len)  ;)  {
                 dest[str_count]++;
                 cur_len--;
             }
