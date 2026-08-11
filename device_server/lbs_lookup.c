@@ -65,7 +65,7 @@ void read_lbs_file(cell_db * database, char * file) {
         if (strlen(buffer) > 2 && memcmp(buffer, "radio", 5) != 0) {
             char * sptrs[11];
 
-            if (split_to(',', buffer, strlen(buffer), (unsigned char**)&sptrs, 11) >= 10) {
+            if (split_to(',', buffer, strlen(buffer), (unsigned char * *)&sptrs, 11) >= 10) {
                 memset(& database->tower_buffer[tower_idx], 0, sizeof(cell_tower));
                 database->tower_buffer[tower_idx].mcc = parse_int(sptrs[1], 5); //64000
                 database->tower_buffer[tower_idx].mnc = parse_int(sptrs[2], 3);
@@ -218,7 +218,7 @@ location_result lbs_lookup(cell_tower * to_find, float last_lat, float last_lng)
         ret = lbs_in_cache(to_find);
     }
 
-    if (!ret.valid || (ret.last_tried > 0 && ( (time(0) - ret.last_tried) > CACHE_ENTRY_RETRY))) {
+    if (!ret.valid || (ret.last_tried > 0 && ((time(0) - ret.last_tried) > CACHE_ENTRY_RETRY))) {
         ret = geolocate_tower(to_find);
 
         if (ret.valid )  {

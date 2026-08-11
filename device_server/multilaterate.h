@@ -8,6 +8,7 @@ typedef struct __attribute__((packed)) {
     float lng;
     float strength;
 }
+
 multilaterate_point;
 multilaterate_point multilaterate(multilaterate_point * input, size_t count);
 

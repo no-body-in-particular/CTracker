@@ -17,7 +17,7 @@
 #include "../wifi_lookup.h"
 #include "megastek_protocol.h"
 
-#define MTEK_TIMEOUT 600
+#define MTEK_TIMEOUT 700
 
 bool megastek_send_command( void * c, const char * cmd) {
     connection * conn = (connection *)c;
@@ -62,7 +62,6 @@ void process_message(connection * conn, char * string, size_t length) {
     size_t len = min(length, strlen(string));
     len = min(len, BUF_SIZE - 1);
     memcpy(bufstr, string, len);
-
     size_t str_count = split_to(',', bufstr, strlen(bufstr), data_buffers, 40);
     conn->timeout_time = time(0) + MTEK_TIMEOUT;
 
@@ -94,6 +93,7 @@ void process_message(connection * conn, char * string, size_t length) {
         //default wifi on
         megastek_send_command(conn, "W040,0");
         megastek_send_command(conn, "W039,1");
+        megastek_send_command(conn, "W005,20"); //update every 10 mins
     }
 
     if ( str_count < 35) {
@@ -188,9 +188,10 @@ void process_message(connection * conn, char * string, size_t length) {
     double shallow_sleep_time = parse_float(data_buffers[27]);
     double deep_sleep_time = parse_float(data_buffers[28]);
 
-    if (strlen(data_buffers[34])>=5 && memcmp(data_buffers[34], "Timer",5) == 0) {
+    if (strlen(data_buffers[34]) >= 5 && memcmp(data_buffers[34], "Timer", 5) == 0) {
         move_to(conn, dt, position_type, lat, lon);
         write_sat_count(conn, position_type, num_sats);
+
     } else {
         move_to(conn, dt, position_type, lat, lon);
         log_event(conn, data_buffers[34]);
@@ -240,9 +241,9 @@ void megastek_process(void * vp) {
         size_t index = idx(conn->recv_buffer, '!');
 
         if (index > 0 && index < conn->read_count) {
-            process_message(conn, conn->recv_buffer, index -1);
+            process_message(conn, conn->recv_buffer, index - 1);
             index++;
-            memmove(conn->recv_buffer, conn->recv_buffer + index , conn->read_count - index);
+            memmove(conn->recv_buffer, conn->recv_buffer + index, conn->read_count - index);
             conn->read_count -= index;
             return;
         }

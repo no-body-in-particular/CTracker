@@ -143,8 +143,8 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
         sscanf(gps_split[4], " %3f%9f", &lng, &lngdeg );
         lat += latdeg / 60;
         lng += lngdeg / 60;
-        lng = gps_split[3][0] == 'S' ?  -lng : lng;
-        lat = gps_split[5][0] == 'W' ? -lat : lat;
+        lat = gps_split[3][0] == 'S' ? -lat : lat;
+        lng = gps_split[5][0] == 'W' ? -lng : lng;
         speed = parse_float(gps_split[6]);
         valid_position = true;
         num_sats = 4;

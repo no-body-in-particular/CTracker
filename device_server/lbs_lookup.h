@@ -19,6 +19,7 @@ typedef struct __attribute__((packed)) {
     time_t cache_age;
     pthread_mutex_t mutex;
 }
+
 cell_db;
 
 void init_lbs();

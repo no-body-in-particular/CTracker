@@ -150,8 +150,8 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
     sscanf(data_buffers[0], "%2d%2d%2d%1c%2f%7f%1c%3f%7f%1c%5f%2d%2d%2d%6f%3d%3d%3d0%2d%2d", &year, &month, &day, &valid, &lat, &latdeg, &is_north, &lng, &lngdeg, &is_east, &speed, &hour, &minute, &second, &heading, &signal_strength, &num_sats, &battery_level, &working_mode, &fortification_state);
     lat += latdeg / 60;
     lng += lngdeg / 60;
-    lat = is_east == 'W' ? -lat : lat;
-    lng = is_north == 'S' ? -lng : lng;
+    lat = is_north == 'S' ? -lat : lat;
+    lng = is_east == 'W' ? -lng : lng;
 
     if (lat != 0 || lng != 0) {
         valid_position = true;

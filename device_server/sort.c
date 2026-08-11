@@ -5,7 +5,7 @@
 
 
 void memswap(void * a, void * b, size_t size) {
-    char * a_swap = (char *)a, *b_swap = (char *)b;
+    char * a_swap = (char *)a, * b_swap = (char *)b;
     char * a_end = a + size;
 
     while (a_swap < a_end) {

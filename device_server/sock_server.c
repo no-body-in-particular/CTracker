@@ -106,9 +106,7 @@ int wait_for_client(int s) {
     struct hostent * hostinfo = gethostbyaddr((char *) &peer.sin_addr.s_addr, len, AF_INET);
 
     fprintf(stdout, "Incoming connection accepted from %s[%s]\n", !hostinfo ? "" : hostinfo->h_name, inet_ntoa(peer.sin_addr));
-
     set_nonblock(newsock);
-
     return (newsock);
 }
 
@@ -240,7 +238,7 @@ void run_server() {
             continue;
         }
 
-        if ( client > 0 && ( pthread_create( &thread_id, NULL,  process_thread, (void *) client) < 0)) {
+        if ( client > 0 && ( pthread_create(&thread_id, NULL,  process_thread, (void *) client) < 0)) {
             fprintf(stderr, "Failed to create thread.\n");
         }
     }

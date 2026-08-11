@@ -118,6 +118,7 @@ void write_sat_count(connection * conn, int position_type, int num_sats) {
         write_stat(conn, "wifi_networks", num_sats);
     }
 }
+
 void statusvfprintf(connection * conn, const char * format, va_list args) {
     FILE * fp;
 
@@ -167,6 +168,7 @@ void log_command_response(connection * conn, const unsigned char * response) {
 
     commandprintf(conn, "\n");
 }
+
 /* va_list, va_start, va_arg, va_end */
 
 void log_time(connection * conn) {

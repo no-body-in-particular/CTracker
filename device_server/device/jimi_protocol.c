@@ -517,6 +517,7 @@ void process_current_packet(connection * conn) {
             break;
     }
 }
+
 //add wifi support sometime
 
 bool validate_startbits(data_packet p) {
