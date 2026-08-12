@@ -377,9 +377,21 @@ function alphanum(o) {
 }
 
 function moveDemoFeature() {
+    var lng = parseFloat(document.getElementById("fenceLong").value);
+    var lat = parseFloat(document.getElementById("fenceLat").value);
+    var radius = parseFloat(document.getElementById("fenceRadius").value);
+
     geofenceLayer.getSource().forEachFeature(function(feature) {
         if (feature.TYPE == 'demo') {
-            feature.setGeometry(new ol.geom.Circle(ol.proj.fromLonLat([document.getElementById("fenceLong").value, document.getElementById("fenceLat").value]), document.getElementById("fenceRadius").value * 1.60934));
+            //the lat/long inputs are hidden and start at 0, so until a fence has actually
+            //been placed on the map there is no position to preview. clear the geometry
+            //rather than draw the preview in the gulf of guinea.
+            if (!isFinite(lat) || !isFinite(lng) || !isFinite(radius) || (lat === 0 && lng === 0)) {
+                feature.setGeometry(null);
+                return;
+            }
+
+            feature.setGeometry(new ol.geom.Circle(ol.proj.fromLonLat([lng, lat]), radius * 1.60934));
         }
     });
 }
@@ -398,7 +410,11 @@ function fetchFence() {
                 return f;
             });
 
-            var f = new ol.Feature(new ol.geom.Circle(ol.proj.fromLonLat([0, 0]), 100 * 1.60934));
+            //preview circle for the geofence editor. it is created with no geometry so it
+            //draws nothing until moveDemoFeature() places it. it used to be built at 0,0,
+            //which parked a permanent 160km grey circle on null island off west africa for
+            //anyone who had not yet placed a fence.
+            var f = new ol.Feature();
             f.TYPE = 'demo';
 
             coords.push(f);
