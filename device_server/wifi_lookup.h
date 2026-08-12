@@ -16,6 +16,7 @@ typedef struct __attribute__((packed)) {
     size_t network_count;
     location_result result;
 }
+
 wifi_db_entry;
 
 
@@ -29,6 +30,7 @@ typedef struct  {
     time_t cache_age;
     pthread_mutex_t mutex;
 }
+
 wifi_db;
 
 

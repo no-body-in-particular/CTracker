@@ -19,17 +19,18 @@ if (isset($_GET['login'])) {
     }
 }
 ?>
+<!DOCTYPE html>
 <html>
    <head>
       <link rel="stylesheet" href="style/index.css" type="text/css">
-      <script src="jquery/jquery-3.2.1.min.js"></script>
+      <script src="jquery/jquery-3.7.1.js"></script>
       <script src="js/store.js"></script>
    </head>
    <body>
       <div class="login-page">
          <div class="form">
             <form method="post" class="login-form" action="<?php echo $_SERVER['PHP_SELF']; ?>?login=true" >
-                <input style="width:100%" type="text" placeholder="username" class="input" name="username" id="username"/>
+                <input style="width:100%" type="text" placeholder="username" class="input" name="username" id="username" autocomplete="username"/>
                 <input style="width:100%" type="password" placeholder="password" class="input" name="password" id="password"/>
                <button style="width:100%" class="button">login</button>
                 <p class="message"><?php echo $message; ?></p>

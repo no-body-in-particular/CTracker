@@ -28,6 +28,7 @@ var animateSpeed=200;
 function animateTo(long, lat) {
     setfocus = 0;
     var lonlat = ol.proj.fromLonLat([long, lat]);
+
     map.getView().animate({
         center: lonlat,
         duration: animateSpeed
@@ -630,7 +631,8 @@ function updateMarker(lat, lng, dt, forceMove = false) {
     setBattery(batlvl);
     setSignal(signal);
 
-    var moveMarker = forceMove || (new Date().getTime() - newImei) < 6000;
+    var moveMarker = forceMove || (new Date().getTime() - newImei) < 30000;
+    console.log(moveMarker);
     setMarker(lat, lng, moveMarker, 'Last seen on: ' + readableDate(dt) + ' <br>Moving at speed ' + spd + 'km/h<br><br>' + 'Battery: ' + batlvl + '%<br>' + 'Gsm signal strength: ' + signal + '%<br>');
     updateSpeed(spd);
 }
@@ -658,8 +660,8 @@ function updateCurrentPosition(force = false) {
 
                 if (coords.length < 4) return;
 
-                var moveMarker = force || (new Date().getTime() - newImei) < 6000;
-                setMarker(coords[1], coords[2], moveMarker, 'Last seen on: ' + readableDate(new Date(coords[0])) + ' <br>Moving at speed ' + coords[3] + 'km/h<br><br>' + 'Battery: ' + misc[0] + '%<br>' + 'Gsm signal strength: ' + misc[1] + '%<br>');
+                updateMarker(coords[1], coords[2],new Date(coords[0]),force);
+
                 setBattery(misc[0]);
                 setSignal(misc[1]);
                 updateSpeed(coords[3]);
@@ -676,6 +678,7 @@ function refreshData() {
         fetchCommandResults()
         fetchStats();
         fetchHistory();
+        fetchLogging();
     }
 }
 
@@ -690,11 +693,12 @@ function searchdateChange() {
     refreshData();
 }
 
+setTimeout(updateCurrentPosition, 500);
 setInterval(updateCurrentPosition, 10000);
 setInterval(refreshData, 80000);
 setInterval(fetchLogging, 280000);
 
-setBeginDate(120);
+setBeginDate(720);
 
 function setBeginDate(offsetMinutes) {
     var dateOffset = (60 * offsetMinutes * 1000); //5 days

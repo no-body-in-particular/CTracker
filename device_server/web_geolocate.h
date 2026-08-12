@@ -11,6 +11,7 @@ typedef struct __attribute__((packed)) {
     bool valid;
     uint64_t last_tried;
 }
+
 location_result;
 
 typedef struct __attribute__((packed)) {
@@ -18,6 +19,7 @@ typedef struct __attribute__((packed)) {
     uint8_t nulls[2];
     uint8_t rssi;
 }
+
 wifi_network;
 
 typedef struct __attribute__((packed)) {
@@ -27,6 +29,7 @@ typedef struct __attribute__((packed)) {
     uint32_t cell_id;//since we use a little endian system and this is 4 bytes, we can just use an uint64 to cover all the data in the beginning of this struct
     location_result location;
 }
+
 cell_tower;
 
 location_result google_geolocate_tower(cell_tower * tower) ;

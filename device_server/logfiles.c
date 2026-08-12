@@ -28,8 +28,29 @@ void connFilePrintf(connection * conn, const char * fn, FILE ** handle, const ch
         return;
     }
 
-    vfprintf(*handle, format, arglist );
-    fflush(*handle);
+    //a device often holds more than one connection open at once, and every connection
+    //has its own FILE * onto the same per-imei file. two buffered writes could interleave
+    //part way through a line and fuse two records into one, which is where rows like
+    //"2026-01-03T12:02:112026-01-03T13:32:11Z,speed,0.00" came from - a mangled timestamp
+    //that then sorts to the wrong place. format into a buffer and hand the kernel a
+    //single write() on the O_APPEND descriptor instead, which is atomic against the
+    //other connections rather than merely flushed soon after.
+    char buffer[BUF_SIZE * 2];
+    int written = vsnprintf(buffer, sizeof(buffer), format, arglist);
+
+    if (written <= 0) {
+        return;
+    }
+
+    if (written > (int)sizeof(buffer) - 1) {
+        written = (int)sizeof(buffer) - 1;
+    }
+
+    if (write(fileno(*handle), buffer, (size_t)written) < 0) {
+        fprintf(stderr, "failed to write to %s\n", fn);
+        return;
+    }
+
     fsync(fileno(*handle));
 }
 

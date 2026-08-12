@@ -25,6 +25,7 @@ void strip_unprintable(char * from) {
         }
     }
 }
+
 void convert_imei(unsigned char * from, char * to) {
     CONVERT_HEX(from[0], to[0], to[1]);
     CONVERT_HEX(from[1], to[2], to[3]);
@@ -66,7 +67,10 @@ double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
 double compute_speed(time_t dt, double lat1, double lon1, double lat2, double lon2) {
     double speed = haversineDistance(lat1, lon1, lat2, lon2);
     double over_time = (fabs(dt) / 3600);
-    over_time = over_time < 0.0f ? 0.166666f : over_time;
+    //fabs() never returns a negative, so this test used to be dead and a pair of fixes
+    //sharing a timestamp divided by zero - giving inf, or nan when the two fixes were
+    //also in the same spot. fall back to the usual reporting interval instead.
+    over_time = over_time <= 0.0 ? 0.166666f : over_time;
     speed = speed / over_time;
     return speed;
 }
@@ -113,6 +117,12 @@ time_t parse_date(const char * dt) {
     time_t timeVar = 0;
 
     if (sscanf(dt, "%d-%d-%dT%d:%d:%dZ", &tmVar.tm_year, &tmVar.tm_mon, & tmVar.tm_mday, &tmVar.tm_hour, &tmVar.tm_min, &tmVar.tm_sec) == 6) {
+        tmVar.tm_year -= 1900;
+        tmVar.tm_mon -= 1;
+        return timegm(&tmVar);
+    }
+
+    if (sscanf(dt, "%d-%d-%d %d:%d:%d", &tmVar.tm_year, &tmVar.tm_mon, & tmVar.tm_mday, &tmVar.tm_hour, &tmVar.tm_min, &tmVar.tm_sec) == 6) {
         tmVar.tm_year -= 1900;
         tmVar.tm_mon -= 1;
         return timegm(&tmVar);

@@ -334,6 +334,21 @@ void thinkrace_process_heartbeat(connection * conn, size_t parse_count, unsigned
     }
 
     log_line(conn, "number of steps: %s\n", data_buffers[2]);
+
+    //the step field is a running total for the current day that the watch resets at
+    //midnight, so it climbs into five digits. every stat shares one y axis on the
+    //chart, where the largest other series is systolic pressure at around 120, so the
+    //raw count would flatten everything else into a line along the bottom. recording
+    //it in thousands keeps it on the same scale as the rest.
+    int steps = parse_int(data_buffers[2], strlen(data_buffers[2]));
+
+    //a zero is the watch padding out a report it has no step data for - the real
+    //counter only reaches zero at midnight, and it never drops during the day. writing
+    //those would saw the line down to the floor between every genuine reading.
+    if (steps > 0) {
+        write_stat(conn, "steps_k", steps / 1000.0f);
+    }
+
     conn->timeout_time = time(0) + THINKRACE_TIMEOUT;
 }
 
@@ -379,7 +394,15 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
     int type = parse_int(data_buffers[2], 1);
     int systole = 0;
     int diastole = 0;
-    conn->device_time =     parse_date(data_buffers[1]);
+
+    //these readings carry their own measurement time, which is the right stamp for them
+    //but runs on a different clock to the position messages - often minutes ahead. it
+    //used to be left in conn->device_time afterwards, so it leaked into whatever was
+    //written next and the following position message then dragged the clock back,
+    //which is what put the reversed timestamps in the stats file. borrow it, then put
+    //the position clock back.
+    time_t position_clock = conn->device_time;
+    conn->device_time = parse_date(data_buffers[1]);
 
     switch (type) {
         case 1:
@@ -403,6 +426,8 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
         default:
             break;
     }
+
+    conn->device_time = position_clock;
 }
 
 

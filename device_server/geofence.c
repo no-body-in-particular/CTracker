@@ -5,6 +5,7 @@
 #include "string.h"
 #include "commands.h"
 #include <unistd.h>
+#include <math.h>
 #include "events.h"
 
 int convert_wday(int day) {
@@ -198,10 +199,18 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     double speed = compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
     bool allow_trigger = dt > 5 && dt < 1200;
 
-    if ( speed < 0 | speed > 1600) {
+    //a nan compares false against everything, so the old test let it through into the
+    //logs untouched while inf was caught. check for it explicitly and first.
+    if (!isfinite(speed) || speed < 0 || speed > MAX_PLAUSIBLE_SPEED) {
         speed = 0;
     }
 
+    //adopt this fix's own timestamp before anything is written. log_position() and
+    //write_stat() both stamp from conn->device_time, so while this assignment sat at the
+    //end of the function every position row and speed sample was filed under the
+    //previous fix's time - a fix measured at 19:24:19 was stored as 19:17:00. dt and
+    //speed are already computed above, so nothing here still needs the old value.
+    conn->device_time = device_time;
     log_position(conn, position_type, lat, lon, speed);
 
     if (position_type != 1 &&  conn->current_position_type != 1) {
@@ -276,7 +285,6 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     conn->current_lat = lat;
     conn->current_lon = lon;
     conn->current_speed = speed;
-    conn->device_time = device_time;
     conn->current_position_type = position_type;
 
     if (position_type == 0) {

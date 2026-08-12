@@ -1,4 +1,8 @@
 
+/* API keys live in secrets.h, which is gitignored - copy secrets.h.example to secrets.h
+ * and fill in your own. Nothing in this file is a credential, so it can be committed. */
+#include "secrets.h"
+
 #define BUF_SIZE 4096 //send/recieve buffer sizes. minimum is 276. I like to keep it one cache page.
 #define MAX_FENCE 4096 //max number of geofence entries
 
@@ -10,7 +14,6 @@
 
 
 #define SERVER_TIME_OFFSET 60
-#define HERE_API_KEY ""
 
 /*databases for lbs location */
 
@@ -23,11 +26,14 @@
 //#define WIFIDB_FILE "/var/gps/wifi.db"
 #define WIFIDB_FILE "/var/gps/wifi.db"
 
-/* just steal the arch linux location API keys */
-#define GOOGLE_API_KEY "AIzaSyDwr302FpOSkGRpLlUpPThNTDPbXcIn_FM"
-
 #define CACHE_SAVE_TIME 1200
 #define CACHE_ENTRY_RETRY (60*60*128)
 
 #define MAX_DATA_SIZE (1024*1024*30)
 #define MAX_LOG_SIZE (1024*1024*4)
+
+/* speeds are computed between consecutive fixes, which can come from GPS, WiFi or cell
+ * towers with wildly different accuracy. a source change or a stale previous position
+ * can imply a jump of hundreds of km, so anything above this is recorded as 0 rather
+ * than charted as real movement. km/h. */
+#define MAX_PLAUSIBLE_SPEED 700

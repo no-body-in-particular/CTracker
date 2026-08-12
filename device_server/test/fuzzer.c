@@ -82,6 +82,7 @@ size_t build_megastek_packet(uint8_t * buffer, size_t max_len) {
 
     return strlen(buffer);
 }
+
 //sets the non-blocking flag for an IO descriptor
 void set_nonblock(int fd) {
     //retrieve all the flags for this file descriptor
@@ -108,6 +109,7 @@ void set_nonblock(int fd) {
 
     fprintf(stdout, "SO_KEEPALIVE set on socket\n");
 }
+
 int main(int argc, char * argv[]) {
     unsigned char message[1000] ;
     unsigned char server_reply[2000];

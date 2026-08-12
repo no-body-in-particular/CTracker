@@ -50,3 +50,25 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Credentials - copy device_server/secrets.h.example to secrets.h and fill in your own.
+# The .config.h copies are older snapshots of config.h that still carry keys.
+device_server/secrets.h
+device_server/.config.h
+device_server/.config.h1
+
+# Per-device output the daemon writes next to the binary when run from this directory.
+# These hold real GPS traces and IMEIs.
+device_server/*.log.txt
+device_server/*.event.txt
+device_server/*.command.txt
+device_server/*.stats.txt
+device_server/*.gps.txt
+device_server/*.status.txt
+
+# Built artefacts
+device_server/jimitrack
+device_server/device_time
+
+# Editor backups
+*.save

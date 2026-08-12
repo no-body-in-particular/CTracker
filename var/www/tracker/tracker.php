@@ -12,7 +12,7 @@ validateSession();
       <link rel="stylesheet" href="style/tracker.css" type="text/css">
       <link rel="stylesheet" href="jquery/jquery-ui.css" type="text/css">
       <link rel="stylesheet" href="jquery/jquery.timepicker.min.css" type="text/css">
-      <script src="jquery/jquery-3.2.1.min.js"></script>
+      <script src="jquery/jquery-3.7.1.js"></script>
       <script src="jquery/jquery-ui.js"></script>
       <script src="//cdnjs.cloudflare.com/ajax/libs/timepicker/1.3.5/jquery.timepicker.min.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
@@ -227,9 +227,9 @@ validateSession();
                <select id="hourCount" class="input" onchange="searchdateChange()">
                   <option value="72">72 Hours</option>
                   <option value="48">48 Hours</option>
-                  <option value="24">24 Hours</option>
+                  <option value="24" selected>24 Hours</option>
                   <option value="12">12 Hours</option>
-                  <option value="6" selected>6 Hours</option>
+                  <option value="6" >6 Hours</option>
                   <option value="3">3 Hours</option>
                   <option value="1">1 Hour</option>
                </select>

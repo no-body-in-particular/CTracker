@@ -190,7 +190,7 @@ void test() {
 location_result wifi_to_cache( wifi_db_entry  networks) {
     pthread_mutex_unlock(&wifi_database.mutex);
     //sort our networks first
-    networks.network_count=quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), wifi_network_compare, wifi_network_compare);
+    networks.network_count = quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), wifi_network_compare, wifi_network_compare);
 
     for (size_t network_idx = 0; network_idx < wifi_database.cache_count; network_idx++) {
         if (is_same(&wifi_database.network_cache[network_idx], &networks) == 0) {
@@ -198,7 +198,7 @@ location_result wifi_to_cache( wifi_db_entry  networks) {
         }
     }
 
-    if ( (wifi_database.cache_count + 1) >= wifi_database.network_cache_size) {
+    if ((wifi_database.cache_count + 1) >= wifi_database.network_cache_size) {
         wifi_database.network_cache_size *= 2;
         wifi_database.network_cache = realloc(wifi_database.network_cache, sizeof(wifi_db_entry) *  wifi_database.network_cache_size);
     }
@@ -219,10 +219,10 @@ location_result wifi_lookup(wifi_network * first, size_t network_count) {
     quick_sort(entry.network_buffer, entry.network_count, sizeof(wifi_network), wifi_network_compare, 0);
     entry.result.valid = false;
     pthread_mutex_unlock(&wifi_database.mutex);
-    wifi_db_entry * network_ptr = wifi_database.network_count == 0 ? 0 : (wifi_db_entry *) binary_search(wifi_database.network_buffer, (wifi_database.network_buffer + wifi_database.network_count),  &entry,  sizeof(wifi_db_entry), wifi_hash_compare) ;
+    wifi_db_entry * network_ptr = wifi_database.network_count == 0 ? 0 : (wifi_db_entry *) binary_search(wifi_database.network_buffer, (wifi_database.network_buffer + wifi_database.network_count), &entry,  sizeof(wifi_db_entry), wifi_hash_compare) ;
 
     for (; network_ptr != 0 && (network_ptr <= (wifi_database.network_buffer + wifi_database.network_count))
-            && wifi_db_entry_hash( network_ptr) == wifi_db_entry_hash( &entry)
+            && wifi_db_entry_hash( network_ptr) == wifi_db_entry_hash(&entry)
             ; network_ptr++) {
         if (is_same(network_ptr, &entry) == 0) {
             entry.result = network_ptr->result;
