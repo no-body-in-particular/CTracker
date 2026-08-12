@@ -159,12 +159,27 @@ function fetchEvents() {
             eventList = eventList.concat(parsed);
 
             var lastCaption;
-            var features = eventList.map(rv => {
-                var f = new ol.Feature(new ol.geom.Circle(ol.proj.fromLonLat([rv[2], rv[1]]), 5));
+            var features = [];
+            eventList.forEach(rv => {
+                var caption = (rv[4] + ' on ' + readableDate(rv[0]) + ' while moving at speed: ' + rv[3]);
+                lastCaption = caption;
+
+                //an event logged before the device had a fix carries 0,0, and a few older
+                //ones carry values well outside the valid range. drawing those puts a
+                //marker on Null Island off west africa, which reads as the middle of the
+                //atlantic. the event itself is real - an SOS or a low battery still
+                //happened - so it keeps its row in the table below and still raises a
+                //notification. it just gets no marker, because we do not know where it was.
+                var lat = rv[1], lng = rv[2];
+
+                if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) {
+                    return;
+                }
+
+                var f = new ol.Feature(new ol.geom.Circle(ol.proj.fromLonLat([lng, lat]), 5));
                 f.EVT = rv[4];
-                f.CAPTION = (rv[4] + ' on ' + readableDate(rv[0]) + ' while moving at speed: ' + rv[3]);
-                lastCaption = f.CAPTION;
-                return f;
+                f.CAPTION = caption;
+                features.push(f);
             });
             eventLayer.getSource().clear();
             eventLayer.getSource().addFeatures(features);
