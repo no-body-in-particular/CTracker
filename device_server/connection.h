@@ -67,9 +67,6 @@ typedef struct {
     float current_lat;
     float current_lon;
     float current_speed;
-    //the last speed actually measured between two real fixes. tower fixes cannot produce
-    //a meaningful speed, so they report this instead of claiming the device has stopped.
-    float last_measured_speed;
     float last_gps_lat;
     float last_gps_lon;
     size_t current_position_type;

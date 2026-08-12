@@ -202,23 +202,14 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     //wearer. either end of the pair is enough to poison it. these were already kept out
     //of the speed stat, but log_position() still wrote them to the gps file, which is
     //where the several-hundred km/h rows came from.
-    //
-    //carry the last speed measured between two real fixes rather than logging a zero -
-    //the device is not known to have stopped, we just cannot measure it from a tower.
     bool lbs_fix = (position_type == 1 || conn->current_position_type == 1);
-    double speed = lbs_fix ? conn->last_measured_speed : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
+    double speed = lbs_fix ? 0 : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
     bool allow_trigger = dt > 5 && dt < 1200;
 
     //a nan compares false against everything, so the old test let it through into the
     //logs untouched while inf was caught. check for it explicitly and first.
     if (!isfinite(speed) || speed < 0 || speed > MAX_PLAUSIBLE_SPEED) {
         speed = 0;
-    }
-
-    //only a speed we actually measured is worth carrying forward, and only after the
-    //clamp above has had a chance to reject it
-    if (!lbs_fix) {
-        conn->last_measured_speed = speed;
     }
 
     //adopt this fix's own timestamp before anything is written. log_position() and

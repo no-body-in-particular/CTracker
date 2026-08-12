@@ -42,7 +42,6 @@ connection new_connection(int socket) {
     result.current_lat = 0;
     result.current_lon = 0;
     result.current_speed = 0;
-    result.last_measured_speed = 0;
     result.since_battalm = time(0);
     result.just_connected = true;
     result.log_disconnect = true;
