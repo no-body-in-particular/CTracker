@@ -67,6 +67,8 @@ typedef struct {
     float current_lat;
     float current_lon;
     float current_speed;
+    //false when the current speed could not be measured, ie the fix came from a tower
+    bool current_speed_valid;
     float last_gps_lat;
     float last_gps_lon;
     size_t current_position_type;

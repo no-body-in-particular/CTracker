@@ -204,6 +204,7 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     //where the several-hundred km/h rows came from.
     bool lbs_fix = (position_type == 1 || conn->current_position_type == 1);
     double speed = lbs_fix ? 0 : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
+    conn->current_speed_valid = !lbs_fix;
     bool allow_trigger = dt > 5 && dt < 1200;
 
     //a nan compares false against everything, so the old test let it through into the
@@ -218,7 +219,7 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     //previous fix's time - a fix measured at 19:24:19 was stored as 19:17:00. dt and
     //speed are already computed above, so nothing here still needs the old value.
     conn->device_time = device_time;
-    log_position(conn, position_type, lat, lon, speed);
+    log_position(conn, position_type, lat, lon, speed, !lbs_fix);
 
     if (!lbs_fix) {
         write_stat(conn, "speed", speed);

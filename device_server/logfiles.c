@@ -76,8 +76,20 @@ void gpsprintf( connection * conn, const char * format, ... ) {
     va_end( arglist );
 }
 
-void log_position(connection * conn, int type, float lat, float lng, float spd) {
+void log_position(connection * conn, int type, float lat, float lng, float spd, bool has_speed) {
     struct tm tm = *gmtime(&conn->device_time);
+
+    //a tower fix cannot measure speed. writing a zero would claim the device had stopped,
+    //which is its own wrong assertion, so leave the field empty - a reader can then tell
+    //"not measured" apart from "measured as standing still".
+    if (!has_speed) {
+        gpsprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,,%u\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+                  lat,
+                  lng,
+                  type);
+        return;
+    }
+
     gpsprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%f,%u\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
               lat,
               lng,
@@ -221,6 +233,15 @@ void log_buffer(connection * conn) {
 void log_event(connection * conn, const unsigned char * response) {
     time_t t = conn->device_time;
     struct tm tm = *gmtime(&t);
+
+    //same reasoning as log_position: if the last fix came from a tower there is no
+    //measured speed to attach to this event, so the field is left empty
+    if (!conn->current_speed_valid) {
+        eventprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,,%s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+                    conn->current_lat, conn->current_lon, response);
+        return;
+    }
+
     eventprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%.2f,%s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
                 conn->current_lat, conn->current_lon, conn->current_speed, response);
 }

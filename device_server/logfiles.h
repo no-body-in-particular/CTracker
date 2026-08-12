@@ -6,7 +6,7 @@ void gpsvfprintf( connection * conn, const char * format, va_list arglist ) ;
 void eventvfprintf( connection * conn, const char * format, va_list arglist ) ;
 void logprintf( connection * conn, const char * format, ... );
 void gpsprintf( connection * conn, const char * format, ... );
-void log_position(connection * conn, int type, float lat, float lng, float spd);
+void log_position(connection * conn, int type, float lat, float lng, float spd, bool has_speed);
 void eventprintf( connection * conn, const char * format, ... ) ;
 void statusvfprintf(connection * conn, const char * format, va_list args) ;
 void statusprintf(connection * conn, const char * format, ...) ;

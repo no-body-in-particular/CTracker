@@ -39,12 +39,20 @@ function constructURL(phpName, begindate, enddate) {
     return phpName + "?imei=" + imei + "&begin=" + tounix(begindate) + (enddate ? ("&end=" + tounix(enddate)) : "") + viewOnlyParameter();
 }
 
+//the daemon leaves the speed field empty for cell tower fixes rather than writing a
+//zero, because a tower cannot measure speed and a zero would claim the device had
+//stopped. parseFloat gives NaN for the empty field, so render it as unknown.
+function speedText(spd) {
+    var v = parseFloat(spd);
+    return isFinite(v) ? v + ' km/h' : 'not measured';
+}
+
 function computeEventRow(cols) {
-    return "<tr onclick='animateTo(" + cols[2] + "," + cols[1] + ")'><td>" + readableDate(new Date(cols[0])) + "</td><td>" + cols[3] + "</td><td>" + cols[4] + "</td></tr>";
+    return "<tr onclick='animateTo(" + cols[2] + "," + cols[1] + ")'><td>" + readableDate(new Date(cols[0])) + "</td><td>" + speedText(cols[3]) + "</td><td>" + cols[4] + "</td></tr>";
 }
 
 function computeHistoryRow(cols) {
-    return "<tr onclick='animateTo(" + cols[2] + "," + cols[1] + ")'><td>" + readableDate(new Date(cols[0])) + "</td><td>" + cols[1] + "</td><td>" + cols[2] + "</td><td>" + cols[3] + "</td></tr>";
+    return "<tr onclick='animateTo(" + cols[2] + "," + cols[1] + ")'><td>" + readableDate(new Date(cols[0])) + "</td><td>" + cols[1] + "</td><td>" + cols[2] + "</td><td>" + speedText(cols[3]) + "</td></tr>";
 }
 
 function computeLogRow(cols) {
@@ -161,7 +169,7 @@ function fetchEvents() {
             var lastCaption;
             var features = [];
             eventList.forEach(rv => {
-                var caption = (rv[4] + ' on ' + readableDate(rv[0]) + ' while moving at speed: ' + rv[3]);
+                var caption = (rv[4] + ' on ' + readableDate(rv[0]) + ' while moving at speed: ' + speedText(rv[3]));
                 lastCaption = caption;
 
                 //an event logged before the device had a fix carries 0,0, and a few older
@@ -650,7 +658,7 @@ function setSignal(signal) {
 
 function updateSpeed(spd) {
     var speedDiv = document.getElementById("speed");
-    speedDiv.innerHTML = '  speed: ' + spd + 'km/h';
+    speedDiv.innerHTML = '  speed: ' + speedText(spd);
 }
 
 function updateMarker(lat, lng, dt, forceMove = false) {
