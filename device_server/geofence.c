@@ -196,7 +196,14 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
 
 void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon) {
     time_t dt = fabs(device_time - conn->device_time);
-    double speed = compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
+
+    //a cell tower fix can sit kilometres from the device and hops as the serving tower
+    //changes, so a speed measured against one describes the network rather than the
+    //wearer. either end of the pair is enough to poison it. these were already kept out
+    //of the speed stat, but log_position() still wrote them to the gps file, which is
+    //where the several-hundred km/h rows came from.
+    bool lbs_fix = (position_type == 1 || conn->current_position_type == 1);
+    double speed = lbs_fix ? 0 : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
     bool allow_trigger = dt > 5 && dt < 1200;
 
     //a nan compares false against everything, so the old test let it through into the
@@ -213,7 +220,7 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     conn->device_time = device_time;
     log_position(conn, position_type, lat, lon, speed);
 
-    if (position_type != 1 &&  conn->current_position_type != 1) {
+    if (!lbs_fix) {
         write_stat(conn, "speed", speed);
     }
 
