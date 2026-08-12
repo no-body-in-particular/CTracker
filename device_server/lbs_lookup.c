@@ -4,13 +4,20 @@
 #include "web_geolocate.h"
 #include "sort.h"
 #include "search.h"
+#include <float.h>
 
 double compare_lbs(void  * tower_a, void * tower_b) {
     return memcmp(tower_b, tower_a, 9);
 }
 
+//the arguments are reversed to match compare_lbs. partition() calls COMPARE(pivot, elem)
+//and moves elem to the front when the result is negative, and binary_search() calls
+//COMPARE(mid, to_find) and steps left when the result is negative - both of which only
+//land correctly on the ascending array this convention produces. Comparing in the plain
+//order here meant the partial search stepped left when the target lay to the right, so it
+//routinely landed outside the block it was looking for.
 double compare_lbs_partial(void  * tower_a, void * tower_b) {
-    return memcmp(tower_a, tower_b, 5);
+    return memcmp(tower_b, tower_a, 5);
 }
 
 
@@ -228,7 +235,10 @@ location_result lbs_lookup(cell_tower * to_find, float last_lat, float last_lng)
         }
     }
 
-    double closest_match = UINT32_MAX;
+    //larger than any distance on earth, so the first candidate always replaces it. it used
+    //to be compared against a value truncated to a byte, which could never exceed 255 and
+    //made the sentinel meaningless.
+    double closest_match = DBL_MAX;
 
     if (!ret.valid) {
         to_find->location.radius = 0;
@@ -237,9 +247,22 @@ location_result lbs_lookup(cell_tower * to_find, float last_lat, float last_lng)
         cell_tower * current_tower =   lbs_db.tower_count == 0 ? 0 :  binary_search(lbs_db.tower_buffer, (lbs_db.tower_buffer + lbs_db.tower_count),  to_find,  sizeof(cell_tower), compare_lbs_partial) ;
         bool found_closest_tower = false;
 
+        //the first five bytes are a prefix of the nine the array is sorted on, so every
+        //tower sharing them sits in one contiguous block - but the search lands somewhere
+        //inside that block rather than at its start. walk back to the first entry, or the
+        //scan below only ever sees the tail of the candidates.
+        while (current_tower != 0 && current_tower > lbs_db.tower_buffer
+                && memcmp(current_tower - 1, to_find, 5) == 0) {
+            current_tower--;
+        }
+
         for (; current_tower != 0 && (current_tower < (lbs_db.tower_buffer + lbs_db.tower_count)); current_tower++) {
             if (memcmp(current_tower, to_find, 5) == 0) {
-                uint8_t diff = haversineDistance(current_tower->location.lat, current_tower->location.lng, last_lat, last_lng);
+                //this is a distance in kilometres and needs to stay one. truncating it to
+                //a uint8_t wrapped it modulo 256, so a tower 256km away scored a perfect
+                //zero and beat every genuinely close one - which is what threw fixes
+                //hundreds of kilometres across the map.
+                double diff = haversineDistance(current_tower->location.lat, current_tower->location.lng, last_lat, last_lng);
 
                 if (diff < closest_match) {
                     closest_match = diff;
