@@ -34,7 +34,7 @@ if ('POST' === $_SERVER['REQUEST_METHOD'] ) {
    <body>
       <div class="login-page">
          <div class="form">
-            <form method="post" class="reset-form action="<?php echo $_SERVER['PHP_SELF']; ?>?key=$url_key" >
+            <form method="post" class="reset-form action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>?key=$url_key" >
                 <input style="width:100%" type="password" placeholder="new password" class="input" name="password" id="password"/>
                 <input type="submit" value ="Set password" />
                 <p class="message"><?php echo $message; ?></p>

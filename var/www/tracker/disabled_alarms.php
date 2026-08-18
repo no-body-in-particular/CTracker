@@ -39,6 +39,13 @@ function write_alarms($alarms): void
 
 switch ($ACTION) {
     case 'write':
+        // disabled_events.php has always had this; here it was missing, so the holder of a
+        // read-only share link could silently disable another user's alarms - sos, tamper,
+        // low battery - on their device
+        if (isReadonly()) {
+            exit();
+        }
+
         if (isset($_GET['alarms'])) {
             write_alarms($EVENTS);
         }

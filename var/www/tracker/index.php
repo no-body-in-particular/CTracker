@@ -29,7 +29,7 @@ if (isset($_GET['login'])) {
    <body>
       <div class="login-page">
          <div class="form">
-            <form method="post" class="login-form" action="<?php echo $_SERVER['PHP_SELF']; ?>?login=true" >
+            <form method="post" class="login-form" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>?login=true" >
                 <input style="width:100%" type="text" placeholder="username" class="input" name="username" id="username" autocomplete="username"/>
                 <input style="width:100%" type="password" placeholder="password" class="input" name="password" id="password"/>
                <button style="width:100%" class="button">login</button>

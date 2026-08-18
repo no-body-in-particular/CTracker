@@ -11,6 +11,13 @@ validateSession();
 
 $ACTION = $_GET['action'];
 
+// write and remove both take an imei straight from the query string and put it into a
+// file path and the devices table. every other endpoint checks it first.
+if (('write' === $ACTION || 'remove' === $ACTION)
+    && (!isset($_GET['imei']) || !check_imei($_GET['imei']))) {
+    exit('Please accuire a valid device link.');
+}
+
 switch ($ACTION) {
     case 'write':
         if (isReadonly()) {

@@ -33,7 +33,7 @@ if ('POST' === $_SERVER['REQUEST_METHOD'] ) {
    <body>
       <div class="login-page">
          <div class="form">
-            <form method="post" class="login-form" action="<?php echo $_SERVER['PHP_SELF']; ?>" >
+            <form method="post" class="login-form" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" >
                 <input style="width:100%" type="text" placeholder="email address" class="input" name="email" id="email"/>
                 <img src="captcha.php" /><br>
                 <input type="text" name="phrase" class="input" placeholder="Captcha" /><br>

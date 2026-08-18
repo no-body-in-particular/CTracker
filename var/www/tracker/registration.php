@@ -11,11 +11,20 @@ if (isset($_GET['add']) && 'POST' === $_SERVER['REQUEST_METHOD']) {
     // Checking that the posted phrase match the phrase stored in the session
     if (isset($_SESSION['phrase']) && compareCaptcha($_SESSION['phrase'], $_POST['phrase'])) {
         if (validateEmail($_POST['email']) && !findUserByEmail($_POST['email'])) {
-            if (findUser($_POST['username'])) {
-                $message = 'User '.$_POST['username'].' already exists.';
+            // registration never checked these, so a username could contain markup - which
+            // then came straight back out in the "already exists" message below. these are
+            // the same rules modify.php already enforces on the profile form.
+            if (!validateUsername($_POST['username']) || !validateName($_POST['name'])) {
+                $message = 'Invalid name or username. Letters, numbers, dash and underscore only, up to 32 characters.';
+            } elseif (findUser($_POST['username'])) {
+                $message = 'User '.htmlspecialchars($_POST['username'], ENT_QUOTES, 'UTF-8').' already exists.';
             } else {
              if(validatePassword($_POST["pwd"])){
-                $ret = updateUser($_GET['add'], $_POST['username'], $_POST['name'], $_POST['email'], $_POST['pwd']);
+                // the row id used to come from $_GET['add'], which the form puts in the
+                // query string. updateUser() does INSERT OR REPLACE on that id, so posting
+                // an existing user's id here overwrote their account - username, email and
+                // password. generate it here instead; the request can no longer choose it.
+                $ret = updateUser(uniqid(), $_POST['username'], $_POST['name'], $_POST['email'], $_POST['pwd']);
               }else{
                 $message = "Invalid password. Must be between 8 and 32 characters containing at least 1 uppercase, 1 lowercase letter and 1 number.";
               }
