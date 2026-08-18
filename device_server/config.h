@@ -49,8 +49,17 @@
  * running, cycling and driving all do. ACTIVITY_DWELL keeps the device in the short
  * interval for a while after the last sign of activity, so waiting at a junction or a
  * quiet minute mid-run does not flip it back and forth. */
+/* Interval adaptation is off by default. Reconfiguring a watch repeatedly destabilised
+ * one: six interval changes in thirty-five minutes left it acknowledging commands without
+ * measuring, and eventually connecting without sending anything at all. The flapping that
+ * caused it is fixed - shared state across connections, and hysteresis on the heart rate -
+ * but this stays off until it has been shown to be safe on a device that can afford it.
+ * Health polling is unaffected and remains on. */
+#define ADAPTIVE_INTERVAL_ENABLED 0
+
 #define HEALTH_POLL_INTERVAL 180        //how often to ask the device for a reading, seconds
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
+#define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again
 #define MOVING_SPEED_KMH 8              //above a brisk walk: running, cycling, driving
 #define TRACK_INTERVAL_ACTIVE 60        //location interval while active, seconds
 #define TRACK_INTERVAL_IDLE 600         //location interval while still, seconds

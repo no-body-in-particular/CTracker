@@ -133,9 +133,13 @@ void statsprintf( connection * conn, const char * format, ... ) {
     va_end( arglist );
 }
 
-void write_stat(connection * conn, char * value_name, float value) {
-    struct tm tm = *gmtime(&conn->device_time);
+void write_stat_at(connection * conn, char * value_name, float value, time_t when) {
+    struct tm tm = *gmtime(&when);
     statsprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%s,%.2f\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, value_name, value);
+}
+
+void write_stat(connection * conn, char * value_name, float value) {
+    write_stat_at(conn, value_name, value, conn->device_time);
 }
 
 void write_sat_count(connection * conn, int position_type, int num_sats) {

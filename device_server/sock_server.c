@@ -142,12 +142,21 @@ void * process_thread(void * int_ptr) {
                 pthread_exit(0);
             }
 
-            //reduce our buffer by the amount of data sent
-            if (sent != conn.send_count) {
-                memmove(conn.send_buffer, conn.send_buffer + sent, conn.send_count - sent);
-            }
+            //a socket that is not ready to accept more returns -1 with EWOULDBLOCK, which
+            //the checks above deliberately do not treat as fatal. it must not be treated as
+            //a byte count either: memmove would walk one byte back off the front of the
+            //buffer and send_count would grow rather than shrink, so the buffer could never
+            //drain. the loop then sat permanently in the branch below that re-runs
+            //determine_device, re-identifying the device and sending it another SYNCTIME
+            //every pass - thousands of them - while never processing anything it sent.
+            if (sent > 0) {
+                //reduce our buffer by the amount of data sent
+                if (sent != conn.send_count) {
+                    memmove(conn.send_buffer, conn.send_buffer + sent, conn.send_count - sent);
+                }
 
-            conn.send_count -= sent;
+                conn.send_count -= sent;
+            }
         }
 
         msleep(GRACE_TIME);
@@ -174,11 +183,15 @@ void * process_thread(void * int_ptr) {
             //then determine device from those 12 bytes.
             //depending on this set the commands to use for a warning + the function pointers
             if (  conn. iteration % 5 == 0 ) {
-                process_command_file(&conn);
-                //both self rate limit and both no-op for protocols that cannot do them,
-                //so this is just a convenient periodic tick while connected
-                poll_health(&conn);
-                update_tracking_interval(&conn);
+                //only the newest connection for this device sends anything. a device
+                //routinely leaves an older connection half open, and writes to it are
+                //silently lost - so a queued command could be consumed from the file and
+                //thrown into a dead socket, never reaching the device at all.
+                if (is_command_owner(&conn)) {
+                    process_command_file(&conn);
+                    poll_health(&conn);
+                    update_tracking_interval(&conn);
+                }
             }
 
             conn.PROCESS_FUNCTION(&conn);
@@ -209,7 +222,11 @@ void * process_thread(void * int_ptr) {
             }
 
         } else {
-            determine_device(&conn);
+            //only worth doing while the device is still unknown. once a protocol has claimed
+            //it, re-running this just re-sends the identify handshake.
+            if (conn.PROCESS_FUNCTION == 0) {
+                determine_device(&conn);
+            }
 
             //test for disconnected client every 5 minutes then end the process
             if (time(0) - since_packet > 20) {

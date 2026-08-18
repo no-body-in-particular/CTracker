@@ -37,6 +37,11 @@ typedef struct {
     unsigned char command_response_outfile[FILENAME_MAX];
     unsigned char current_status_file[FILENAME_MAX];
     unsigned char stats_file[FILENAME_MAX];
+    unsigned char tracking_file[FILENAME_MAX];
+    //identifies this connection among the several a device may hold open at once. only the
+    //newest one is allowed to send, so commands cannot go out on a socket the device has
+    //already abandoned
+    unsigned long connection_id;
     unsigned char command_infile[FILENAME_MAX];
     unsigned char disabled_alarms_infile[FILENAME_MAX];
     unsigned char current_packet[BUF_SIZE];

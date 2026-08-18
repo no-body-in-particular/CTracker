@@ -347,7 +347,14 @@ void thinkrace_process_heartbeat(connection * conn, size_t parse_count, unsigned
     //counter only reaches zero at midnight, and it never drops during the day. writing
     //those would saw the line down to the floor between every genuine reading.
     if (steps > 0) {
-        write_stat(conn, "steps_k", steps / 1000.0f);
+        //AP03 carries no timestamp of its own, so write_stat() filed this under whatever
+        //the last position message left in conn->device_time - up to a whole reporting
+        //interval in the past. That backdated the step counts and pushed them behind rows
+        //already written, which the front end reads through date_grep and date_grep needs
+        //in order. The heartbeat is sent in real time, so stamp it with now, never earlier
+        //than the clock we already have.
+        time_t when = time(0) > conn->device_time ? time(0) : conn->device_time;
+        write_stat_at(conn, "steps_k", steps / 1000.0f, when);
     }
 
     //the heartbeat carries the interval the device is actually on, which beats assuming

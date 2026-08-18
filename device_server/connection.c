@@ -14,6 +14,7 @@
 #include <float.h>
 
 #include "connection.h"
+#include "tracking.h"
 #include "string.h"
 #include "util.h"
 #include <time.h>
@@ -22,9 +23,13 @@
 #include "events.h"
 
 //initial method to create a connection object
+static unsigned long next_connection_id = 1;
+
 connection new_connection(int socket) {
     connection result;
     memset(&result, 0, sizeof(connection));
+    //monotonic, so a larger id is always the more recent connection
+    result.connection_id = __sync_fetch_and_add(&next_connection_id, 1);
     result.can_log = false;
     result.imei[0] = 0;
     result.device_extra = 0;
@@ -161,6 +166,7 @@ void init_imei(connection * conn) {
     memcpy(conn->geofence_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->disabled_alarms_infile, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->stats_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
+    memcpy(conn->tracking_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     //but extensions are not
     strcat(conn->gps_outfile, ".gps.txt");
     strcat(conn->log_outfile, ".log.txt");
@@ -171,8 +177,13 @@ void init_imei(connection * conn) {
     strcat(conn->geofence_file, ".fence.txt");
     strcat(conn->disabled_alarms_infile, ".disabled-alarms.txt");
     strcat(conn->stats_file, ".stats.txt");
+    strcat(conn->tracking_file, ".tracking.txt");
     //now that we've got a path/imei we can log things
     conn->can_log = true;
+    //take over as the connection that sends to this device. a device often leaves an older
+    //connection half open, and anything written to it is simply lost - which is why health
+    //polls were being acknowledged on one socket while the watch never acted on them.
+    claim_command_ownership(conn);
     log_line(conn, "imei recieved: %s \n", conn->imei);
     init_position(conn);
     read_disabled_alarms(conn);

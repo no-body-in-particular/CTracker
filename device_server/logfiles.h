@@ -18,6 +18,7 @@ void log_array(connection * conn, uint8_t * array, size_t len);
 void log_buffer(connection * conn);
 void log_event(connection * conn, const unsigned char * response) ;
 void write_stat(connection * conn, char * value_name, float value);
+void write_stat_at(connection * conn, char * value_name, float value, time_t when);
 void write_sat_count(connection * conn, int position_type, int num_sats);
 void statsvfprintf( connection * conn, const char * format, va_list arglist);
 void statsprintf( connection * conn, const char * format, ... ) ;
