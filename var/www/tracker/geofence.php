@@ -11,7 +11,12 @@ if (!isset($_GET['imei']) || !check_imei($_GET['imei'])) {
 
 function check_fence($code)
 {
-    return preg_match('/^-*[\-0-9][0-9]:-*[\-0-9][0-9],-*[\-0-9][0-9]:-*[0-9][0-9],[0-9],[0-9],[0-9\\.]*,[0-9\\.]*,[0-9]*,[0-9]*,[\w-]{0,31}/u', $code);
+    // anchored with $ and the D modifier so the whole value has to match. without them a
+    // valid prefix let anything through after it - including a newline, which write_fence()
+    // joins with "\n" and so becomes an extra fence line.
+    // the name accepts space and dot as well as word characters and dash, and the two
+    // coordinates accept a leading minus, which the previous pattern rejected outright.
+    return preg_match('/^-*[\-0-9][0-9]:-*[\-0-9][0-9],-*[\-0-9][0-9]:-*[0-9][0-9],[0-9],[0-9],-?[0-9\\.]*,-?[0-9\\.]*,[0-9]*,[0-9]*,[\w .\-]{0,31}$/uD', $code);
 }
 
 if (isset($_GET['fence']) && !check_fence($_GET['fence'])) {

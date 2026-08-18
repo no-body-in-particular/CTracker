@@ -362,4 +362,102 @@ function validateSession()
     }
 }
 
+/*
+ * Login throttling.
+ *
+ * Keyed on the client address rather than the username on purpose: throttling per account
+ * would let anyone lock a legitimate user out of their own tracker just by failing logins
+ * against their name. The table is created on demand, so there is no migration step.
+ *
+ * Only the login form calls these. validateSession() runs validateUser() on every
+ * authenticated request, and counting those would throttle normal use.
+ */
+define('LOGIN_MAX_FAILURES', 10);   // failures allowed inside the window
+define('LOGIN_WINDOW', 900);        // window, seconds
+define('LOGIN_LOCKOUT', 900);       // how long a lockout lasts, seconds
+
+function loginThrottleDb()
+{
+    $db = new SQLite3(DATABASE);
+    $db->busyTimeout(5000);
+    $db->exec('CREATE TABLE IF NOT EXISTS LOGIN_ATTEMPTS ('
+        .'IP TEXT PRIMARY KEY, FAILURES INTEGER NOT NULL DEFAULT 0, '
+        .'FIRST_FAILURE INTEGER NOT NULL DEFAULT 0, BLOCKED_UNTIL INTEGER NOT NULL DEFAULT 0);');
+
+    return $db;
+}
+
+function loginClientIp()
+{
+    // deliberately not X-Forwarded-For: that is client supplied, and trusting it would let
+    // an attacker pick a fresh identity per request and skip the limit entirely
+    return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
+}
+
+// Returns seconds remaining on a lockout, or 0 when the caller may attempt a login.
+function loginBlockedSeconds()
+{
+    $db = loginThrottleDb();
+    $now = time();
+
+    // opportunistic tidy up so the table cannot grow without bound
+    $db->exec('DELETE FROM LOGIN_ATTEMPTS WHERE BLOCKED_UNTIL < '.($now - LOGIN_WINDOW)
+        .' AND FIRST_FAILURE < '.($now - LOGIN_WINDOW));
+
+    $stmt = $db->prepare('SELECT BLOCKED_UNTIL FROM LOGIN_ATTEMPTS WHERE IP=:ip;');
+    $stmt->bindValue(':ip', loginClientIp(), SQLITE3_TEXT);
+    $row = $stmt->execute()->fetchArray();
+    $db->close();
+
+    if (!$row) {
+        return 0;
+    }
+
+    $remaining = ((int) $row['BLOCKED_UNTIL']) - $now;
+
+    return $remaining > 0 ? $remaining : 0;
+}
+
+function recordLoginFailure(): void
+{
+    $db = loginThrottleDb();
+    $now = time();
+    $ip = loginClientIp();
+
+    $stmt = $db->prepare('SELECT FAILURES, FIRST_FAILURE FROM LOGIN_ATTEMPTS WHERE IP=:ip;');
+    $stmt->bindValue(':ip', $ip, SQLITE3_TEXT);
+    $row = $stmt->execute()->fetchArray();
+
+    $failures = 1;
+    $first = $now;
+
+    if ($row) {
+        // a window that has already elapsed starts again rather than accumulating forever
+        if (((int) $row['FIRST_FAILURE']) > ($now - LOGIN_WINDOW)) {
+            $failures = ((int) $row['FAILURES']) + 1;
+            $first = (int) $row['FIRST_FAILURE'];
+        }
+    }
+
+    $blocked_until = $failures >= LOGIN_MAX_FAILURES ? $now + LOGIN_LOCKOUT : 0;
+
+    $stmt = $db->prepare('INSERT OR REPLACE INTO LOGIN_ATTEMPTS (IP,FAILURES,FIRST_FAILURE,BLOCKED_UNTIL) '
+        .'VALUES (:ip,:failures,:first,:blocked);');
+    $stmt->bindValue(':ip', $ip, SQLITE3_TEXT);
+    $stmt->bindValue(':failures', $failures, SQLITE3_INTEGER);
+    $stmt->bindValue(':first', $first, SQLITE3_INTEGER);
+    $stmt->bindValue(':blocked', $blocked_until, SQLITE3_INTEGER);
+    $stmt->execute();
+    $db->close();
+}
+
+function clearLoginFailures(): void
+{
+    $db = loginThrottleDb();
+    $stmt = $db->prepare('DELETE FROM LOGIN_ATTEMPTS WHERE IP=:ip;');
+    $stmt->bindValue(':ip', loginClientIp(), SQLITE3_TEXT);
+    $stmt->execute();
+    $db->close();
+}
+
 ?>

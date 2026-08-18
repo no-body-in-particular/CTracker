@@ -15,7 +15,8 @@ if (!isset($_GET['imei']) || !check_imei($_GET['imei'])) {
 
 function check_events($code)
 {
-    return preg_match('/^[A-Za-z0-9 \*\.]*/u', $code);
+    // same unanchored problem as check_alarms in disabled_alarms.php
+    return preg_match('/^[A-Za-z0-9 .*|:_\-]*$/uD', $code);
 }
 
 if (isset($_GET['events']) && !check_events($_GET['events'])) {

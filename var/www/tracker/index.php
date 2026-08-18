@@ -12,9 +12,18 @@ session_start();
 session_unset();
 
 if (isset($_GET['login'])) {
-    if (validateUser($_POST['username'], hash('whirlpool', $_POST['password']))) {
+    $blocked = loginBlockedSeconds();
+
+    if ($blocked > 0) {
+        // the same message either way, so this cannot be used to tell a real username from
+        // an invented one
+        $message = '<a>Too many failed login attempts. Please try again in '
+            .ceil($blocked / 60).' minute(s).</a>';
+    } elseif (validateUser($_POST['username'], hash('whirlpool', $_POST['password']))) {
+        clearLoginFailures();
         header('Location: tracker.php');
     } else {
+        recordLoginFailure();
         $message = '<a>Wrong Username or Password</a>';
     }
 }

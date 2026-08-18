@@ -11,7 +11,11 @@ if (!isset($_GET['imei']) || !check_imei($_GET['imei'])) {
 
 function check_alarms($code)
 {
-    return preg_match('/^[A-Za-z0-9 *\.\|]*/u', $code);
+    // the trailing * with no $ matched the empty string at the start of any input, so this
+    // accepted everything. refreshSettings() drops the stored value straight into innerHTML,
+    // which made it a stored xss sink. anchored, and : _ - added so fence alert names like
+    // "Curfew: entered fence area" still work.
+    return preg_match('/^[A-Za-z0-9 .*|:_\-]*$/uD', $code);
 }
 
 if (isset($_GET['alarms']) && (!check_alarms($_GET['alarms']) || strlen($_GET['alarms']) > 2000)) {
