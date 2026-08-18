@@ -18,6 +18,7 @@
 #include "../lbs_lookup.h"
 #include "../multilaterate.h"
 #include "thinkrace_protocol.h"
+#include "../tracking.h"
 
 #define THINKRACE_TIMEOUT 1200
 
@@ -349,6 +350,12 @@ void thinkrace_process_heartbeat(connection * conn, size_t parse_count, unsigned
         write_stat(conn, "steps_k", steps / 1000.0f);
     }
 
+    //the heartbeat carries the interval the device is actually on, which beats assuming
+    //our last command landed
+    if (parse_count > 5) {
+        note_device_interval(conn, parse_int(data_buffers[5], strlen(data_buffers[5])));
+    }
+
     conn->timeout_time = time(0) + THINKRACE_TIMEOUT;
 }
 
@@ -411,9 +418,13 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
             write_stat(conn,  "systole", systole);
             break;
 
-        case 2:
-            write_stat(conn,  "heartrate", parse_int(data_buffers[3], 3));
+        case 2: {
+            int bpm = parse_int(data_buffers[3], 3);
+            write_stat(conn,  "heartrate", bpm);
+            //feeds the activity test in update_tracking_interval()
+            note_heartrate(conn, bpm);
             break;
+        }
 
         case 3:
             write_stat(conn,  "temperature", parse_float(data_buffers[3]));
@@ -591,6 +602,10 @@ void thinkrace_identify(void * vp) {
         thinkrace_send_command(conn, "SYNCTIME#");
         conn->PROCESS_FUNCTION = thinkrace_process;
         conn->COMMAND_FUNCTION = thinkrace_send_command;
+        //BP15 sets the location interval and BPXL asks for a health reading, so this
+        //protocol can take part in adaptive tracking
+        conn->supports_interval = true;
+        conn->supports_health_poll = true;
         conn->WARNING_FUNCTION = thinkrace_warn;
         conn->AUDIO_WARNING_FUNCTION = thinkrace_warn_audio;
         conn->MOTOR_WARNING_FUNCTION = thinkrace_warn;

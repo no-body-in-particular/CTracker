@@ -22,6 +22,27 @@
 bool megastek_send_command( void * c, const char * cmd) {
     connection * conn = (connection *)c;
     size_t start = conn->send_count;
+    char translated[64] = {0};
+
+    //adaptive tracking hands every protocol the same UPDATE=<seconds># and lets each one
+    //translate. W005 counts in units of 30 seconds - "W005,2" is a 60 second interval -
+    //and 0 would switch uploading off altogether, so never round down past 1.
+    if (strlen(cmd) > 7 && memcmp(cmd, "UPDATE=", 7) == 0) {
+        unsigned int seconds = atoi(cmd + 7);
+        unsigned int units = seconds / 30;
+
+        if (units < 1) {
+            units = 1;
+        }
+
+        if (units > 65535) {
+            units = 65535;
+        }
+
+        snprintf(translated, sizeof(translated) - 1, "W005,%u", units);
+        cmd = translated;
+    }
+
     send_string(conn, "$GPRS,");
     send_string(conn, conn->imei + (*conn->imei == '0' ? 1 : 0));
     send_string(conn, ";");
@@ -275,6 +296,8 @@ void megastek_identify(void * vp) {
         fprintf(stdout, "  device type is megastek\n");
         conn->PROCESS_FUNCTION = megastek_process;
         conn->COMMAND_FUNCTION = megastek_send_command;
+        //W005 sets the GPRS upload interval
+        conn->supports_interval = true;
         conn->WARNING_FUNCTION = megastek_warn;
         conn->AUDIO_WARNING_FUNCTION = megastek_warn_audio;
         conn->MOTOR_WARNING_FUNCTION = megastek_warn;

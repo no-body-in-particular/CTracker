@@ -3,6 +3,7 @@
 #include "../crc16.h"
 #include "../connection.h"
 #include "../logfiles.h"
+#include <stdlib.h>
 
 bool is_v2(data_packet packet) {
     return packet.header.start_bit[0] == 0x79;
@@ -82,6 +83,34 @@ void send_data_packet( void * c, data_packet packet) {
 
 bool JIMI_send_command(void * c, const char * cmd) {
     connection * conn = (connection *)c;
+    char translated[64] = {0};
+
+    //adaptive tracking hands every protocol the same UPDATE=<seconds>#. GT06 splits it in
+    //two and, awkwardly, uses different units for each: T1 is the upload interval with the
+    //ignition on, in seconds, and T2 the interval with it off, in minutes. Both are
+    //documented as 5..18000. T2 gets at least a minute so a short active interval cannot
+    //round it down to zero.
+    if (strlen(cmd) > 7 && memcmp(cmd, "UPDATE=", 7) == 0) {
+        unsigned int seconds = atoi(cmd + 7);
+
+        if (seconds < 5) {
+            seconds = 5;
+        }
+
+        if (seconds > 18000) {
+            seconds = 18000;
+        }
+
+        unsigned int minutes = seconds / 60;
+
+        if (minutes < 1) {
+            minutes = 1;
+        }
+
+        snprintf(translated, sizeof(translated) - 1, "TIMER,%u,%u#", seconds, minutes);
+        cmd = translated;
+    }
+
     command_packet command;
     data_packet to_send = create_response(0x80, 0);
     memset(&command, 0, sizeof(command));

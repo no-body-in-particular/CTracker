@@ -20,6 +20,7 @@
 #include "device/megastek_protocol.h"
 #include "device/XEXUN_protocol.h"
 #include "device/thinkrace_protocol.h"
+#include "tracking.h"
 #include "device/myrope_r18_protocol.h"
 #include "device/myrope_protocol.h"
 #include "device/basic_protocol.h"
@@ -174,6 +175,10 @@ void * process_thread(void * int_ptr) {
             //depending on this set the commands to use for a warning + the function pointers
             if (  conn. iteration % 5 == 0 ) {
                 process_command_file(&conn);
+                //both self rate limit and both no-op for protocols that cannot do them,
+                //so this is just a convenient periodic tick while connected
+                poll_health(&conn);
+                update_tracking_interval(&conn);
             }
 
             conn.PROCESS_FUNCTION(&conn);

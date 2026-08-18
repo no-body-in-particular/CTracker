@@ -43,6 +43,16 @@ connection new_connection(int socket) {
     result.current_lon = 0;
     result.current_speed = 0;
     result.current_speed_valid = false;
+    result.supports_interval = false;
+    result.supports_health_poll = false;
+    result.current_interval = 0;
+    result.last_interval_change = 0;
+    result.since_last_health_poll = 0;
+    result.last_heartrate = 0;
+    result.last_heartrate_time = 0;
+    //not "now": a device that connects while genuinely still should settle to the idle
+    //interval rather than be treated as active for the first dwell period
+    result.last_activity = 0;
     result.since_battalm = time(0);
     result.just_connected = true;
     result.log_disconnect = true;

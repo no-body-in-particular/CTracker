@@ -393,6 +393,8 @@ void myrope_identify(void * vp) {
         fprintf(stdout, "  device type is myrope\n");
         conn->PROCESS_FUNCTION = myrope_process;
         conn->COMMAND_FUNCTION = myrope_send_command;
+        //implements UPDATE= ($HX,1002) in seconds, but has no health poll
+        conn->supports_interval = true;
         conn->WARNING_FUNCTION = myrope_warn;
         conn->AUDIO_WARNING_FUNCTION = myrope_warn_audio;
         conn->MOTOR_WARNING_FUNCTION = myrope_warn;

@@ -69,6 +69,15 @@ typedef struct {
     float current_speed;
     //false when the current speed could not be measured, ie the fix came from a tower
     bool current_speed_valid;
+    //adaptive tracking - see tracking.c
+    bool supports_interval;         //protocol implements an interval command
+    bool supports_health_poll;      //protocol can ask for a health reading on demand
+    unsigned int current_interval;  //interval the device is on, seconds. 0 while unknown
+    time_t last_interval_change;
+    time_t since_last_health_poll;
+    int last_heartrate;
+    time_t last_heartrate_time;
+    time_t last_activity;           //last time movement or a raised heart rate was seen
     float last_gps_lat;
     float last_gps_lon;
     size_t current_position_type;

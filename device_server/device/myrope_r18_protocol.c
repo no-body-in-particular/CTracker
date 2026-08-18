@@ -481,6 +481,8 @@ void myrope_r18_identify(void * vp) {
         fprintf(stdout, "  device type is myrope r18\n");
         conn->PROCESS_FUNCTION = myrope_r18_process;
         conn->COMMAND_FUNCTION = myrope_r18_send_command;
+        //implements HEARTRATE# (hrtstart) but no interval command
+        conn->supports_health_poll = true;
         conn->WARNING_FUNCTION = myrope_r18_warn;
         conn->AUDIO_WARNING_FUNCTION = myrope_r18_warn_audio;
         conn->MOTOR_WARNING_FUNCTION = myrope_r18_warn;

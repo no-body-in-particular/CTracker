@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "util.h": "c",
+        "string": "c",
+        "vector": "c",
+        "sort.h": "c",
+        "__locale": "c",
+        "string_view": "c",
+        "__string": "c"
+    }
+}

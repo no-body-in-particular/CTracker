@@ -595,6 +595,8 @@ void JIMI_identify(void * c) {
         fprintf(stdout, "  device type is JIMI\n");
         conn->PROCESS_FUNCTION = JIMI_process;
         conn->COMMAND_FUNCTION = JIMI_send_command;
+        //TIMER sets the upload interval
+        conn->supports_interval = true;
         conn->WARNING_FUNCTION = JIMI_warn;
         conn->AUDIO_WARNING_FUNCTION = JIMI_warn;
         conn->MOTOR_WARNING_FUNCTION = JIMI_do_nothing;

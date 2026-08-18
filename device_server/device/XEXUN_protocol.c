@@ -106,9 +106,26 @@ void xex_send_packet(connection * conn, xexun_data data) {
 
 bool XEXUN_send_command( void * c, const char * cmd) {
     connection * conn = (connection *)c;
+    char translated[64] = {0};
 
     if (!conn->can_log ) {
         return false;
+    }
+
+    //adaptive tracking hands every protocol the same UPDATE=<seconds>#. XEXUN takes both a
+    //fix interval and an upload interval, in seconds - the manual's example is
+    //"tracking_send=60,300", meaning fix every 60s and upload every 300s. Both are set to
+    //the same value so a position actually reaches us at the requested rate rather than
+    //being batched up and delivered late.
+    if (strlen(cmd) > 7 && memcmp(cmd, "UPDATE=", 7) == 0) {
+        unsigned int seconds = atoi(cmd + 7);
+
+        if (seconds < 5) {
+            seconds = 5;
+        }
+
+        snprintf(translated, sizeof(translated) - 1, "tracking_send=%u,%u", seconds, seconds);
+        cmd = translated;
     }
 
     xexun_data d = xex_make_packet(conn, conn->packet_index++, 0x07, strlen(cmd) + 1);
@@ -564,6 +581,8 @@ void XEXUN_identify(void * vp) {
         fprintf(stdout, "   device is xexun\n");
         conn->PROCESS_FUNCTION = XEXUN_process;
         conn->COMMAND_FUNCTION = XEXUN_send_command;
+        //tracking_send sets the fix and upload intervals
+        conn->supports_interval = true;
         conn->WARNING_FUNCTION = XEXUN_warn;
         conn->MOTOR_WARNING_FUNCTION = XEXUN_warn;
         conn->AUDIO_WARNING_FUNCTION = XEXUN_do_nothing;

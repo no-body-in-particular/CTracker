@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <math.h>
 #include "events.h"
+#include "tracking.h"
 
 int convert_wday(int day) {
     if (day >= 8 || day < 0) {
@@ -219,6 +220,8 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     //previous fix's time - a fix measured at 19:24:19 was stored as 19:17:00. dt and
     //speed are already computed above, so nothing here still needs the old value.
     conn->device_time = device_time;
+    //only a measured speed counts - a tower fix cannot produce one
+    note_movement(conn, speed, !lbs_fix);
     log_position(conn, position_type, lat, lon, speed, !lbs_fix);
 
     if (!lbs_fix) {
