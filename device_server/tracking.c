@@ -222,7 +222,32 @@ void update_tracking_interval(connection * conn)
 
     unsigned int target = st.active ? TRACK_INTERVAL_ACTIVE : TRACK_INTERVAL_IDLE;
 
+    //until the device has told us what it is on, there is nothing to correct - asking
+    //blind would mean a command on every single connect
+    if (conn->current_interval == 0) {
+        write_state(conn, &st);
+        return;
+    }
+
+    //the device is already where we want it. adopt that into our state rather than sending
+    //a command telling it to do what it is already doing, which is what happened on every
+    //fresh connection before the state file existed.
+    if (conn->current_interval == target) {
+        st.interval = target;
+        write_state(conn, &st);
+        return;
+    }
+
+    //already asked for this. the device reports its interval only in its heartbeat, so
+    //requiring confirmation before considering the job done meant reissuing the same
+    //command every cooldown while waiting for the next one. only reissue when the device
+    //actively disagrees with what we asked for.
     if (st.interval == target && conn->current_interval == target) {
+        write_state(conn, &st);
+        return;
+    }
+
+    if (st.interval == target && (time(0) - st.last_change) < DEVICE_CONFIRM_GRACE) {
         write_state(conn, &st);
         return;
     }
