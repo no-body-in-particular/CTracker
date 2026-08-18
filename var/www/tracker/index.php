@@ -19,7 +19,9 @@ if (isset($_GET['login'])) {
         // an invented one
         $message = '<a>Too many failed login attempts. Please try again in '
             .ceil($blocked / 60).' minute(s).</a>';
-    } elseif (validateUser($_POST['username'], hash('whirlpool', $_POST['password']))) {
+    } elseif (validateLogin($_POST['username'], $_POST['password'])) {
+        // the plaintext goes in now rather than a digest computed here: password_verify()
+        // needs it, and it is also the only moment a legacy password can be rehashed
         clearLoginFailures();
         header('Location: tracker.php');
     } else {
