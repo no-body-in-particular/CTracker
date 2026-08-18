@@ -21,7 +21,8 @@ function fetchUser() {
         url: "details.php?action=read" + viewOnlyParameter(),
         success: function(result) {
             result = result.replace("\n", "");
-            var parsed = forEachRow(result, 3, cols => [cols[0], cols[1], cols[2], cols[3]]);
+            //details.php no longer returns the password hash, so this is three columns now
+            var parsed = forEachRow(result, 2, cols => [cols[0], cols[1], cols[2]]);
             if (parsed.length) {
                 const usernameField = document.getElementById("username");
                 const nameField = document.getElementById("name_for_account");
@@ -31,18 +32,26 @@ function fetchUser() {
                 nameField.value = parsed[0][0];
                 usernameField.value = parsed[0][1];
                 emailField.value = parsed[0][2];
-                passwordField.value = parsed[0][3];
+                //deliberately left blank - submitting it empty keeps the current password
+                passwordField.value = '';
             }
         }
     });
 }
 
 function updateUser() {
+    //posted rather than put in the query string: a url ends up in the webserver access
+    //log, the browser history and any referrer header. the fields were not escaped either,
+    //so a & or a space in a name broke the request.
     $.ajax({
-        url: "modify.php?username=" + document.getElementById("username").value +
-            "&name=" + document.getElementById("name_for_account").value +
-            "&email=" + document.getElementById("email").value +
-            "&pwd=" + document.getElementById("password").value,
+        url: "modify.php",
+        type: "POST",
+        data: {
+            username: document.getElementById("username").value,
+            name: document.getElementById("name_for_account").value,
+            email: document.getElementById("email").value,
+            pwd: document.getElementById("password").value
+        },
         success: function(result) {
             alert(result);
             fetchUser();

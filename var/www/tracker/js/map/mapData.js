@@ -348,10 +348,11 @@ function addFence() {
     ];
 
     var cols = f.join(',');
-    var url = "geofence.php?imei=" + imei + "&action=write&fence=" + encodeURIComponent(cols) + "&username=" + document.getElementById("username").value + "&password=" +
-        document.getElementById("password").value;
 
-    copyTextToClipboard(url);
+    //this used to also build a url with the username and password from the account form
+    //appended to it and copy that to the clipboard on every fence added - putting the
+    //user's password into their clipboard, and into anywhere they subsequently pasted it.
+    //it was never needed: the request below creates the fence using the session.
 
     $.ajax({
         url: "geofence.php?imei=" + imei + "&action=write&fence=" + encodeURIComponent(cols),

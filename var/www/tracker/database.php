@@ -347,12 +347,15 @@ function validateSession()
     $username = $_SESSION['login'];
     $password = $_SESSION['password'];
 
-    if (null === $username || null === $password) {
-        $username = $_GET['username'];
-        $password = $_GET['password'];
-    }
-
-    if (validateUser($username, $password)) {
+    // credentials used to fall back to $_GET['username'] and $_GET['password'] when the
+    // session was empty. anything in a query string ends up in the webserver access log,
+    // the browser history and any referrer header, so a link shared or pasted once leaked
+    // the account permanently. read only sharing already has a proper mechanism - the
+    // viewonly alias, which is a per device token that can be regenerated.
+    //
+    // dropping it also removes a collision: modify.php passes the *new* username and
+    // password in $_GET['username'] and $_GET['pwd'] when updating a profile.
+    if (null !== $username && null !== $password && validateUser($username, $password)) {
         $_SESSION['viewonly'] = null;
 
         return true;

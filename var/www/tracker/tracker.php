@@ -67,7 +67,7 @@ validateSession();
                <input placeholder="Username" id="username" name="username" class="input"/>
                <input placeholder="Name" id="name_for_account" name="name_for_account" class="input"/>
                <input placeholder="Email" id="email" name="email" class="input"/>
-               <input placeholder="Password" id="password" name="password" class="input" type="password" onfocus="this.value=''"/>
+               <input placeholder="Password (blank = unchanged)" id="password" name="password" class="input" type="password" onfocus="this.value=''"/>
                <button onclick="updateUser()" class="button">Update</button>
             </section>
             <section id='history' align="left" style="width:70vw;height:8vh;display: table;">
