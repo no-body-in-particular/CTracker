@@ -58,6 +58,7 @@ connection new_connection(int socket) {
     //not "now": a device that connects while genuinely still should settle to the idle
     //interval rather than be treated as active for the first dwell period
     result.last_activity = 0;
+    result.last_stat_time = 0;
     result.since_battalm = time(0);
     result.just_connected = true;
     result.log_disconnect = true;

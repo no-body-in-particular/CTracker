@@ -83,6 +83,7 @@ typedef struct {
     int last_heartrate;
     time_t last_heartrate_time;
     time_t last_activity;           //last time movement or a raised heart rate was seen
+    time_t last_stat_time;          //timestamp of the last stat written, to keep them ordered
     float last_gps_lat;
     float last_gps_lon;
     size_t current_position_type;

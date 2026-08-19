@@ -68,3 +68,12 @@
 //how long to let a device confirm a new interval, in its own heartbeat, before assuming
 //the command was lost and reissuing. must exceed the idle reporting interval.
 #define DEVICE_CONFIRM_GRACE 900
+
+/* Stats come from two clocks. Position derived values carry the position message's time,
+ * while health values carry the measurement time inside the JK packet, which is typically
+ * a handful of seconds earlier. Both are accurate, but a health batch processed after a
+ * position lands slightly behind it and the file stops being sorted - which matters
+ * because the front end reads through date_grep. A backward step within this tolerance is
+ * nudged forward to keep the file ordered; anything larger is genuinely older data, such
+ * as a device replaying what it buffered while offline, and is written as it stands. */
+#define STAT_ORDER_TOLERANCE 30

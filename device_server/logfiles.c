@@ -134,6 +134,15 @@ void statsprintf( connection * conn, const char * format, ... ) {
 }
 
 void write_stat_at(connection * conn, char * value_name, float value, time_t when) {
+    //nudge a small backward step forward so the file stays sorted - see STAT_ORDER_TOLERANCE
+    if (when < conn->last_stat_time && (conn->last_stat_time - when) <= STAT_ORDER_TOLERANCE) {
+        when = conn->last_stat_time;
+    }
+
+    if (when > conn->last_stat_time) {
+        conn->last_stat_time = when;
+    }
+
     struct tm tm = *gmtime(&when);
     statsprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%s,%.2f\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, value_name, value);
 }
