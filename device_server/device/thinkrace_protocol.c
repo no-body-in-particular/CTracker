@@ -504,8 +504,15 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
 
     if (memcmp(string, "IWAPJK", 6) == 0 && str_count > 2) {
         thinkrace_process_stat(conn, str_count, data_buffers);
-        sprintf(response, "IWBPJK,%c#", string[2]);
+        //the protocol wants the type from the uploaded packet echoed back - "IWBPJK,2#"
+        //for a heart rate. string[2] is the letter 'A' of "IWAPJK", so this replied
+        //"IWBPJK,A#", and without the return below the generic responder then appended a
+        //bare "IWBPJK#" as well. The device was being told twice, wrongly, that its health
+        //packet had been received.
+        sprintf(response, "IWBPJK,%s#", data_buffers[2]);
         send_string(conn, response);
+
+        return;
     }
 
     if (!isdigit(string[4]) || !isdigit(string[5])) {
