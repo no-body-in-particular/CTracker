@@ -135,7 +135,9 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
     bool valid_position = false;
     size_t position_type = 0;
     unsigned char * wifi_split[16];
-    wifi_db_entry db_entry;
+    //this used to be left uninitialised while db_entry.result was read further down, and
+    //network_buffer entries whose mac failed to parse kept whatever was on the stack
+    wifi_db_entry db_entry = {0};
     unsigned char * current_network[3];
 
     if (parse_count < 5) {
@@ -162,24 +164,86 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
     if ( parse_count > 5) {
         db_entry.network_count = split_to('&', data_buffers[5], strlen(data_buffers[5]) + 1, wifi_split, 16);
 
-        if ( db_entry.network_count > 2) {
-            for (int i = 0; i <  db_entry.network_count; i++) {
-                size_t split_count = split_to('|', wifi_split[i], strlen(wifi_split[i]) + 1, current_network, 3);
+        //Only networks that actually parse are kept, and they are packed down to the front
+        //of the buffer. Previously every '&' separated field counted towards network_count
+        //even when its mac could not be read, so a single malformed entry handed the
+        //lookup a garbage address, and a scan of three fields where two were malformed
+        //looked like three usable networks. Anything unusable is now dropped from the
+        //count rather than passed on.
+        size_t scanned = db_entry.network_count;
+        size_t usable = 0;
 
-                if (split_count == 3) {
-                    int values[6];
-                    sscanf( current_network[1], "%x:%x:%x:%x:%x:%x",
-                            &values[0], &values[1], &values[2],
-                            &values[3], &values[4], &values[5] );
-                    db_entry.network_buffer[i].mac_addr[0] =  values[0];
-                    db_entry.network_buffer[i].mac_addr[1] = values[1];
-                    db_entry.network_buffer[i].mac_addr[2] = values[2];
-                    db_entry.network_buffer[i].mac_addr[3] = values[3];
-                    db_entry.network_buffer[i].mac_addr[4] = values[4];
-                    db_entry.network_buffer[i].mac_addr[5] = values[5];
+        for (size_t i = 0; i < scanned && usable < WIFI_LOOKUP_MAX; i++) {
+            size_t split_count = split_to('|', wifi_split[i], strlen(wifi_split[i]) + 1, current_network, 3);
+
+            if (split_count != 3) {
+                continue;
+            }
+
+            unsigned int values[6];
+
+            if (sscanf( current_network[1], "%x:%x:%x:%x:%x:%x",
+                        &values[0], &values[1], &values[2],
+                        &values[3], &values[4], &values[5] ) != 6) {
+                continue;
+            }
+
+            unsigned char mac[6];
+            bool all_zero = true;
+            bool all_ones = true;
+
+            for (int b = 0; b < 6; b++) {
+                if (values[b] > 0xff) {
+                    all_zero = all_ones = false;
+                    break;
+                }
+
+                mac[b] = (unsigned char)values[b];
+
+                if (mac[b] != 0x00) {
+                    all_zero = false;
+                }
+
+                if (mac[b] != 0xff) {
+                    all_ones = false;
                 }
             }
 
+            //00:00:00:00:00:00 and ff:ff:ff:ff:ff:ff are never a real access point, and a
+            //byte outside 0..ff means the field was not a mac at all
+            if (all_zero || all_ones) {
+                continue;
+            }
+
+            bool duplicate = false;
+
+            for (size_t j = 0; j < usable; j++) {
+                if (memcmp(db_entry.network_buffer[j].mac_addr, mac, 6) == 0) {
+                    duplicate = true;
+                    break;
+                }
+            }
+
+            //the same access point listed twice adds no information but does skew a
+            //multilateration towards it
+            if (duplicate) {
+                continue;
+            }
+
+            memcpy(db_entry.network_buffer[usable].mac_addr, mac, 6);
+            usable++;
+        }
+
+        db_entry.network_count = usable;
+
+        if (usable != scanned) {
+            log_line(conn, "   wifi scan: %zu of %zu networks usable\n", usable, scanned);
+        }
+
+        //two access points are enough for a lookup to be worth attempting - the old
+        //threshold of three threw away scans that would have resolved, and left the device
+        //on a cell tower fix (or on no fix at all) instead
+        if ( db_entry.network_count >= WIFI_LOOKUP_MIN) {
             if (!valid_position) {
                 db_entry.result =  wifi_lookup(db_entry.network_buffer,  db_entry.network_count);
 
@@ -226,6 +290,18 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
     }
 
     time_t dt = date_to_time(year, month, day, hour, minute, second);
+
+    //A position that could not be resolved still tells us what time the device thinks it
+    //is. Only move_to() used to set conn->device_time, so once the fixes went void and
+    //both the wifi and tower lookups failed the clock stopped at the last resolved fix -
+    //and every later log line, event and stat was written at that one instant. Hours of
+    //heart rate readings landed on a single timestamp and showed up as a stack of
+    //duplicate looking points. Advance the clock from the packet itself, whether or not
+    //we managed to place the device. Only ever forwards, so a stale fix replayed by a
+    //second connection cannot drag it back.
+    if (dt > conn->device_time) {
+        conn->device_time = dt;
+    }
 
     if (valid_position) {
         //if we're fairly certain about our location do trigger fences

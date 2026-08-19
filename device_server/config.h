@@ -77,3 +77,8 @@
  * nudged forward to keep the file ordered; anything larger is genuinely older data, such
  * as a device replaying what it buffered while offline, and is written as it stands. */
 #define STAT_ORDER_TOLERANCE 30
+
+//smallest number of access points worth sending to a wifi geolocation lookup
+#define WIFI_LOOKUP_MIN 2
+//most access points we will carry from one scan
+#define WIFI_LOOKUP_MAX 16
