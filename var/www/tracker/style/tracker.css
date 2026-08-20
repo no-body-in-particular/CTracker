@@ -927,11 +927,8 @@ body.statsOpen #map > a {
    icons are white svgs, so the colour had nothing to act on. A row of real touch targets
    instead, each wide enough to hit without aiming. */
 #history {
-    width: 70vw;
     display: flex;
-    justify-content: space-around;
     align-items: center;
-    gap: 4pt;
 }
 
 .playctl {
@@ -1089,9 +1086,19 @@ section {
        centring within that puts the centre half a rail's width right of where the eye expects
        it, which is obvious on a phone where the rail is a large share of the width. The bar
        passes behind the rail, which is opaque and sits above it. */
+    /* Five buttons do not need the width of a page. Anchoring the middle of the bar to the
+       middle of the screen lets it shrink to its contents and stay centred at any width -
+       stretching it edge to edge and centring the buttons inside worked out to the same thing
+       on a phone but left a bar the width of a desktop holding five icons.
+       Fixed rather than absolute so that middle is the screen's: the other panels sit inside
+       .container, which begins where the icon rail ends, and centring within that puts the
+       centre half a rail's width to the right of where the eye expects it. */
     position: fixed;
-    left: var(--gutter);
-    right: var(--gutter);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100vw - (2 * var(--gutter)));
 }
 
 .playctl {
