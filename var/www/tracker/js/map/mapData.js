@@ -1240,6 +1240,43 @@ window.addEventListener('hashchange', syncStatsMode);
  * does that rather than history.replaceState: :target is only re-evaluated by an actual
  * navigation, and replaceState is not one - the URL would change and the panel would not.
  */
+/*
+ * Escape closes whichever right hand panel is open, the same as pressing back does. A panel is
+ * shown by the hash naming a section, and opening the first one pushed a history entry (see the
+ * click handler below), so history.back() is exactly the "close it" step - it drops that entry
+ * and the hash with it. Only when a panel is actually open, or Escape on the bare map would walk
+ * off the page. A field or a dropdown having focus is left alone: Escape there is the browser's.
+ */
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' && e.keyCode !== 27) {
+        return;
+    }
+
+    var focused = document.activeElement;
+
+    if (focused && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName)) {
+        return;
+    }
+
+    var hash = window.location.hash.replace('#', '');
+    var target = hash ? document.getElementById(hash) : null;
+
+    if (target && target.tagName === 'SECTION') {
+        e.preventDefault();
+
+        //back is the intended close. But if the page was opened straight onto a panel hash -
+        //a reload while one was open - there may be no entry behind it, and back would leave
+        //the page. So if the panel is still open a moment later, close it outright instead.
+        history.back();
+
+        setTimeout(function() {
+            if (window.location.hash.replace('#', '') === hash) {
+                window.location.replace(window.location.pathname + window.location.search);
+            }
+        }, 120);
+    }
+});
+
 document.addEventListener('click', function(e) {
     if (!e.target || !e.target.closest) {
         return;
