@@ -12,7 +12,7 @@
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="Server address" android:paddingTop="8dp" />
         <EditText android:id="@+id/host" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:hint="tracker.example.com"
+            android:layout_height="wrap_content" android:hint="coredump.ws"
             android:inputType="textUri" />
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -29,7 +29,7 @@
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="Report interval (seconds)" android:paddingTop="8dp" />
         <EditText android:id="@+id/interval" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:text="600" android:inputType="number" />
+            android:layout_height="wrap_content" android:text="180" android:inputType="number" />
 
         <CheckBox android:id="@+id/shell" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:paddingTop="16dp"

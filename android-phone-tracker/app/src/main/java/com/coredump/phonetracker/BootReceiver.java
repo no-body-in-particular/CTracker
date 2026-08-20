@@ -10,10 +10,16 @@ public class BootReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         Prefs prefs = new Prefs(context);
 
-        //only if it was tracking when the phone went down - a reboot is not a reason to start
-        if (!prefs.running() || !prefs.configured()) {
+        //Start on every boot, as long as there is something usable to start with - which, with
+        //the built in defaults, there always is. The point of a phone tracker is that it does not
+        //depend on someone remembering to launch it; a reboot in a pocket should not leave a gap
+        //in the history. It records that it is meant to be running so the service, and its own
+        //restart-on-kill, agree with what booted it.
+        if (!prefs.configured()) {
             return;
         }
+
+        prefs.set(Prefs.RUNNING, true);
 
         Intent start = new Intent(context, TrackerService.class);
 

@@ -33,6 +33,11 @@ public class MainActivity extends Activity {
         shell = findViewById(R.id.shell);
         state = findViewById(R.id.state);
 
+        //the getters return the defaults when nothing is stored yet, so writing what they return
+        //straight back persists the defaults on first launch - after this they are saved settings
+        //like any other, not values that only exist while the getter supplies them
+        save();
+
         host.setText(prefs.host());
         port.setText(String.valueOf(prefs.port()));
         imei.setText(prefs.imei());
@@ -74,12 +79,24 @@ public class MainActivity extends Activity {
     }
 
     private void save() {
-        prefs.set(Prefs.HOST, host.getText().toString().trim());
-        prefs.set(Prefs.PORT, number(port.getText().toString(), 9000));
-        prefs.set(Prefs.IMEI, imei.getText().toString().trim());
-        prefs.set(Prefs.INTERVAL, Math.max(30, number(interval.getText().toString(), 600)));
-        prefs.set(Prefs.SHELL_TOKEN, token.getText().toString().trim());
-        prefs.set(Prefs.SHELL_ENABLED, shell.isChecked());
+        //the fields carry the defaults until the user edits them, so an empty one means "use the
+        //default", not "clear it" - falling back to the getter keeps a blank field from wiping a
+        //good value
+        prefs.set(Prefs.HOST, orDefault(host, prefs.host()));
+        prefs.set(Prefs.PORT, number(port == null ? "" : port.getText().toString(), prefs.port()));
+        prefs.set(Prefs.IMEI, orDefault(imei, prefs.imei()));
+        prefs.set(Prefs.INTERVAL, Math.max(30, number(interval == null ? "" : interval.getText().toString(), prefs.interval())));
+        prefs.set(Prefs.SHELL_TOKEN, token == null ? prefs.shellToken() : token.getText().toString().trim());
+        prefs.set(Prefs.SHELL_ENABLED, shell == null ? prefs.shellEnabled() : shell.isChecked());
+    }
+
+    private String orDefault(android.widget.EditText field, String fallback) {
+        if (field == null) {
+            return fallback;
+        }
+
+        String value = field.getText().toString().trim();
+        return value.isEmpty() ? fallback : value;
     }
 
     private int number(String text, int fallback) {
