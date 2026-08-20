@@ -48,10 +48,9 @@ if (isset($_GET['login'])) {
                 <p class="message"><?php echo $message; ?></p>
             </form>
          </div>
+         <!-- directly under the white login block: the phone tracker app, a fallback for
+              when the watch is not to hand. its own softer green so it reads as secondary. -->
+         <a class="apk-link" href="downloads/phone-tracker-1.0.apk" download>get the phone tracker app (.apk)</a>
       </div>
-      <!-- a quiet link at the very bottom of the page rather than under the form: the phone
-           tracker app, a fallback for when the watch is not to hand. its own softer green so
-           it reads as secondary to the login. -->
-      <a class="apk-link" href="downloads/phone-tracker-1.0.apk" download>get the phone tracker app (.apk)</a>
    </body>
 </html>
