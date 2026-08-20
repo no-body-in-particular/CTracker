@@ -385,24 +385,53 @@ function alphanum(o) {
     o.value = o.value.replace(/([^0-9A-Za-z -_])/g, "");
 }
 
+/*
+ * A circle drawn on a web mercator map is in projected units, not metres. They are only the
+ * same at the equator: at latitude p a real metre is 1/cos(p) projected ones. The radius stored
+ * for a fence is in metres - the daemon divides it by 1000 and compares it against a haversine
+ * distance in kilometres - so it has to be scaled before it is drawn, or the circle on screen
+ * is not the fence the daemon enforces. It used to be multiplied by 1.60934, which is close to
+ * 1/cos(52) and so came out about right in the Netherlands and nowhere else.
+ */
+function fenceCircle(lat, lng, metres) {
+    return new ol.geom.Circle(ol.proj.fromLonLat([lng, lat]), metres / Math.cos(lat * Math.PI / 180));
+}
+
+//the preview is a feature like any other on the fence layer, so a refresh of the layer takes it
+//with it. find it, or put it back.
+function demoFeature() {
+    var found = null;
+
+    geofenceLayer.getSource().forEachFeature(function(feature) {
+        if (feature.TYPE == 'demo') {
+            found = feature;
+        }
+    });
+
+    if (!found) {
+        found = new ol.Feature();
+        found.TYPE = 'demo';
+        geofenceLayer.getSource().addFeature(found);
+    }
+
+    return found;
+}
+
 function moveDemoFeature() {
     var lng = parseFloat(document.getElementById("fenceLong").value);
     var lat = parseFloat(document.getElementById("fenceLat").value);
     var radius = parseFloat(document.getElementById("fenceRadius").value);
+    var feature = demoFeature();
 
-    geofenceLayer.getSource().forEachFeature(function(feature) {
-        if (feature.TYPE == 'demo') {
-            //the lat/long inputs are hidden and start at 0, so until a fence has actually
-            //been placed on the map there is no position to preview. clear the geometry
-            //rather than draw the preview in the gulf of guinea.
-            if (!isFinite(lat) || !isFinite(lng) || !isFinite(radius) || (lat === 0 && lng === 0)) {
-                feature.setGeometry(null);
-                return;
-            }
+    //the lat/long inputs are hidden and start at 0, so until a point has been picked there is
+    //no position to preview. clear the geometry rather than draw the preview in the gulf of
+    //guinea.
+    if (!isFinite(lat) || !isFinite(lng) || !isFinite(radius) || (lat === 0 && lng === 0)) {
+        feature.setGeometry(null);
+        return;
+    }
 
-            feature.setGeometry(new ol.geom.Circle(ol.proj.fromLonLat([lng, lat]), radius * 1.60934));
-        }
-    });
+    feature.setGeometry(fenceCircle(lat, lng, radius));
 }
 
 function fetchFence() {
@@ -414,23 +443,19 @@ function fetchFence() {
 
 
             var coords = parsed.map(rv => {
-                var f = new ol.Feature(new ol.geom.Circle(ol.proj.fromLonLat([rv[5], rv[4]]), rv[6] * 1.60934));
+                var f = new ol.Feature(fenceCircle(rv[4], rv[5], rv[6]));
                 f.TYPE = rv[3];
                 return f;
             });
 
-            //preview circle for the geofence editor. it is created with no geometry so it
-            //draws nothing until moveDemoFeature() places it. it used to be built at 0,0,
-            //which parked a permanent 160km grey circle on null island off west africa for
-            //anyone who had not yet placed a fence.
-            var f = new ol.Feature();
-            f.TYPE = 'demo';
-
-            coords.push(f);
-
-            //new ol.Feature(new ol.geom.Circle(centerLongitudeLatitude, 4000))]
             geofenceLayer.getSource().clear();
             geofenceLayer.getSource().addFeatures(coords);
+
+            //The preview lives on this layer, so clearing it takes the preview with it - and
+            //this runs on the refresh timer, which used to wipe a point the user had just
+            //picked while they were still setting the radius. Put it back and redraw it from
+            //whatever the panel currently says.
+            moveDemoFeature();
 
             const tableBody = document.getElementById("fenceBody");
             tableBody.innerHTML = '';
@@ -1231,7 +1256,11 @@ map.on('singleclick', function(evt) {
     var fenceLong = document.getElementById("fenceLong");
     var lonlat = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326');
 
-    if (fenceLat && fenceLong) {
+    //Only while the geofence panel is open. A click anywhere on the map used to move the fence
+    //position whatever the user was actually doing, which was invisible before there was a
+    //preview and would now put a grey circle on the map while they were reading a trip.
+    //Each click moves the preview, so a fence can be aimed before anything is added.
+    if (fenceLat && fenceLong && window.location.hash === '#geofence') {
         fenceLat.value = lonlat[1];
         fenceLong.value = lonlat[0];
         moveDemoFeature();
