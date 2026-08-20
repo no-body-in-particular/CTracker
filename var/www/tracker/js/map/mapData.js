@@ -626,6 +626,10 @@ function breakGaps(points) {
 
 var statsShown = [];
 
+//which groups this device actually reports. a chip for a group nothing falls into is a filter
+//for nothing, and four of them wrapped onto a second row on a phone.
+var statGroupsPresent = [];
+
 function makeDataset(itemList) {
     statsShown = itemList;
 
@@ -650,6 +654,14 @@ function makeDataset(itemList) {
 
         byType[name].push({ x: itemList[i][0], y: itemList[i][2] });
     }
+
+    var present = {};
+
+    Object.keys(byType).forEach(function(name) {
+        present[statMeta(name).group] = true;
+    });
+
+    statGroupsPresent = Object.keys(present);
 
     var datasets = [];
 
@@ -733,7 +745,12 @@ function renderStatChips() {
 
     var hidden = hiddenStatGroups();
 
-    host.innerHTML = STAT_GROUPS.map(function(g) {
+    //before any stats have arrived nothing is known to be present, so offer the lot
+    var groups = statGroupsPresent.length
+        ? STAT_GROUPS.filter(function(g) { return statGroupsPresent.indexOf(g.key) !== -1; })
+        : STAT_GROUPS;
+
+    host.innerHTML = groups.map(function(g) {
         var off = hidden.indexOf(g.key) !== -1 ? ' off' : '';
         return '<button type="button" class="chip' + off + '" onclick="toggleStatGroup(\'' + g.key + '\')">' + g.label + '</button>';
     }).join('');

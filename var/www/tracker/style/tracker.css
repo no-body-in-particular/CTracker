@@ -603,23 +603,41 @@ section:target h1 {
     max-width: 70vw;
 }
 
-/* three pickers in 70vw wrapped onto a second line on a phone, and the panel then held that
-   whole second row clear for them. Given the width and a smaller size they fit on one. */
+/* Three pickers wrapped onto a second row on a phone, and the panel then held that whole row
+   clear for them. Android renders a native date field wider than the font alone accounts for,
+   so asking politely with a smaller size was not enough: the row is told not to wrap at all,
+   and min-width:0 is what actually lets a form control shrink below the width it would rather
+   have. With the range labels down to "24h" there is room without any of them having to. */
 @media (max-width: 700px) {
     #rangeControls {
-        max-width: calc(100vw - 46pt);
+        flex-wrap: nowrap;
+        max-width: calc(100vw - 40pt);
         gap: 3pt;
     }
 
     #rangeControls .input {
         font-size: 9pt;
-        padding: 3pt 6pt;
+        padding: 3pt 5pt;
         min-height: 26pt;
+        min-width: 0;
+        flex: 0 1 auto;
     }
 
     #rangeControls select.input {
-        padding-right: 18pt;
-        background-position: right 9pt top 52%, right 5pt top 52%;
+        padding-right: 16pt;
+        background-position: right 8pt top 52%, right 4pt top 52%;
+    }
+
+    /* the chip row is the other thing that was running to two lines */
+    .chips {
+        gap: 4pt;
+        padding: 2pt 0 4pt 0;
+    }
+
+    .chips .chip {
+        font-size: 9pt;
+        padding: 4pt 9pt;
+        min-height: 26pt;
     }
 }
 

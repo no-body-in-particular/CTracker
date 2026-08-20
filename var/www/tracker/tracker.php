@@ -228,15 +228,15 @@ validateSession();
                <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" type="date" onchange="searchdateChange()" class="input"/>
                <input value="00:00" id="beginTime" type="time" onchange="searchdateChange()" class="input"/>
                <select id="hourCount" class="input" onchange="searchdateChange()">
-                  <option value="720">30 Days</option>
-                  <option value="168">7 Days</option>
-                  <option value="72">72 Hours</option>
-                  <option value="48">48 Hours</option>
-                  <option value="24" selected>24 Hours</option>
-                  <option value="12">12 Hours</option>
-                  <option value="6" >6 Hours</option>
-                  <option value="3">3 Hours</option>
-                  <option value="1">1 Hour</option>
+                  <option value="720">30d</option>
+                  <option value="168">7d</option>
+                  <option value="72">72h</option>
+                  <option value="48">48h</option>
+                  <option value="24" selected>24h</option>
+                  <option value="12">12h</option>
+                  <option value="6" >6h</option>
+                  <option value="3">3h</option>
+                  <option value="1">1h</option>
                </select>
             </div>
          </div>
