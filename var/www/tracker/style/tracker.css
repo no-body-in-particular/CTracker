@@ -68,7 +68,7 @@
     top: 0;
 }
 
-#table-scroll {
+.table-scroll {
     margin-top: 2pt;
     height: 40vh;
     width: 100%;
@@ -76,12 +76,12 @@
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
-#table-scroll::-webkit-scrollbar {
+.table-scroll::-webkit-scrollbar {
     display: none;
 }
   
   /* Hide scrollbar for IE, Edge and Firefox */
-#table-scroll {
+.table-scroll {
     -ms-overflow-style: none;
   /* IE and Edge */
     scrollbar-width: none;
@@ -742,7 +742,8 @@ section:target h1 {
 
 .chips .chip.off {
     background: transparent;
-    color: #838a9e;
+    /* #838a9e came out at 4.4:1 on the panel, just under AA for text this size */
+    color: #98a0b4;
     border-color: #3a3e4e;
 }
 
@@ -899,7 +900,7 @@ nav a {
    screen graph they are clutter on top of the plot, and lifting the panel above them was not
    enough - so while the graph is open they are simply not drawn. The range pickers are a
    different case and stay: they choose what the graph shows. */
-body.statsOpen #map > a {
+body.statsOpen .mapOverlay {
     display: none;
 }
 
@@ -950,7 +951,7 @@ body.statsOpen #map > a {
     }
 
     /* 40vh of a phone screen was mostly empty panel below the rows */
-    #table-scroll {
+    .table-scroll {
         height: 54vh;
     }
 }
@@ -1113,9 +1114,9 @@ section {
     max-height: 46vh;
 }
 
-#geofence #table-scroll,
-#account #table-scroll,
-#trips #table-scroll {
+#geofence .table-scroll,
+#account .table-scroll,
+#trips .table-scroll {
     flex: 0 1 auto;
     height: auto;
     max-height: 34vh;
@@ -1123,7 +1124,7 @@ section {
 
 /* the scrolling area takes whatever the panel has left. min-height:0 is what lets a flex child
    shrink instead of pushing the panel taller than the space it was given. */
-section #table-scroll {
+section .table-scroll {
     flex: 1 1 auto;
     height: auto;
     min-height: 0;
@@ -1234,4 +1235,52 @@ nav {
 #accountUpdate .button {
     width: 100%;
     max-width: 260pt;
+}
+
+
+/* ---- controls that used to be anchors ------------------------------------ */
+
+/* These carried their appearance in an inline style and their behaviour in an onclick, on an
+   anchor with no href - which is not focusable, is not announced as a control, and cannot be
+   activated from a keyboard. They are buttons now, so the button chrome has to be taken back
+   off them. */
+.playctl,
+.mapBtn {
+    -webkit-appearance: none;
+    appearance: none;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+/* the readouts beside them lost their inline colour with the anchor. white over map tiles of
+   any colour needs the same dark outline the marker label uses. */
+.mapOverlay {
+    color: #ffffff;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
+}
+
+/* ---- keyboard and motion ------------------------------------------------- */
+
+/* Nothing in here showed a focus ring, so tabbing through the page was invisible. :focus-visible
+   rather than :focus, so it appears for a keyboard and not on every mouse click. */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4pt;
+}
+
+/* the panels fade, the map pans and a trip plays itself back - all of which is motion someone
+   may have asked their system not to show them */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

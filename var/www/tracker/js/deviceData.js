@@ -12,7 +12,13 @@ function viewOnlyLink(param) {
 }
 
 function computeDeviceRow(cols) {
-    return '<tr ondblclick=viewDevice("' + cols[0] + '")><td>' + cols[0] + '</td><td>' + cols[1] + '</td><td><button class="button" onclick="viewDevice(\'' + cols[0] + '\');">View</button><button class="button" onclick=\'removeDevice("' + cols[0] + '")\'>Remove</button><button class="button" onclick=viewOnlyLink("' + cols[2] + '")>View-only link</button></td></tr>';
+    //the imei and the view-only token are checked server side, but they are placed inside a
+    //javascript string inside an attribute, so they are escaped here as well rather than
+    //trusted twice over. the device name is free text and only ever reaches a table cell.
+    var imei = escapeHtml(cols[0]);
+    var token = escapeHtml(cols[2]);
+
+    return '<tr ondblclick=\'viewDevice("' + imei + '")\'><td>' + imei + '</td><td>' + escapeHtml(cols[1]) + '</td><td><button class="button" onclick=\'viewDevice("' + imei + '")\'>View</button><button class="button" onclick=\'removeDevice("' + imei + '")\'>Remove</button><button class="button" onclick=\'viewOnlyLink("' + token + '")\'>View-only link</button></td></tr>';
 }
 
 

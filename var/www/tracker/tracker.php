@@ -7,7 +7,9 @@ validateSession();
 <!DOCTYPE html>
 <html>
    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+      <!-- maximum-scale and user-scalable=0 used to be here. Blocking pinch zoom fails WCAG 1.4.4
+           and is a poor fit for a map, where zooming in on a label is the whole point. -->
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <link rel="stylesheet" href="openlayers/ol.css" type="text/css">
       <link rel="stylesheet" href="style/tracker.css" type="text/css">
       <link rel="stylesheet" href="jquery/jquery-ui.css" type="text/css">
@@ -28,16 +30,16 @@ validateSession();
       <div id="around" style="display: flex;flex-direction:row;width:100%;height:100%">
          <div id="aroundNav" align="left">
             <nav>
-               <a href="#account" class="tooltip"> <span class="tooltiptext"  >Account</span><i class="icon user"></i></a>
-               <a href="#history" class="tooltip" ><span class="tooltiptext">Playback</span><i class="icon clock"></i></a>
-               <a href="#stats" class="tooltip" ><span class="tooltiptext">Statistics</span><i class="icon chart-line"></i></a>
-               <a href="#alarms" class="tooltip"><span class="tooltiptext">Alarms</span><i class="icon exclamation-triangle"></i></a>
-               <a href="#geofence" class="tooltip"><span class="tooltiptext">Geofence</span><i class="icon map-marked-alt"></i></a>
-               <a href="#commands" onClick="refreshCommandResults()" class="tooltip"><span class="tooltiptext">Commands</span><i class="icon terminal"></i></a>
-               <a href="#serverLogging" class="tooltip" ><span class="tooltiptext">Server logging</span><i class="icon file"></i></a>
-               <a href="#trips" class="tooltip"><span class="tooltiptext">Trips</span><i class="icon address-card"></i></a>
-               <a href="#settings" class="tooltip" ><span class="tooltiptext">Settings</span><i class="icon cog"></i></a>
-               <a href="#" class="tooltip"><span class="tooltiptext">Close</span><i class="icon backward"></i></a>
+               <a href="#account" class="tooltip" aria-label="Account"> <span class="tooltiptext"  >Account</span><i class="icon user"></i></a>
+               <a href="#history" class="tooltip" aria-label="Playback" ><span class="tooltiptext">Playback</span><i class="icon clock"></i></a>
+               <a href="#stats" class="tooltip" aria-label="Statistics" ><span class="tooltiptext">Statistics</span><i class="icon chart-line"></i></a>
+               <a href="#alarms" class="tooltip" aria-label="Alarms"><span class="tooltiptext">Alarms</span><i class="icon exclamation-triangle"></i></a>
+               <a href="#geofence" class="tooltip" aria-label="Geofence"><span class="tooltiptext">Geofence</span><i class="icon map-marked-alt"></i></a>
+               <a href="#commands" onClick="refreshCommandResults()" class="tooltip" aria-label="Commands"><span class="tooltiptext">Commands</span><i class="icon terminal"></i></a>
+               <a href="#serverLogging" class="tooltip" aria-label="Server logging" ><span class="tooltiptext">Server logging</span><i class="icon file"></i></a>
+               <a href="#trips" class="tooltip" aria-label="Trips"><span class="tooltiptext">Trips</span><i class="icon address-card"></i></a>
+               <a href="#settings" class="tooltip" aria-label="Settings" ><span class="tooltiptext">Settings</span><i class="icon cog"></i></a>
+               <a href="#" class="tooltip" aria-label="Close"><span class="tooltiptext">Close</span><i class="icon backward"></i></a>
             </nav>
          </div>
          <div class='container' align="left">
@@ -48,7 +50,7 @@ validateSession();
                   <button onclick="window.location.href='logout.php'" class="button">log out</button>
                   <a href="#accountUpdate" class="button">change details</a>
                </div>
-               <div id="table-scroll">
+               <div class="table-scroll">
                   <table id="deviceTable"  class="table">
                      <thead>
                         <tr>
@@ -57,7 +59,7 @@ validateSession();
                            <th scope="col">Actions</th>
                         </tr>
                         <tr>
-                           <th><input placeholder="IMEI" id="imei" name="imei" class="input" size="17"/></th>
+                           <th><input placeholder="IMEI" id="imei" aria-label="Device IMEI" name="imei" class="input" size="17"/></th>
                            <th><input placeholder="Name" id="name" name="name" class="input" size="17"/></th>
                            <th><button onclick="saveDevice()" class="button">Add</button></th>
                         </tr>
@@ -68,18 +70,18 @@ validateSession();
                </div>
             </section>
             <section id='accountUpdate' align="left">
-               <input placeholder="Username" id="username" name="username" class="input"/>
+               <input placeholder="Username" id="username" aria-label="Username" name="username" class="input"/>
                <input placeholder="Name" id="name_for_account" name="name_for_account" class="input"/>
-               <input placeholder="Email" id="email" name="email" class="input"/>
+               <input placeholder="Email" id="email" aria-label="Email address" name="email" class="input"/>
                <input placeholder="Password (blank = unchanged)" id="password" name="password" class="input" type="password" onfocus="this.value=''"/>
                <button onclick="updateUser()" class="button">Update</button>
             </section>
             <section id='history' align="left">
-               <a onclick="playSlower()" class="playctl"><i class="icon slower"></i></a>
-               <a onclick="startPlaying()" class="playctl"><i class="icon play"></i></a>
-               <a onclick="pausePlaying()" class="playctl"><i class="icon pause"></i></a>
-               <a onclick="stopPlaying()" class="playctl"><i class="icon stop"></i></a>
-               <a onclick="playFaster()" class="playctl"><i class="icon faster"></i></a>
+               <button type="button" onclick="playSlower()" class="playctl" aria-label="Slower"><i class="icon slower"></i></button>
+               <button type="button" onclick="startPlaying()" class="playctl" aria-label="Play"><i class="icon play"></i></button>
+               <button type="button" onclick="pausePlaying()" class="playctl" aria-label="Pause"><i class="icon pause"></i></button>
+               <button type="button" onclick="stopPlaying()" class="playctl" aria-label="Stop"><i class="icon stop"></i></button>
+               <button type="button" onclick="playFaster()" class="playctl" aria-label="Faster"><i class="icon faster"></i></button>
             </section>
 
             <section id='stats' align="left">
@@ -87,13 +89,11 @@ validateSession();
                <!-- the canvas is sized by this wrapper: Chart.js overrides a height set on the
                     canvas itself, which is why the graph used to collapse to half its width -->
                <div id="chartWrap"><canvas id="lineChart"></canvas></div>
-               <!--
-                  <span class="narrow"></span>
-                  <button id="downloadbtn" class="button">Download as CSV</button><span id="distance"></span>--> 
+
             </section>
             <!--'date', 'lattitude', 'longitude', 'speed', 'event']-->
             <section id='alarms' align="left">
-               <div id="table-scroll">
+               <div class="table-scroll">
                   <table id="alarmTable"  class="table">
                      <thead >
                         <th scope="col">date</th>
@@ -106,7 +106,7 @@ validateSession();
                </div>
             </section>
             <section id='geofence' align="left">
-               <div id="table-scroll">
+               <div class="table-scroll">
                   <table id="fenceTable"  class="table">
                      <thead >
                         <tr>
@@ -144,14 +144,14 @@ validateSession();
                               </select>
                            </th>
                            <input id="fenceLat" type="hidden" step="0.00000001" style="width:7em" value=0 onchange=moveDemoFeature()></input><input id="fenceLong" type="hidden" step="0.00000001" style="width:7em" value=0 onchange=moveDemoFeature()></input>
-                           <th><input id="fenceRadius" type="number" style="width:4em" value=100 onchange=moveDemoFeature()></input></th>
+                           <th><input id="fenceRadius" aria-label="Fence radius in metres" type="number" style="width:4em" value=100 onchange=moveDemoFeature()></input></th>
                            <th>
                               <select id="alarmEnable" class="input">
                                  <option value="0">Off</option>
                                  <option value="1" selected>On</option>
                               </select>
                            </th>
-                           <th><input id="fenceName" style="width:5em" value=default maxlength=31 onkeydown="alphanum(this)" onkeyup="alphanum(this)" onblur="alphanum(this)" onclick="alphanum(this)"></input></th>
+                           <th><input id="fenceName" aria-label="Fence name" style="width:5em" value=default maxlength=31 onkeydown="alphanum(this)" onkeyup="alphanum(this)" onblur="alphanum(this)" onclick="alphanum(this)"></input></th>
                            <th><button onClick=addFence() class="button">add</button></th>
                         </tr>
                      </thead>
@@ -161,7 +161,7 @@ validateSession();
                </div>
             </section>
             <section id='commands' align="left">
-               <div id="table-scroll">
+               <div class="table-scroll">
                   <table  id="commandTable" style="width:99%" class="table">
                      <thead >
                         <tr>
@@ -170,7 +170,7 @@ validateSession();
                         </tr>
                         <tr>
                            <th></th>
-                           <th><input type="text" name="command" id="command" class="input_small" /><button onclick="sendCommand(document.getElementById('command').value)" class="button">Send</button>
+                           <th><input type="text" name="command" id="command" aria-label="Command to send" class="input_small" /><button onclick="sendCommand(document.getElementById('command').value)" class="button">Send</button>
                               <button class="button" onclick="sendCommand('WARNAUDIO#');"><i style="font-size:14pt;" class="icon bullhorn"></i></button>
                               <button class="button" onclick="sendCommand('WARNMOTOR#');"><i  style="font-size:14pt;" class="icon exclamation-circle"></i></button>
                            </th>
@@ -181,8 +181,8 @@ validateSession();
                </div>
             </section>
             <section id='serverLogging' align="left">
-               <div id="table-scroll">
-                  <table  id="commandTable" style="width:99%" class="table">
+               <div class="table-scroll">
+                  <table  id="serverLogTable" style="width:99%" class="table">
                      <thead >
                         <th>date</th>
                         <th>line</th>
@@ -193,7 +193,7 @@ validateSession();
             </section>
             <section id='trips' align="left">
             <button class="button" onclick="exitTrip();" style="font-size:10pt;"><i class="icon repeat"></i> Reload/exit current trip</button>
-               <div id="table-scroll">
+               <div class="table-scroll">
                   <table  id="tripsTable" style="width:99%" class="table">
                      <thead >
                         <th>start date</th>
@@ -207,7 +207,7 @@ validateSession();
                </div>
             </section>
             <section id='settings' align="left">
-               <div id="table-scroll">
+               <div class="table-scroll">
                   <table  id="settingsTable" style="width:99%" class="table">
                      <thead >
                         <th>setting</th>
@@ -221,17 +221,17 @@ validateSession();
       </div>
       <div id="aroundMap" >
          <div id="map" tabindex="0">
-            <a style="font-size:10pt;color:blue;position:absolute;right:1em;bottom:0.1em;z-index: 2;" id="distance"></a>
-            <a style="font-size:10pt;color:blue;position:absolute;right:1em;bottom:1.0em;z-index: 2;" id="speed"></a>
-            <a style="font-size:22pt;color:red;position:absolute;right:1em;bottom:1.5em;z-index: 2;" onclick="toggleSat();"><i class="icon globe"></i></a>
-            <a style="font-size:22pt;color:blue;position:absolute;right:1em;bottom:2.5em;z-index: 2;"><i id="batt" class="icon battery-full"></i></a>
-            <a style="font-size:22pt;color:blue;position:absolute;right:1em;bottom:3.5em;z-index: 2;"><i id="signal" class="icon signal"></i></a>
-            <a style="font-size:22pt;color:blue;position:absolute;right:1em;bottom:4.5em;z-index: 2;" onclick="recenter();"><i id="current" class="icon crosshair"></i></a>
+            <span class="mapOverlay" style="font-size:10pt;position:absolute;right:1em;bottom:0.1em;z-index: 2;" id="distance"></span>
+            <span class="mapOverlay" style="font-size:10pt;position:absolute;right:1em;bottom:1.0em;z-index: 2;" id="speed"></span>
+            <button type="button" class="mapOverlay mapBtn" style="font-size:22pt;position:absolute;right:1em;bottom:1.5em;z-index: 2;" onclick="toggleSat();" aria-label="Toggle satellite view"><i class="icon globe"></i></button>
+            <span class="mapOverlay" style="font-size:22pt;position:absolute;right:1em;bottom:2.5em;z-index: 2;" role="img" aria-label="Battery level"><i id="batt" class="icon battery-full"></i></span>
+            <span class="mapOverlay" style="font-size:22pt;position:absolute;right:1em;bottom:3.5em;z-index: 2;" role="img" aria-label="Signal strength"><i id="signal" class="icon signal"></i></span>
+            <button type="button" class="mapOverlay mapBtn" style="font-size:22pt;position:absolute;right:1em;bottom:4.5em;z-index: 2;" onclick="recenter();" aria-label="Recentre on the device"><i id="current" class="icon crosshair"></i></button>
 
             <div id="rangeControls">
-               <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" type="date" onchange="searchdateChange()" class="input"/>
+               <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" aria-label="Start date" type="date" onchange="searchdateChange()" class="input"/>
                <input value="00:00" id="beginTime" type="time" onchange="searchdateChange()" class="input"/>
-               <select id="hourCount" class="input" onchange="searchdateChange()">
+               <select id="hourCount" aria-label="Time range" class="input" onchange="searchdateChange()">
                   <option value="720">30d</option>
                   <option value="168">7d</option>
                   <option value="72">72h</option>

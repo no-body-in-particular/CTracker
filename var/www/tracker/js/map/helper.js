@@ -196,3 +196,31 @@ function viewOnlyParameter() {
     }
     return '';
 }
+/*
+ * Every table on this page is built by concatenating values into innerHTML, and some of those
+ * values are whatever the device sent - event descriptions, log lines, command responses - or
+ * whatever the user typed into a device name. None of it was escaped, so a device name of
+ * <img src=x onerror=...> ran as soon as the list was drawn.
+ *
+ * Quotes are escaped as well as the tag characters, so a value cannot break out of an attribute
+ * it is placed in either.
+ */
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+//for a value that ends up inside a javascript string inside an attribute, where the html
+//parser hands the quote back before the script sees it
+function escapeNumber(value) {
+    var n = parseFloat(value);
+    return isFinite(n) ? n : 0;
+}

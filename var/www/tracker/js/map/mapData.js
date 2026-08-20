@@ -48,7 +48,7 @@ function speedText(spd) {
 }
 
 function computeEventRow(cols) {
-    return "<tr onclick='animateTo(" + cols[2] + "," + cols[1] + ")'><td>" + readableDate(new Date(cols[0])) + "</td><td>" + speedText(cols[3]) + "</td><td>" + cols[4] + "</td></tr>";
+    return "<tr onclick='animateTo(" + escapeNumber(cols[2]) + "," + escapeNumber(cols[1]) + ")'><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td>" + escapeHtml(speedText(cols[3])) + "</td><td>" + escapeHtml(cols[4]) + "</td></tr>";
 }
 
 function computeHistoryRow(cols) {
@@ -56,7 +56,7 @@ function computeHistoryRow(cols) {
 }
 
 function computeLogRow(cols) {
-    return "<tr><td>" + readableDate(new Date(cols[0])) + "</td><td style='font-size:10px'>" + cols[1] + "</td></tr>";
+    return "<tr><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td style='font-size:10px'>" + escapeHtml(cols[1]) + "</td></tr>";
 }
 
 function computeFenceRow(cols) {
@@ -75,7 +75,7 @@ function computeFenceRow(cols) {
     }
 
 
-    return "<tr onclick='animateTo(" + cols[5] + "," + cols[4] + ")'><td>" + localTime(cols[0])[1] + "</td><td>" + localTime(cols[1])[1] + "</td><td>" + dayOfWeek[displayDate] + "</td><td>" + fenceType[cols[3]] + "</td><td>" + cols[6] + "m</td><td>" + alarmEnabled[cols[7]] + "</td><td>" + cols[8] + "</td><td><button onClick='deleteFence(\"" + cols.join(',') + "\")' >delete</button></td></tr>";
+    return "<tr onclick='animateTo(" + escapeNumber(cols[5]) + "," + escapeNumber(cols[4]) + ")'><td>" + escapeHtml(localTime(cols[0])[1]) + "</td><td>" + escapeHtml(localTime(cols[1])[1]) + "</td><td>" + escapeHtml(dayOfWeek[displayDate]) + "</td><td>" + escapeHtml(fenceType[cols[3]]) + "</td><td>" + escapeNumber(cols[6]) + "m</td><td>" + escapeHtml(alarmEnabled[cols[7]]) + "</td><td>" + escapeHtml(cols[8]) + "</td><td><button class='button' onClick='deleteFence(\"" + escapeHtml(cols.join(',')) + "\")' >delete</button></td></tr>";
 }
 
 
