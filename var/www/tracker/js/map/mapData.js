@@ -635,15 +635,65 @@ function decimate(points, budget) {
 //device goes quiet for hours at a time. Break the line instead.
 var STAT_GAP_MS = 45 * 60 * 1000;
 
-function breakGaps(points) {
-    var out = [];
+// Build the plotted points for one series: split the real readings into runs separated by a
+// genuine gap, thin each run on its own, then join the runs with a break. The gap is judged from
+// the series' own cadence, so it is the same on a 24 hour view and a 30 day view.
+//
+// This is the fix for lines that came out broken into dots. The break used to be applied after
+// the thinning, and thinning a month down to a thousand points leaves them tens of minutes
+// apart - past the fixed 45 minute gap - so every segment was cut and, with no point markers,
+// the line vanished. Segmenting the raw readings first keeps a continuous line continuous
+// however wide the range is.
+function seriesData(points, budget) {
+    if (points.length === 0) {
+        return [];
+    }
 
-    for (var i = 0; i < points.length; i++) {
-        if (i > 0 && (points[i].x - points[i - 1].x) > STAT_GAP_MS) {
-            out.push({ x: new Date(points[i - 1].x.getTime() + 1), y: null });
+    var deltas = [];
+
+    for (var i = 1; i < points.length; i++) {
+        deltas.push(points[i].x - points[i - 1].x);
+    }
+
+    var sorted = deltas.slice().sort(function(a, b) { return a - b; });
+    var median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+
+    // a run is broken only by a gap several times the normal spacing, never below the 45 minute
+    // floor - so an ordinary sampling interval never breaks the line, and a sparse series that is
+    // simply reported hourly does not come out as loose dots either
+    var threshold = Math.max(median * 3, STAT_GAP_MS);
+
+    var segments = [];
+    var run = [points[0]];
+
+    for (var i = 1; i < points.length; i++) {
+        if (points[i].x - points[i - 1].x > threshold) {
+            segments.push(run);
+            run = [];
         }
 
-        out.push(points[i]);
+        run.push(points[i]);
+    }
+
+    segments.push(run);
+
+    // thin each run to a share of the budget in proportion to its length, and separate the runs
+    // with a single null so the line breaks across a real gap but stays whole within a run
+    var out = [];
+
+    for (var s = 0; s < segments.length; s++) {
+        var seg = segments[s];
+        var share = Math.max(2, Math.round(budget * seg.length / points.length));
+
+        if (s > 0) {
+            out.push({ x: new Date(seg[0].x.getTime() - 1), y: null });
+        }
+
+        var thinned = decimate(seg, share);
+
+        for (var k = 0; k < thinned.length; k++) {
+            out.push(thinned[k]);
+        }
     }
 
     return out;
@@ -675,6 +725,11 @@ function makeDataset(itemList) {
 
         if (!byType[name]) {
             byType[name] = [];
+        }
+
+        //a non-numeric value would draw as a break in the line; it is not a reading, so drop it
+        if (!isFinite(itemList[i][2])) {
+            continue;
         }
 
         byType[name].push({ x: itemList[i][0], y: itemList[i][2] });
@@ -714,7 +769,7 @@ function makeDataset(itemList) {
             tension: 0,
             fill: false,
             spanGaps: false,
-            data: breakGaps(decimate(points, budget))
+            data: seriesData(points, budget)
         });
     });
 
