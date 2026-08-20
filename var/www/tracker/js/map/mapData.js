@@ -720,14 +720,20 @@ function layoutStatsPanel() {
     }
 }
 
-//The map keeps its own readouts and buttons in the bottom right corner. Raising the panel
-//above them was not enough to keep them off the plot, so the graph being open is published as
-//a class on the body and the stylesheet takes them out of the layout entirely.
+//Which panel is open is published as a class on the body, because two things outside the panel
+//depend on it: the dark ground drawn behind it over the whole window, and the map's own
+//readouts in the bottom right, which the stylesheet takes out of the layout while the graph is
+//up rather than leaving them over the plot.
 function syncStatsMode() {
-    var open = window.location.hash === '#stats';
+    var hash = window.location.hash.replace('#', '');
+    var target = hash ? document.getElementById(hash) : null;
+
+    //the close link is href="#", which is a hash that names nothing
+    var open = !!(target && target.tagName === 'SECTION');
 
     if (document.body.classList) {
-        document.body.classList.toggle('statsOpen', open);
+        document.body.classList.toggle('panelOpen', open);
+        document.body.classList.toggle('statsOpen', hash === 'stats');
     }
 
     if (open) {
@@ -773,6 +779,7 @@ function peekAtMap() {
     }
 
     panel.classList.add('peek');
+    document.body.classList.add('peeking');
 
     //a second click while the map is showing extends the look rather than cutting it short
     if (mapPeekTimer) {
@@ -781,6 +788,7 @@ function peekAtMap() {
 
     mapPeekTimer = setTimeout(function() {
         panel.classList.remove('peek');
+        document.body.classList.remove('peeking');
         mapPeekTimer = null;
     }, MAP_PEEK_MS);
 }

@@ -987,10 +987,20 @@ body {
    also dropped: with the links centred, anything wider than the rail was trimmed off both
    sides at once, which is what took the left edge off the icons. */
 nav {
-    overflow-x: visible;
+    /* overflow-x:visible alongside overflow-y:auto does not stay visible - the spec computes it
+       to auto, which is where the horizontal scrollbar came from. Hidden on that axis, and the
+       vertical bar is suppressed too: the rail scales down on a short screen rather than
+       scrolling, so a bar there would only ever be chrome. */
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     flex-shrink: 0;
     padding-left: 3pt;
     padding-right: 2pt;
+}
+
+nav::-webkit-scrollbar {
+    display: none;
 }
 
 nav a {
@@ -1085,3 +1095,40 @@ section #table-scroll {
    #history is the playback bar and #accountUpdate a short form, so both stay as tall as their
    contents and stay anchored at the bottom. */
 /* superseded: every section is a full height window now, see the panel rule above */
+
+/* ---- backdrop behind an open panel -------------------------------------- */
+
+/* A panel keeps a gutter from the edges, which left the map showing in the margin around it
+   and through the strip beside the icon rail. This is the dark ground the panels sit on: one
+   fixed layer over the whole window, above the map and below the panels themselves. */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #22252E;
+    /* over the map and its readouts at 2, under the panels at 10 and the rail at 50 */
+    z-index: 5;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity ease-in .5s;
+}
+
+body.panelOpen::before {
+    opacity: 1;
+}
+
+/* tapping a point on the graph drops the panel to show the marker move on the map - so the
+   ground it stands on has to come away as well, or the peek reveals nothing but this */
+body.peeking::before {
+    opacity: 0;
+}
+
+/* z-index does nothing to an unpositioned element, so the rail's 50 was inert and it would
+   have been buried by the backdrop. It is also the right containing block for the tooltips
+   inside it, which were being placed against the page instead. */
+nav {
+    position: relative;
+}
