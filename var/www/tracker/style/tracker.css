@@ -565,48 +565,57 @@ section:target h1 {
 
 /* ---- statistics graph -------------------------------------------------- */
 
-/* Chart.js writes its own width and height onto the canvas, so the size has to come from a
-   wrapper around it. With maintainAspectRatio off the chart fills this box exactly. */
-#chartWrap {
-    position: relative;
-    width: 100%;
-    height: 68vh;
-    max-height: 620px;
+/* The graph panel takes the whole viewport rather than sitting in the same bottom corner
+   box as the tables. It is laid out as a column so the chart can take whatever height the
+   chips do not, instead of being pinned to a guessed fraction of the screen.
+   The left padding clears the icon rail, which has a higher z-index and would otherwise
+   draw over the left edge of the plot. */
+#stats {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    padding: 4pt 8pt 8pt 34pt;
+    overflow: hidden;
 }
 
-/* a phone in portrait has the height to spare and badly needs it - the plot area is what was
-   missing, not the panel */
-@media (orientation: portrait) {
-    #chartWrap {
-        height: 64vh;
-        max-height: none;
-    }
-
-    /* the graph needs more width than the tables do */
+@media (orientation: landscape) {
     #stats {
-        width: 94vw;
+        padding-left: 32pt;
     }
 }
 
-/* landscape on a phone is mostly height starved, so give the plot nearly all of it */
-@media (max-height: 520px) {
-    #chartWrap {
-        height: 70vh;
-        max-height: none;
-    }
+.chips {
+    /* the chart gets the rest */
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6pt;
+    padding: 2pt 0 6pt 0;
+}
+
+/* Chart.js writes its own width and height onto the canvas, so the size has to come from a
+   wrapper around it. With maintainAspectRatio off the chart fills this box exactly.
+   min-height:0 is what lets a flex child actually shrink rather than overflow its parent. */
+#stats #chartWrap {
+    position: relative;
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
 }
 
 /* the other panels read fine at 0.9, but a graph seen through the map behind it does not */
 #stats:target {
     opacity: 1;
     background: #22252E;
-}
-
-.chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6pt;
-    padding: 6pt 4pt 2pt 4pt;
 }
 
 .chips .chip {
