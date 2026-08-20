@@ -575,16 +575,20 @@ section:target h1 {
    first measurement. --gutter is the one gap every panel keeps - from the rail on the left and
    from the edge of the page on the right - so the panels line up with each other instead of
    each having its own margin. */
+/* --pickers is replaced at runtime with the measured height of the range pickers, which is one
+   row or two depending on the width; the value here is only what is used until then. --gutter is
+   the single gap every panel keeps from the edges of the area it sits in. */
 :root {
     --gutter: 5px;
-    --rail: 34pt;
     --pickers: 40pt;
 }
 
 #stats {
-    position: fixed;
+    /* absolute like the rest now: the container already begins where the rail ends, so the
+       gutter is measured from there without having to know how wide the rail is */
+    position: absolute;
     top: var(--gutter);
-    left: calc(var(--rail) + var(--gutter));
+    left: var(--gutter);
     right: var(--gutter);
     bottom: var(--gutter);
     width: auto;
@@ -779,11 +783,7 @@ section:not(#stats) {
     border-radius: 10pt;
 }
 
-/* the short ones - a form and the playback bar - keep their own modest padding */
-#accountUpdate,
-#history {
-    padding: 6pt;
-}
+
 
 .table {
     background: transparent;
@@ -1010,16 +1010,52 @@ nav a {
    whatever their static position happened to be. That left a different gap on the left than on
    the right, and a different one again per orientation. They all sit between the icon rail and
    the edge of the page now, with the same gutter on each side. */
-section {
-    left: calc(var(--rail) + var(--gutter));
-    right: var(--gutter);
-    width: auto;
+/* Every panel is the same window: from the top of the screen to the bottom, on the 5px gutter
+   from the icon rail and from the right edge. They used to be a flat 90vw anchored at the
+   bottom with no top, so each was as tall as whatever happened to be inside it - which is how
+   the emptier ones ended up as strips along the bottom of the screen.
+   The range pickers float over the top right corner and stay above the panels, so the room for
+   them is padding: the panel itself reaches the edge and only its contents step out of the way. */
+/* .container is the box the panels are positioned inside, and it arrived from the login page
+   styling with max-width:200pt on it. Panels used to be sized in vw, which ignores that, so
+   nobody noticed; the moment they were positioned with left and right they were confined to
+   267px and came out as narrow strips.
+   Its z-index:1 matters just as much. A positioned element with a z-index starts a stacking
+   context, so everything inside it is painted as a single layer at z-index 1 - which is why
+   the map's readouts at z-index 2 kept drawing over the graph however high the panel's own
+   z-index went. Both are cleared here, and the container is given the row to itself so that
+   it starts where the icon rail ends. */
+.container {
+    max-width: none;
+    z-index: auto;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-#history {
-    width: auto;
-    /* the same gap from the bottom as the panels keep from the sides */
+section {
+    top: var(--gutter);
     bottom: var(--gutter);
+    left: var(--gutter);
+    right: var(--gutter);
+    width: auto;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
+}
+
+/* the playback controls are a row across the panel, not a column down it */
+#history {
+    flex-direction: row;
+}
+
+/* the scrolling area takes whatever the panel has left. min-height:0 is what lets a flex child
+   shrink instead of pushing the panel taller than the space it was given. */
+section #table-scroll {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
 }
 
 /* Ten icons at 16pt with room to tap them do not fit the height of a phone held sideways, so
@@ -1048,30 +1084,4 @@ section {
    the panel taller than the space it has.
    #history is the playback bar and #accountUpdate a short form, so both stay as tall as their
    contents and stay anchored at the bottom. */
-#account,
-#alarms,
-#geofence,
-#commands,
-#serverLogging,
-#trips,
-#settings {
-    top: var(--gutter);
-    bottom: var(--gutter);
-    height: auto;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
-}
-
-#account #table-scroll,
-#alarms #table-scroll,
-#geofence #table-scroll,
-#commands #table-scroll,
-#serverLogging #table-scroll,
-#trips #table-scroll,
-#settings #table-scroll {
-    flex: 1 1 auto;
-    height: auto;
-    min-height: 0;
-}
+/* superseded: every section is a full height window now, see the panel rule above */
