@@ -58,6 +58,13 @@
 #define ADAPTIVE_INTERVAL_ENABLED 1
 
 #define HEALTH_POLL_INTERVAL 180        //how often to ask the device for a reading, seconds
+//A watch that has been answering health polls and then stops has been seen to keep the
+//connection up, keep reporting positions, and simply never answer again until it is restarted.
+//After this many polls in a row go unanswered it is sent a restart. Only devices that have
+//answered at least once are ever considered - a tracker with no sensor is not broken for
+//failing to report a heart rate.
+#define HEALTH_RECOVERY_POLLS 5         //unanswered polls before restarting the device
+#define HEALTH_RECOVERY_COOLDOWN 1800   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
 #define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again
 #define MOVING_SPEED_KMH 8              //above a brisk walk: running, cycling, driving

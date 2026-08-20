@@ -37,6 +37,9 @@ typedef struct {
     int active;                 //whether the wearer is currently considered active
     time_t last_activity;       //last movement or raised heart rate, any connection
     unsigned long owner;        //connection_id allowed to send to this device
+    unsigned long polls_missed; //health polls sent with no reading back since
+    unsigned long health_seen;  //this device has answered a health poll at least once
+    time_t last_recovery;       //when the device was last restarted to recover health
 } tracking_state;
 
 static void read_state(connection * conn, tracking_state * st)
@@ -57,15 +60,20 @@ static void read_state(connection * conn, tracking_state * st)
     unsigned int b = 0;
     int d = 0;
 
-    unsigned long f = 0;
+    unsigned long f = 0, g = 0, h = 0, i = 0;
 
-    if (fscanf(fp, "%lu %u %lu %d %lu %lu", &a, &b, &c, &d, &e, &f) >= 5) {
+    //still accepts a file written before the last three fields existed - fscanf simply stops
+    //early and they keep the zero memset put there, which reads as "has never reported health"
+    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i) >= 5) {
         st->last_change = (time_t)a;
         st->interval = b;
         st->last_health_poll = (time_t)c;
         st->active = d;
         st->last_activity = (time_t)e;
         st->owner = f;
+        st->polls_missed = g;
+        st->health_seen = h;
+        st->last_recovery = (time_t)i;
     }
 
     fclose(fp);
@@ -83,10 +91,12 @@ static void write_state(connection * conn, tracking_state * st)
         return;
     }
 
-    fprintf(fp, "%lu %u %lu %d %lu %lu\n",
+    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu\n",
             (unsigned long)st->last_change, st->interval,
             (unsigned long)st->last_health_poll, st->active,
-            (unsigned long)st->last_activity, st->owner);
+            (unsigned long)st->last_activity, st->owner,
+            st->polls_missed, st->health_seen,
+            (unsigned long)st->last_recovery);
     fclose(fp);
 }
 
@@ -132,6 +142,25 @@ static void mark_activity(connection * conn)
     write_state(conn, &st);
 }
 
+/*
+ * Any health reading at all - pressure, pulse, temperature, oxygen - answers a poll. Recording
+ * it here rather than in note_heartrate() means a device answering with only a temperature is
+ * still plainly alive, and does not get restarted for failing to send a pulse.
+ */
+void note_health(connection * conn)
+{
+    tracking_state st;
+    read_state(conn, &st);
+
+    if (st.polls_missed == 0 && st.health_seen == 1) {
+        return;                     //nothing to record, and no need to rewrite the file
+    }
+
+    st.polls_missed = 0;
+    st.health_seen = 1;
+    write_state(conn, &st);
+}
+
 void note_heartrate(connection * conn, int bpm)
 {
     if (bpm <= 0) {
@@ -173,6 +202,14 @@ void poll_health(connection * conn)
         return;
     }
 
+    //A protocol declares itself the moment it recognises the traffic, which is before the
+    //device has said who it is. Without an imei there is no per device file, so read_state
+    //hands back zeroes, the rate limit below cannot be stored, and the poll fires on every
+    //pass - as "IWBPXL,,080835#", addressed to nobody. Wait until the device has identified.
+    if (conn->imei[0] == 0) {
+        return;
+    }
+
     if (!is_command_owner(conn)) {
         return;
     }
@@ -184,9 +221,25 @@ void poll_health(connection * conn)
         return;
     }
 
+    //A device that has been answering and then stops keeps its connection up and keeps
+    //reporting positions, so nothing else notices. Restarting it is what brings the readings
+    //back. Only ever for a device that has answered before, and not again until the cooldown
+    //has passed, so a watch that is simply not being worn is not restarted in a loop.
+    if (st.health_seen && st.polls_missed >= HEALTH_RECOVERY_POLLS
+            && (time(0) - st.last_recovery) > HEALTH_RECOVERY_COOLDOWN) {
+        st.polls_missed = 0;
+        st.last_recovery = time(0);
+        st.last_health_poll = time(0);
+        write_state(conn, &st);
+        log_line(conn, "no health reading in %d polls - restarting the device\n", HEALTH_RECOVERY_POLLS);
+        conn->COMMAND_FUNCTION(conn, "RESTART#");
+        return;
+    }
+
     //claim the slot before sending, so a second connection reaching here at the same
     //moment sees the updated time and backs off instead of sending a duplicate
     st.last_health_poll = time(0);
+    st.polls_missed++;
     write_state(conn, &st);
 
     conn->COMMAND_FUNCTION(conn, "HEARTRATE#");

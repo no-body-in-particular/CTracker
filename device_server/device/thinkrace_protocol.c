@@ -522,6 +522,11 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
             break;
     }
 
+    //any recognised reading answers the outstanding poll, whichever kind it was
+    if (type >= 1 && type <= 4) {
+        note_health(conn);
+    }
+
     conn->device_time = position_clock;
 }
 

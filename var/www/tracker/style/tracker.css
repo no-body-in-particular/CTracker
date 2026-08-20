@@ -609,11 +609,16 @@ section:target h1 {
 #rangeControls {
     position: absolute;
     top: 4pt;
-    right: 4pt;
+    /* centred across the top rather than tucked into the right corner, and the three controls
+       are centred against each other too - a date field, a time field and a select do not come
+       out the same height on their own */
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 30;
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: center;
+    align-items: center;
     gap: 5pt;
     max-width: 70vw;
 }
@@ -1060,14 +1065,42 @@ section {
     padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
 }
 
-/* The playback controls are transport buttons for a trip playing out on the map behind them,
-   so a full height window is the wrong shape - it would cover the very thing being played
-   back. A row of buttons along the bottom of the page, as tall as they are and no taller. */
-#history {
-    flex-direction: row;
+/* Two panels work on the map rather than instead of it, so a full height window is the wrong
+   shape for both - it covers the thing being worked on. They sit along the bottom of the page
+   and take only the height they need.
+   Playback is transport buttons for a trip drawing itself behind them. Geofence is placed by
+   clicking the map to pick a centre, which cannot be done through a panel covering it. */
+#history,
+#geofence,
+#account {
     top: auto;
     height: auto;
     padding: 6pt;
+}
+
+#history {
+    flex-direction: row;
+    /* a compact group in the middle, rather than five buttons stretched across the page */
+    justify-content: center;
+    gap: 6pt;
+}
+
+.playctl {
+    flex: 0 0 auto;
+    min-width: 40pt;
+}
+
+/* enough of the list to work with, and enough map left to see */
+#geofence,
+#account {
+    max-height: 46vh;
+}
+
+#geofence #table-scroll,
+#account #table-scroll {
+    flex: 0 1 auto;
+    height: auto;
+    max-height: 34vh;
 }
 
 /* the scrolling area takes whatever the panel has left. min-height:0 is what lets a flex child

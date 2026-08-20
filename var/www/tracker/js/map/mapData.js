@@ -731,10 +731,12 @@ function syncStatsMode() {
     //the close link is href="#", which is a hash that names nothing
     var isPanel = !!(target && target.tagName === 'SECTION');
 
-    //Playback is the exception. It is a row of transport controls for a trip drawing itself on
-    //the map, so blacking the map out behind it hides the thing being played back. It gets no
-    //dark ground - it is a bar over the map, not a window instead of it.
-    var open = isPanel && hash !== 'history';
+    //Some panels sit over the map rather than instead of it, and get no dark ground behind
+    //them: playback is transport controls for a trip drawing itself on the map, a geofence is
+    //placed by clicking the map to pick its centre, and the device list is short enough that
+    //blacking out the whole map for it is more than it needs.
+    var overMap = ['history', 'geofence', 'account'];
+    var open = isPanel && overMap.indexOf(hash) === -1;
 
     if (document.body.classList) {
         document.body.classList.toggle('panelOpen', open);
