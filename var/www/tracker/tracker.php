@@ -42,8 +42,12 @@ validateSession();
          </div>
          <div class='container' align="left">
             <section id='account' align="left">
-               <button onclick="window.location.href='logout.php'" class="button">log out</button>
-               <a href="#accountUpdate" class="button">change details</a>
+               <!-- grouped so they sit side by side: the panel is a flex column, so two loose
+                    children stack one above the other -->
+               <div class="panelActions">
+                  <button onclick="window.location.href='logout.php'" class="button">log out</button>
+                  <a href="#accountUpdate" class="button">change details</a>
+               </div>
                <div id="table-scroll">
                   <table id="deviceTable"  class="table">
                      <thead>

@@ -1186,3 +1186,45 @@ body.peeking::before {
 nav {
     position: relative;
 }
+
+/* ---- account panels ------------------------------------------------------ */
+
+/* The panel is a flex column, so two loose children stack. These belong on one line, and they
+   are secondary to the device list below them - smaller than a primary action like Add. */
+.panelActions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 6pt;
+    margin-bottom: 5pt;
+}
+
+.panelActions .button {
+    font-size: 9pt;
+    padding: 3pt 10pt;
+    min-height: 24pt;
+}
+
+/* an <a> carries the button class too, and an anchor does not centre its own text against a
+   min-height the way a button does */
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+/* A short form in a full height panel sat against the top with the rest of the window empty
+   below it. Centred instead - and held to a readable width, since a field stretched across a
+   desktop is no easier to fill in than one that is not. */
+#accountUpdate {
+    justify-content: center;
+    align-items: center;
+    gap: 8pt;
+}
+
+#accountUpdate .input,
+#accountUpdate .button {
+    width: 100%;
+    max-width: 260pt;
+}
