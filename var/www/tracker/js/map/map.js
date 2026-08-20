@@ -62,21 +62,25 @@ const markerStyle = new ol.style.Style({
 });
 
 /*
- * The pin with a reading written under it. The icon is anchored at its foot, so the label goes
- * below the point rather than over the pin, and it is drawn with a dark outline because it has
- * to stay readable over map tiles of any colour.
+ * The pin with its readings written under it, one to a line. The icon is anchored at its foot,
+ * so the point is at the bottom of the pin and the text hangs below it - baseline at the top so
+ * it grows downwards and the first line stays put however many there are. Drawn with a dark
+ * outline because it has to stay readable over map tiles of any colour.
  */
-function markerStyleWithLabel(label) {
-    if (!label) {
+function markerStyleWithLabel(lines) {
+    var text = (lines || []).filter(Boolean).join('\n');
+
+    if (!text) {
         return markerStyle;
     }
 
     return new ol.style.Style({
         image: markerIcon,
         text: new ol.style.Text({
-            text: label,
+            text: text,
             font: 'bold 12px Montserrat, sans-serif',
-            offsetY: 14,
+            textBaseline: 'top',
+            offsetY: 8,
             fill: new ol.style.Fill({ color: '#ffffff' }),
             stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 0.8)', width: 3 })
         })

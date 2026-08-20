@@ -1154,7 +1154,7 @@ function updateMarker(lat, lng, dt, forceMove = false) {
         label.push(Math.round(bpm) + ' bpm');
     }
 
-    pointFeature.setStyle(markerStyleWithLabel(label.join('   ')));
+    pointFeature.setStyle(markerStyleWithLabel(label));
 
     var moveMarker = forceMove || (new Date().getTime() - newImei) < 30000;
     setMarker(lat, lng, moveMarker, 'Last seen on: ' + readableDate(dt) + ' <br>Moving at speed ' + spd + 'km/h<br><br>'
