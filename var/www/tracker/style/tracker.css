@@ -916,3 +916,59 @@ body.statsOpen #map > a {
         height: 54vh;
     }
 }
+
+/* ---- let the page actually be the page ---------------------------------- */
+
+/* body was 98% x 98% - 95% wide in portrait, and 80% tall in landscape on a phone - with the
+   browser's default margin still on it. Because body is position:fixed it is also the
+   containing block for #aroundMap, so the map was sized to that same 98% and the leftover
+   strip showed the green gradient underneath. The map fills the viewport now and the green
+   has nothing to show through; the background is set to the panel colour so that a rounding
+   hairline cannot bring it back. */
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    top: 0;
+    left: 0;
+    background: #22252E;
+}
+
+@media (max-device-width: 512px) and (orientation: landscape) {
+    body {
+        height: 100%;
+    }
+}
+
+@media (max-device-width: 512px) and (orientation: portrait) {
+    body {
+        width: 100%;
+    }
+}
+
+/* The rail is flush against the edge of the screen now that the margin is gone, so the icons
+   need their own breathing room rather than borrowing the body's. overflow-x on the rail is
+   also dropped: with the links centred, anything wider than the rail was trimmed off both
+   sides at once, which is what took the left edge off the icons. */
+nav {
+    overflow-x: visible;
+    flex-shrink: 0;
+    padding-left: 3pt;
+    padding-right: 2pt;
+}
+
+nav a {
+    flex-shrink: 0;
+}
+
+/* contain already fits the artwork inside the box, but the default origin is the top left
+   corner - centred is what keeps it whole if the box is ever narrower than the glyph */
+.icon {
+    background-position: center center;
+    flex-shrink: 0;
+}
