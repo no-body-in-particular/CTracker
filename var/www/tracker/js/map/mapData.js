@@ -758,9 +758,10 @@ function syncStatsMode() {
 
     //Some panels sit over the map rather than instead of it, and get no dark ground behind
     //them: playback is transport controls for a trip drawing itself on the map, a geofence is
-    //placed by clicking the map to pick its centre, and the device list is short enough that
-    //blacking out the whole map for it is more than it needs.
-    var overMap = ['history', 'geofence', 'account'];
+    //placed by clicking the map to pick its centre, picking a trip from the list draws its
+    //route, and the device list is short enough that blacking out the whole map for it is more
+    //than it needs.
+    var overMap = ['history', 'geofence', 'account', 'trips'];
     var open = isPanel && overMap.indexOf(hash) === -1;
 
     if (document.body.classList) {

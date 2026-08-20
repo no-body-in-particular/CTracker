@@ -1072,7 +1072,8 @@ section {
    clicking the map to pick a centre, which cannot be done through a panel covering it. */
 #history,
 #geofence,
-#account {
+#account,
+#trips {
     top: auto;
     height: auto;
     padding: 6pt;
@@ -1092,12 +1093,14 @@ section {
 
 /* enough of the list to work with, and enough map left to see */
 #geofence,
-#account {
+#account,
+#trips {
     max-height: 46vh;
 }
 
 #geofence #table-scroll,
-#account #table-scroll {
+#account #table-scroll,
+#trips #table-scroll {
     flex: 0 1 auto;
     height: auto;
     max-height: 34vh;
