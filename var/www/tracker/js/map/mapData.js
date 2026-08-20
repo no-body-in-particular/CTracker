@@ -711,7 +711,7 @@ function makeDataset(itemList) {
             pointRadius: 0,
             pointHoverRadius: 4,
             pointHitRadius: 14,
-            lineTension: 0,
+            tension: 0,
             fill: false,
             spanGaps: false,
             data: breakGaps(decimate(points, budget))
@@ -843,17 +843,24 @@ function makeChart(datasets) {
             //about as tall as a line of text.
             responsive: true,
             maintainAspectRatio: false,
-            animation: { duration: 0 },
-            onClick: (e) => {
-                const canvasPosition = Chart.helpers.getRelativePosition(e, lineChart);
-                // Substitute the appropriate scale IDs
-                const dataX = lineChart.scales.x.getValueForPixel(canvasPosition.x);
+            animation: false,
+            //a finger is not a mouse pointer: without this nothing responds unless the tap
+            //lands exactly on a plotted point
+            interaction: {
+                mode: 'nearest',
+                intersect: false
+            },
+            onClick: function(e, elements, chart) {
+                //the event arrives already measured against the canvas, so there is no
+                //helper to reach for and no page offsets to subtract
+                var dataX = chart.scales.x.getValueForPixel(e.x);
                 var moved = false;
+
                 for (var i = 0; i < (historyItems.length - 1); i++) {
                     if (dataX >= historyItems[i][0] && dataX <= historyItems[i + 1][0]) {
-                        stepIndex=i;
-                        isPlaying=0;
-                        noUpdateCurrentPosition=true;
+                        stepIndex = i;
+                        isPlaying = 0;
+                        noUpdateCurrentPosition = true;
                         updateMarker(historyItems[i][1], historyItems[i][2], historyItems[i][0], true);
                         moved = true;
                     }
@@ -864,112 +871,108 @@ function makeChart(datasets) {
                     peekAtMap();
                 }
             },
-            //a finger is not a mouse pointer: without this nothing responds unless the tap
-            //lands exactly on a plotted point
-            hover: {
-                mode: 'nearest',
-                intersect: false
-            },
-            tooltips: {
-                mode: 'nearest',
-                intersect: false,
-                caretPadding: 8,
-                titleFontSize: 12,
-                bodyFontSize: 13,
-                callbacks: {
-                    label: function(item, data) {
-                        var set = data.datasets[item.datasetIndex];
-                        //trailing zeros on a heart rate of 58.00 read as false precision
-                        var value = parseFloat(Number(item.yLabel).toFixed(2));
-                        return set.unit ? set.label.replace(' (' + set.unit + ')', '') + ': ' + value + ' ' + set.unit
-                                        : set.label + ': ' + value;
+            plugins: {
+                legend: {
+                    //A phone needs this more than a desktop does, not less - without it the
+                    //lines have no names at all. It is the chips that keep it to a readable
+                    //size: with the device group folded away it is seven entries, not twelve.
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: CHART_INK,
+                        boxWidth: narrow ? 8 : 12,
+                        padding: narrow ? 6 : 10,
+                        usePointStyle: true,
+                        font: {
+                            size: narrow ? 10 : 12
+                        }
                     }
-                }
-            },
-            legend: {
-                //A phone needs this more than a desktop does, not less - without it the lines
-                //have no names at all. It is the chips that keep it to a readable size: with
-                //the device group folded away it is seven entries, not twelve.
-                display: true,
-                position: 'top',
-                labels: {
-                    fontColor: CHART_INK,
-                    boxWidth: narrow ? 8 : 12,
-                    fontSize: narrow ? 10 : 12,
-                    padding: narrow ? 6 : 10,
-                    usePointStyle: true
+                },
+                tooltip: {
+                    caretPadding: 8,
+                    titleFont: {
+                        size: 12
+                    },
+                    bodyFont: {
+                        size: 13
+                    },
+                    callbacks: {
+                        label: function(context) {
+                            var unit = context.dataset.unit;
+                            var name = context.dataset.label;
+                            //trailing zeros on a heart rate of 58.00 read as false precision
+                            var value = parseFloat(Number(context.parsed.y).toFixed(2));
+
+                            return unit ? name.replace(' (' + unit + ')', '') + ': ' + value + ' ' + unit
+                                        : name + ': ' + value;
+                        }
+                    }
                 }
             },
 
             scales: {
-                xAxes: [{
+                x: {
                     type: 'time',
                     display: true,
                     //no fixed unit - a hard coded 'minute' made the labels meaningless
-                    //across a 30 day range
+                    //across a 30 day range. the tokens are date-fns ones, which the adapter
+                    //this build uses expects - lower case d for the day of the month.
                     time: {
-                        tooltipFormat: 'MMM D, HH:mm',
+                        tooltipFormat: 'MMM d, HH:mm',
                         displayFormats: {
                             minute: 'HH:mm',
                             hour: 'HH:mm',
-                            day: 'MMM D'
+                            day: 'MMM d'
                         }
                     },
-                    scaleLabel: {
+                    title: {
                         display: false
                     },
-                    gridLines: {
-                        color: CHART_GRID,
-                        zeroLineColor: CHART_GRID
+                    grid: {
+                        color: CHART_GRID
                     },
                     ticks: {
                         autoSkip: true,
                         maxRotation: 0,
                         maxTicksLimit: narrow ? 4 : 9,
-                        fontColor: CHART_INK,
-                        major: {
-                            fontStyle: 'bold',
-                            fontColor: CHART_INK
-                        }
-                    },
-                    id: 'x'
-                }],
-                yAxes: [{
+                        color: CHART_INK
+                    }
+                },
+                y: {
                     display: true,
                     position: 'left',
-                    scaleLabel: {
+                    title: {
                         display: false
                     },
-                    gridLines: {
-                        color: CHART_GRID,
-                        zeroLineColor: CHART_GRID
+                    grid: {
+                        color: CHART_GRID
                     },
                     ticks: {
                         autoSkip: true,
                         maxTicksLimit: narrow ? 6 : 10,
-                        fontColor: CHART_INK
-                    },
-                    id: 'y'
-                }, {
+                        color: CHART_INK
+                    }
+                },
+                y2: {
                     //the small ranged series, so they are not flattened against the bottom
                     //of a scale whose top blood pressure sets
                     display: true,
                     position: 'right',
-                    scaleLabel: {
+                    beginAtZero: true,
+                    title: {
                         display: false
                     },
-                    gridLines: {
+                    grid: {
+                        //only one set of horizontal lines across the plot
                         drawOnChartArea: false,
                         color: CHART_GRID
                     },
                     ticks: {
                         autoSkip: true,
                         maxTicksLimit: narrow ? 6 : 10,
-                        fontColor: CHART_INK,
-                        beginAtZero: true
-                    },
-                    id: 'y2'
-                }]
+                        color: CHART_INK
+                    }
+                }
             }
         }
     };
@@ -1225,6 +1228,41 @@ renderStatChips();
 layoutStatsPanel();
 syncStatsMode();
 window.addEventListener('hashchange', syncStatsMode);
+
+/*
+ * Panels are shown with :target, so opening one is a hash change and every one opened pushed a
+ * history entry. Back then walked backwards through every panel visited, one press at a time,
+ * rather than leaving the page - which on a phone is the whole back gesture spent undoing
+ * navigation the user did not think of as navigation.
+ *
+ * Opening the first panel still pushes, so back closes it, which is what the gesture is for.
+ * Moving from one open panel to another replaces the entry instead. location.replace is what
+ * does that rather than history.replaceState: :target is only re-evaluated by an actual
+ * navigation, and replaceState is not one - the URL would change and the panel would not.
+ */
+document.addEventListener('click', function(e) {
+    if (!e.target || !e.target.closest) {
+        return;
+    }
+
+    var link = e.target.closest('nav a[href^="#"]');
+
+    if (!link) {
+        return;
+    }
+
+    var current = window.location.hash.replace('#', '');
+    var target = current ? document.getElementById(current) : null;
+
+    //nothing open yet: let this one push, so there is something for back to close
+    if (!target || target.tagName !== 'SECTION') {
+        return;
+    }
+
+    var href = link.getAttribute('href');
+    e.preventDefault();
+    window.location.replace(href === '#' ? window.location.pathname + window.location.search : href);
+});
 
 setTimeout(updateCurrentPosition, 500);
 setInterval(updateCurrentPosition, 10000);

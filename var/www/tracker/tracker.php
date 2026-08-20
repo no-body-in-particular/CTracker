@@ -16,8 +16,14 @@ validateSession();
       <link rel="stylesheet" href="jquery/jquery.timepicker.min.css" type="text/css">
       <script src="jquery/jquery-3.7.1.js"></script>
       <script src="jquery/jquery-ui.js"></script>
-      <script src="//cdnjs.cloudflare.com/ajax/libs/timepicker/1.3.5/jquery.timepicker.min.js"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
+      <!-- Both of these used to be fetched from cdnjs, so the page lost its time pickers and
+           its graph anywhere that host is blocked or unreachable, and Chart.js 2.8.0 has been
+           end of life since 2021. Served from here now, and the chart is on 4.x.
+           v3 dropped the bundled moment.js, so a date adapter is a separate file - the graph
+           has a time axis and will not build one without it. -->
+      <script src="jquery/jquery.timepicker.min.js"></script>
+      <script src="chartjs/chart.umd.min.js"></script>
+      <script src="chartjs/chartjs-adapter-date-fns.bundle.min.js"></script>
 
       <script src="openlayers/ol.js"></script>
       <script id="assignments" type="text/javascript" >
