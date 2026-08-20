@@ -2,6 +2,17 @@
 
 include 'config.php';
 
+// Session cookie hardening, set here as well as in lib.php because index.php (the login page)
+// loads database.php and starts a session without going through lib.php. ini_set is harmless to
+// repeat and must run before the first session_start, which every caller reaches after this include.
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.use_strict_mode', 1);
+
+if (!empty($_SERVER['HTTPS']) && 'off' !== $_SERVER['HTTPS']) {
+    ini_set('session.cookie_secure', 1);
+}
+
 function getDevice($view_alias)
 {
     session_start();

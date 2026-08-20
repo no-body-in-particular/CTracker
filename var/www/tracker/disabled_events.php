@@ -1,8 +1,5 @@
 <?php
-
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// debug error output removed - php warnings and their file paths do not belong in the response
 
 include 'lib.php';
 include 'database.php';

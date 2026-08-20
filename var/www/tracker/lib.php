@@ -3,6 +3,20 @@
 ini_set('zlib.output_compression', 1);
 ini_set('session.cookie_lifetime', 864000);
 ini_set('session.gc_maxlifetime', 864000);
+
+// Session cookie hardening, applied here because lib.php is included before any session starts.
+//  - HttpOnly keeps the cookie out of reach of javascript, so an XSS cannot read the session.
+//  - SameSite=Lax stops another site from driving an authenticated request with the cookie
+//    attached, which is a CSRF defence the app otherwise had none of.
+//  - Secure is set on HTTPS so the cookie is never sent in clear over the port 80 binding.
+//  - strict_mode makes PHP reject a session id it did not issue, closing session fixation.
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.use_strict_mode', 1);
+
+if (!empty($_SERVER['HTTPS']) && 'off' !== $_SERVER['HTTPS']) {
+    ini_set('session.cookie_secure', 1);
+}
 //ob_start("ob_gzhandler");
 
 include 'config.php';
@@ -35,14 +49,14 @@ function read_fordates($file_path, $oneline): void
         exit();
     }
 
-    passthru('./date_grep '.$file_path.' '.$GLOBALS['BEGIN'].' '.$GLOBALS['END']);
+    passthru('./date_grep '.escapeshellarg($file_path).' '.escapeshellarg($GLOBALS['BEGIN']).' '.escapeshellarg($GLOBALS['END']));
 }
 
 function read_last_line($file_path)
 {
     $output = [];
     $ret = 0;
-    exec('tac '.$file_path." | grep -m 1 '[^[:blank:]]'", $output, $ret);
+    exec('tac '.escapeshellarg($file_path)." | grep -m 1 '[^[:blank:]]'", $output, $ret);
 
     return $output[0];
 }
