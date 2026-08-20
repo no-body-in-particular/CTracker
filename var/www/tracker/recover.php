@@ -26,6 +26,7 @@ if ('POST' === $_SERVER['REQUEST_METHOD'] ) {
 ?>
 <html>
    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <link rel="stylesheet" href="style/index.css" type="text/css">
       <script src="jquery/jquery-3.2.1.min.js"></script>
       <script src="js/store.js"></script>

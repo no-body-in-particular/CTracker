@@ -1,9 +1,13 @@
 /**** ./index.css ***/
 /**** ./index.css ***/
 .login-page {
-    width: 40em;
-    padding: 8% 0 0;
+    /* was a fixed 40em, which is wider than a phone and forced the whole page to scroll
+       sideways and scale down. cap it instead and let it shrink to the screen. */
+    width: 100%;
+    max-width: 40em;
+    padding: 8% 16px 0;
     margin: auto;
+    box-sizing: border-box;
 }
 
 .form,.form-inline {
@@ -203,10 +207,15 @@ body {
    green than the login button's #4CAF50 and the page's #76b852 gradient, so it sits apart from
    both and reads as secondary. */
 .apk-link {
+    /* fixed, so it sits at the foot of the screen without adding to the page's height - in flow
+       it would push the page taller, which on a phone read as the page growing a whole screen.
+       spanning the full width with the text centred puts it in the middle whatever the size. */
     position: fixed;
     left: 0;
     right: 0;
     bottom: 12px;
+    display: block;
+    width: 100%;
     text-align: center;
     font-family: "Roboto", sans-serif;
     font-size: 12px;
