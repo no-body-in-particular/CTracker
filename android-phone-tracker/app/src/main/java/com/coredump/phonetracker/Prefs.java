@@ -12,7 +12,6 @@ public class Prefs {
     //which is now the real default rather than a hint the field started empty behind.
     public static final String DEFAULT_HOST = "coredump.ws";
     public static final int    DEFAULT_PORT = 9000;
-    public static final String DEFAULT_IMEI = "0000000000000001";
     public static final int    DEFAULT_INTERVAL = 180;
 
     public static final String HOST = "host";
@@ -36,7 +35,9 @@ public class Prefs {
      * The server files everything under an imei and pads it to sixteen digits, so a phone needs
      * one too. It is just an identifier here - any sixteen digits that no watch is using.
      */
-    public String imei()  { return p.getString(IMEI, DEFAULT_IMEI); }
+    //no default: this is the key everything is filed under, and a shared default would mean two
+    //phones writing over each other's history. it has to be set before the app will start.
+    public String imei()  { return p.getString(IMEI, ""); }
 
     /** seconds between position reports */
     public int    interval() { return p.getInt(INTERVAL, DEFAULT_INTERVAL); }

@@ -198,3 +198,25 @@ body {
 .signal-4 {
     background-image: url('icons/signal-4.svg');
 }
+
+/* The phone tracker download - a small, quiet link fixed to the bottom of the page. A softer
+   green than the login button's #4CAF50 and the page's #76b852 gradient, so it sits apart from
+   both and reads as secondary. */
+.apk-link {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 12px;
+    text-align: center;
+    font-family: "Roboto", sans-serif;
+    font-size: 12px;
+    color: #a6d98a;
+    text-decoration: none;
+    opacity: 0.85;
+}
+
+.apk-link:hover,
+.apk-link:focus {
+    opacity: 1;
+    text-decoration: underline;
+}

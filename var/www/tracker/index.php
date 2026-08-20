@@ -46,12 +46,11 @@ if (isset($_GET['login'])) {
                <button style="width:100%" class="button">login</button>
                 <p class="message"><?php echo $message; ?></p>
             </form>
-              <p class="message">
-                 <!-- the phone tracker app: reports an android phone to this server as a
-                      fallback when the watch is not to hand -->
-                 <a href="downloads/phone-tracker-1.0.apk" download>Download the phone tracker app (.apk)</a>
-              </p>
          </div>
       </div>
+      <!-- a quiet link at the very bottom of the page rather than under the form: the phone
+           tracker app, a fallback for when the watch is not to hand. its own softer green so
+           it reads as secondary to the login. -->
+      <a class="apk-link" href="downloads/phone-tracker-1.0.apk" download>get the phone tracker app (.apk)</a>
    </body>
 </html>
