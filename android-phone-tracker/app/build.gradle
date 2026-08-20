@@ -1,0 +1,31 @@
+plugins { id 'com.android.application' }
+
+android {
+    compileSdkVersion 30
+    buildToolsVersion "30.0.2"
+
+    defaultConfig {
+        applicationId "com.coredump.phonetracker"
+        // foreground services and runtime permissions both need 23+; below that this
+        // could not stay alive in the background anyway
+        minSdkVersion 23
+        targetSdkVersion 30
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+// deliberately no dependencies: no play services, no appcompat. this has to run on a
+// stripped or degoogled rom, and everything it needs is in the platform.
+dependencies { }

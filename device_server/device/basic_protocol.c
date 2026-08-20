@@ -84,6 +84,31 @@ void basic_process_message(connection * conn, char * string, size_t length) {
         return;
     }
 
+    /*
+     * STAT;imei;name;value - a reading that is not a position. The watch has dedicated packets
+     * for a pulse or a step count; a phone reports whatever sensors it happens to have through
+     * this one message, and the value is written under the same stat name the rest of the system
+     * already charts. The imei is needed here because a stat can be the first thing a phone sends
+     * after connecting, before any position has identified it.
+     */
+    if (strcmp(data_buffers[0], "STAT") == 0 && str_count >= 4) {
+        unsigned char stat_imei[18] = {0};
+        memcpy(stat_imei, data_buffers[1], min(strlen(data_buffers[1]), 16));
+        pad_imei(stat_imei);
+
+        if (strlen(conn->imei) <= 1 || strcmp(conn->imei, stat_imei) != 0) {
+            memcpy(conn->imei, stat_imei, strlen(stat_imei) + 1);
+            init_imei(conn);
+        }
+
+        //a phone reading is sent in real time and carries no timestamp of its own, so it is
+        //stamped now rather than with a position clock that may lag it by a whole interval
+        time_t when = time(0) > conn->device_time ? time(0) : conn->device_time;
+        write_stat_at(conn, unescape_str(data_buffers[2]), parse_float(data_buffers[3]), when);
+        conn->timeout_time = time(0) + BASIC_TIMEOUT;
+        return;
+    }
+
     if ( str_count < 5) {
         log_line(conn, "  invalid location response length.\n");
         return;
@@ -175,6 +200,11 @@ void basic_process(void * vp) {
         size_t index = idx(conn->recv_buffer, '!');
 
         if (index > 0 && index < conn->read_count) {
+            //terminate the message at its '!' before handing it on. basic_process_message reads
+            //to the null rather than to the length it is given, so without this a second message
+            //already sitting in the buffer behind this one bled into its last field - a burst of
+            //reports that arrived in a single read fused into one.
+            conn->recv_buffer[index] = 0;
             index++;
             basic_process_message(conn, conn->recv_buffer, index);
             memmove(conn->recv_buffer, conn->recv_buffer + index, conn->read_count - index);
@@ -189,10 +219,24 @@ void basic_process(void * vp) {
     }
 }
 
+/*
+ * The phone speaks the command channel this protocol already has: a command is a newline
+ * terminated string, and the app knows WARN, WARNAUDIO and QUIET. These were empty, so a
+ * geofence crossing raised on a phone connection did nothing at all. They send the command the
+ * app is waiting for, with the reason passed through so the notification can say what happened.
+ */
 void basic_warn(void * vp, const char * reason ) {
+    connection * conn = (connection *)vp;
+    char buffer[BUF_SIZE] = {0};
+    snprintf(buffer, sizeof(buffer) - 1, "WARN;%s", reason ? reason : "");
+    conn->COMMAND_FUNCTION(conn, buffer);
 }
 
 void basic_warn_audio(void * vp, const char * reason) {
+    connection * conn = (connection *)vp;
+    char buffer[BUF_SIZE] = {0};
+    snprintf(buffer, sizeof(buffer) - 1, "WARNAUDIO;%s", reason ? reason : "");
+    conn->COMMAND_FUNCTION(conn, buffer);
 }
 
 void basic_identify(void * vp) {
