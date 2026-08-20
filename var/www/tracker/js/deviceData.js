@@ -1,5 +1,26 @@
+//the selected device is remembered so a reload, or the browser back button, does not drop back
+//to whatever happens to be first in the list. store.js is not loaded on this page, so this keeps
+//its own key; private browsing can refuse localStorage, in which case the choice just does not
+//persist and the old behaviour returns.
+var SELECTED_DEVICE_KEY = 'selectedDevice';
+
+function rememberDevice(padded) {
+    try {
+        window.localStorage.setItem(SELECTED_DEVICE_KEY, padded);
+    } catch (e) { }
+}
+
+function rememberedDevice() {
+    try {
+        return window.localStorage.getItem(SELECTED_DEVICE_KEY);
+    } catch (e) {
+        return null;
+    }
+}
+
 function viewDevice(no) {
     imei = String(no).padStart(16, '0');
+    rememberDevice(imei);
     newImei = new Date().getTime();
     setTimeout(updateCurrentPosition, 2);
     setTimeout(searchdateChange, 2);
@@ -72,8 +93,17 @@ function fetchDevices() {
         url: "devicelist.php?action=read" + viewOnlyParameter(),
         success: function(result) {
             var parsed = forEachRow(result, 3, cols => [cols[1], cols[2], cols[3]]);
+
+            //only choose a device when none is selected yet - a periodic refresh must not yank
+            //the map back off whatever the user is looking at
             if ((imei == null || imei == '') && parsed.length > 0) {
-                viewDevice(parsed[0][0]);
+                var saved = rememberedDevice();
+                var known = saved && parsed.some(function(row) {
+                    return String(row[0]).padStart(16, '0') === String(saved).padStart(16, '0');
+                });
+
+                //the remembered device if it is still in the list, the first one otherwise
+                viewDevice(known ? saved : parsed[0][0]);
             }
             const tableBody = document.getElementById("deviceBody");
             tableBody.innerHTML = parsed.map(rv => computeDeviceRow(rv)).join('');
