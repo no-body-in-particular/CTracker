@@ -693,3 +693,175 @@ section:target h1 {
     color: #838a9e;
     border-color: #3a3e4e;
 }
+
+/* the stylesheet has a bare button:hover that paints any button dark green - these are not
+   that kind of button */
+.chips .chip:hover,
+.chips .chip:focus {
+    background: #3c4053;
+    border-color: #06d6a0;
+    color: #e6e9f0;
+}
+
+.chips .chip.off:hover,
+.chips .chip.off:focus {
+    background: rgba(255, 255, 255, 0.05);
+    color: #c9cfdb;
+}
+
+/* ---- the rest of the panels -------------------------------------------- */
+
+/* The tables and forms were still the pale green and grey of the original stylesheet, sitting
+   on a near black panel, and 10% of the map showed through the text behind them. Same palette
+   as the graph, so the panels read as one application rather than two. */
+:root {
+    --panel: #22252E;
+    --surface: #313443;
+    --surface-hi: #3c4053;
+    --line: #4a4f63;
+    --ink: #e6e9f0;
+    --ink-dim: #98a0b4;
+    --accent: #06d6a0;
+}
+
+section:target {
+    opacity: 1;
+}
+
+section:not(#stats) {
+    border-radius: 10pt;
+    padding: 6pt;
+    box-sizing: border-box;
+}
+
+.table {
+    background: transparent;
+    color: var(--ink);
+    font-family: Montserrat, sans-serif;
+    font-size: 10pt;
+}
+
+.table th {
+    background: var(--surface);
+    color: var(--ink);
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 6pt 5pt;
+    font-weight: 600;
+}
+
+.table td {
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 5pt;
+    color: var(--ink);
+}
+
+.table tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.table tr:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.input,
+.input_small {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8pt;
+    padding: 4pt 8pt;
+    margin: 0 0 2pt;
+    font-family: Montserrat, sans-serif;
+    font-size: 10pt;
+    /* a target a finger can actually hit */
+    min-height: 26pt;
+    box-sizing: border-box;
+}
+
+.input::placeholder,
+.input_small::placeholder {
+    color: var(--ink-dim);
+}
+
+.input:focus,
+.input_small:focus {
+    outline: 0;
+    border-color: var(--accent);
+}
+
+.button {
+    font-family: Montserrat, sans-serif;
+    text-transform: none;
+    font-size: 10pt;
+    background: rgba(6, 214, 160, 0.14);
+    color: #7ef0cd;
+    border: 1px solid rgba(6, 214, 160, 0.45);
+    border-radius: 14pt;
+    padding: 5pt 12pt;
+    min-height: 28pt;
+    cursor: pointer;
+}
+
+.button:hover,
+.button:active,
+.button:focus {
+    background: rgba(6, 214, 160, 0.26);
+    border-color: var(--accent);
+    color: #b6f7e3;
+}
+
+/* the icon rail sat at 0.7 opacity over the map, which left the icons washed out */
+nav {
+    opacity: 1;
+    background: rgba(49, 52, 67, 0.94);
+    border-radius: 0 10pt 10pt 0;
+}
+
+.tooltip .tooltiptext {
+    background-color: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 6pt;
+    font-family: Montserrat, sans-serif;
+    font-size: 9pt;
+    padding: 3pt 7pt;
+    width: auto;
+    white-space: nowrap;
+}
+
+/* The playback controls were table cells carrying an inline blue that never applied - the
+   icons are white svgs, so the colour had nothing to act on. A row of real touch targets
+   instead, each wide enough to hit without aiming. */
+#history {
+    width: 70vw;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    gap: 4pt;
+}
+
+.playctl {
+    flex: 1 1 0;
+    text-align: center;
+    font-size: 20pt;
+    padding: 8pt 0;
+    border-radius: 8pt;
+    cursor: pointer;
+}
+
+.playctl:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+@media (orientation: portrait) {
+    #history {
+        width: 88vw;
+    }
+
+    /* 40vh of a phone screen was mostly empty panel below the rows */
+    #table-scroll {
+        height: 54vh;
+    }
+}

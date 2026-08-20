@@ -70,12 +70,12 @@ validateSession();
                <input placeholder="Password (blank = unchanged)" id="password" name="password" class="input" type="password" onfocus="this.value=''"/>
                <button onclick="updateUser()" class="button">Update</button>
             </section>
-            <section id='history' align="left" style="width:70vw;height:8vh;display: table;">
-               <a onclick="playSlower()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;"><i class="icon slower"></i></a>
-               <a onclick="startPlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;"><i class="icon play"></i></a>
-               <a onclick="pausePlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;">   <i class="icon pause"></i></a>
-               <a onclick="stopPlaying()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;">  <i class="icon stop"></i></a>
-               <a onclick="playFaster()" style="font-size:24pt;color:blue;display:table-cell;vertical-align:middle;text-align:center;"><i class="icon faster"></i></a>
+            <section id='history' align="left">
+               <a onclick="playSlower()" class="playctl"><i class="icon slower"></i></a>
+               <a onclick="startPlaying()" class="playctl"><i class="icon play"></i></a>
+               <a onclick="pausePlaying()" class="playctl">   <i class="icon pause"></i></a>
+               <a onclick="stopPlaying()" class="playctl">  <i class="icon stop"></i></a>
+               <a onclick="playFaster()" class="playctl"><i class="icon faster"></i></a>
             </section>
 
             <section id='stats' align="left">
