@@ -1096,6 +1096,34 @@ function updateSpeed(spd) {
     speedDiv.innerHTML = '  speed: ' + speedText(spd);
 }
 
+/*
+ * findStat() hands back the nearest value and nothing about when it was taken, so it cannot say
+ * whether a reading is current or hours old - and it falls back to the newest reading it has
+ * whatever its date. A pulse written next to a position has to be one that was measured near
+ * it, or the marker states a heart rate for a moment nobody measured one.
+ */
+var HEARTRATE_FRESH_MS = 30 * 60 * 1000;
+
+function heartrateAt(dt) {
+    var best = null;
+
+    for (var i = 0; i < statsList.length; i++) {
+        if (statsList[i][1] !== 'heartrate' || statsList[i][0] > dt) {
+            continue;
+        }
+
+        if (!best || statsList[i][0] > best[0]) {
+            best = statsList[i];
+        }
+    }
+
+    if (!best || !best[2]) {
+        return 0;
+    }
+
+    return (dt - best[0]) <= HEARTRATE_FRESH_MS ? best[2] : 0;
+}
+
 function updateMarker(lat, lng, dt, forceMove = false) {
     var spd = findStat('speed', dt);
     var batlvl = findStat('battery_level', dt);
@@ -1105,9 +1133,15 @@ function updateMarker(lat, lng, dt, forceMove = false) {
     setBattery(batlvl);
     setSignal(signal);
 
+    var bpm = heartrateAt(dt);
+
+    //written under the pin as well as in the popup, so it can be read without opening anything
+    pointFeature.setStyle(markerStyleWithLabel(bpm ? Math.round(bpm) + ' bpm' : ''));
+
     var moveMarker = forceMove || (new Date().getTime() - newImei) < 30000;
-    console.log(moveMarker);
-    setMarker(lat, lng, moveMarker, 'Last seen on: ' + readableDate(dt) + ' <br>Moving at speed ' + spd + 'km/h<br><br>' + 'Battery: ' + batlvl + '%<br>' + 'Gsm signal strength: ' + signal + '%<br>');
+    setMarker(lat, lng, moveMarker, 'Last seen on: ' + readableDate(dt) + ' <br>Moving at speed ' + spd + 'km/h<br><br>'
+        + (bpm ? 'Heart rate: ' + Math.round(bpm) + ' bpm<br>' : '')
+        + 'Battery: ' + batlvl + '%<br>' + 'Gsm signal strength: ' + signal + '%<br>');
     updateSpeed(spd);
 }
 

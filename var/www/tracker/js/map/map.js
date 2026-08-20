@@ -48,16 +48,40 @@ function travelLayerStyle(feature) {
     return styles;
 }
 
-const markerStyle = new ol.style.Style({
-    image: new ol.style.Icon({
-        anchor: [0.5, 1],
-        size: [400, 600],
-        offset: [0, 0],
-        opacity: 1,
-        scale: 0.12,
-        src: "pin.png"
-    })
+const markerIcon = new ol.style.Icon({
+    anchor: [0.5, 1],
+    size: [400, 600],
+    offset: [0, 0],
+    opacity: 1,
+    scale: 0.12,
+    src: "pin.png"
 });
+
+const markerStyle = new ol.style.Style({
+    image: markerIcon
+});
+
+/*
+ * The pin with a reading written under it. The icon is anchored at its foot, so the label goes
+ * below the point rather than over the pin, and it is drawn with a dark outline because it has
+ * to stay readable over map tiles of any colour.
+ */
+function markerStyleWithLabel(label) {
+    if (!label) {
+        return markerStyle;
+    }
+
+    return new ol.style.Style({
+        image: markerIcon,
+        text: new ol.style.Text({
+            text: label,
+            font: 'bold 12px Montserrat, sans-serif',
+            offsetY: 14,
+            fill: new ol.style.Fill({ color: '#ffffff' }),
+            stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 0.8)', width: 3 })
+        })
+    });
+}
 
 
 
