@@ -65,14 +65,16 @@ double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
 }
 
 double compute_speed(time_t dt, double lat1, double lon1, double lat2, double lon2) {
-    double speed = haversineDistance(lat1, lon1, lat2, lon2);
-    double over_time = (fabs(dt) / 3600);
-    //fabs() never returns a negative, so this test used to be dead and a pair of fixes
-    //sharing a timestamp divided by zero - giving inf, or nan when the two fixes were
-    //also in the same spot. fall back to the usual reporting interval instead.
-    over_time = over_time <= 0.0 ? 0.166666f : over_time;
-    speed = speed / over_time;
-    return speed;
+    //Two fixes sharing a timestamp cannot say how fast anything was moving. This used to
+    //substitute the usual ten minute reporting interval, which does not measure the gap -
+    //it invents one, and any real gap shorter than that came out proportionally too slow.
+    //Report it as unmeasurable and let the caller decide; move_to() then writes no speed
+    //at all rather than a made up one, the same as it does for a cell tower fix.
+    if (dt <= 0) {
+        return NAN;
+    }
+
+    return haversineDistance(lat1, lon1, lat2, lon2) / (dt / 3600.0);
 }
 
 /* msleep(): Sleep for the requested number of milliseconds. */

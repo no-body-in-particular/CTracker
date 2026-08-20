@@ -1,5 +1,8 @@
 #include "stdint.h"
 #include "stdbool.h"
+//size_t is used in the prototypes below - a header has to bring its own types rather
+//than rely on whatever the including file happened to pull in first
+#include <stddef.h>
 
 #ifndef _GEOLOCATE_H_
 #define  _GEOLOCATE_H_

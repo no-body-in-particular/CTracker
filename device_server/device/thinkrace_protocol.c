@@ -291,25 +291,26 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
 
     time_t dt = date_to_time(year, month, day, hour, minute, second);
 
-    //A position that could not be resolved still tells us what time the device thinks it
-    //is. Only move_to() used to set conn->device_time, so once the fixes went void and
-    //both the wifi and tower lookups failed the clock stopped at the last resolved fix -
-    //and every later log line, event and stat was written at that one instant. Hours of
-    //heart rate readings landed on a single timestamp and showed up as a stack of
-    //duplicate looking points. Advance the clock from the packet itself, whether or not
-    //we managed to place the device. Only ever forwards, so a stale fix replayed by a
-    //second connection cannot drag it back.
-    if (dt > conn->device_time) {
-        conn->device_time = dt;
-    }
-
     if (valid_position) {
-        //if we're fairly certain about our location do trigger fences
+        //if we're fairly certain about our location do trigger fences.
+        //move_to() adopts this fix's time itself, and it needs the *previous* fix's time
+        //still in place to work out how long the device took to get here. Advancing the
+        //clock before calling it left that gap at zero, and compute_speed() then fell back
+        //to assuming the reporting interval - so a minute of running was divided by ten
+        //minutes and every speed came out a tenth of its true value.
         move_to(conn, dt, position_type, lat, lng);
         write_stat(conn, "battery_level", battery_level);
         write_sat_count(conn, position_type, num_sats);
         write_stat(conn, "signal", signal_strength);
         conn->timeout_time = time(0) + THINKRACE_TIMEOUT;
+
+    } else if (dt > conn->device_time) {
+        //A position that could not be resolved still tells us what time the device thinks
+        //it is. Only move_to() sets conn->device_time, so once the fixes went void and both
+        //the wifi and tower lookups failed the clock stopped at the last resolved fix, and
+        //every later log line, event and stat was written at that one instant. Forwards
+        //only, so a stale fix replayed by a second connection cannot drag it back.
+        conn->device_time = dt;
     }
 }
 

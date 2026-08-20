@@ -204,15 +204,20 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     //of the speed stat, but log_position() still wrote them to the gps file, which is
     //where the several-hundred km/h rows came from.
     bool lbs_fix = (position_type == 1 || conn->current_position_type == 1);
-    double speed = lbs_fix ? 0 : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
-    conn->current_speed_valid = !lbs_fix;
+    double speed = lbs_fix ? NAN : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
     bool allow_trigger = dt > 5 && dt < 1200;
 
     //a nan compares false against everything, so the old test let it through into the
     //logs untouched while inf was caught. check for it explicitly and first.
-    if (!isfinite(speed) || speed < 0 || speed > MAX_PLAUSIBLE_SPEED) {
+    //an implausible reading is discarded rather than rewritten to zero: zero is a claim
+    //that the device stood still, which is a different statement from having no measurement
+    bool measured = isfinite(speed) && speed >= 0 && speed <= MAX_PLAUSIBLE_SPEED;
+
+    if (!measured) {
         speed = 0;
     }
+
+    conn->current_speed_valid = measured;
 
     //adopt this fix's own timestamp before anything is written. log_position() and
     //write_stat() both stamp from conn->device_time, so while this assignment sat at the
@@ -221,10 +226,10 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     //speed are already computed above, so nothing here still needs the old value.
     conn->device_time = device_time;
     //only a measured speed counts - a tower fix cannot produce one
-    note_movement(conn, speed, !lbs_fix);
-    log_position(conn, position_type, lat, lon, speed, !lbs_fix);
+    note_movement(conn, speed, measured);
+    log_position(conn, position_type, lat, lon, speed, measured);
 
-    if (!lbs_fix) {
+    if (measured) {
         write_stat(conn, "speed", speed);
     }
 
