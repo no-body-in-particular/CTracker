@@ -562,3 +562,70 @@ section:target h1 {
 .slower {
     background-image: url('../icons/slower.svg');
 }
+
+/* ---- statistics graph -------------------------------------------------- */
+
+/* Chart.js writes its own width and height onto the canvas, so the size has to come from a
+   wrapper around it. With maintainAspectRatio off the chart fills this box exactly. */
+#chartWrap {
+    position: relative;
+    width: 100%;
+    height: 68vh;
+    max-height: 620px;
+}
+
+/* a phone in portrait has the height to spare and badly needs it - the plot area is what was
+   missing, not the panel */
+@media (orientation: portrait) {
+    #chartWrap {
+        height: 64vh;
+        max-height: none;
+    }
+
+    /* the graph needs more width than the tables do */
+    #stats {
+        width: 94vw;
+    }
+}
+
+/* landscape on a phone is mostly height starved, so give the plot nearly all of it */
+@media (max-height: 520px) {
+    #chartWrap {
+        height: 70vh;
+        max-height: none;
+    }
+}
+
+/* the other panels read fine at 0.9, but a graph seen through the map behind it does not */
+#stats:target {
+    opacity: 1;
+    background: #22252E;
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6pt;
+    padding: 6pt 4pt 2pt 4pt;
+}
+
+.chips .chip {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 1px solid #4a4f63;
+    background: #313443;
+    color: #e6e9f0;
+    border-radius: 14pt;
+    padding: 5pt 11pt;
+    font-family: Montserrat, sans-serif;
+    font-size: 10pt;
+    /* comfortably tappable rather than merely clickable */
+    min-height: 30pt;
+    cursor: pointer;
+}
+
+.chips .chip.off {
+    background: transparent;
+    color: #838a9e;
+    border-color: #3a3e4e;
+}

@@ -465,18 +465,255 @@ function saveSettings() {
 }
 
 var lineChart = null;
+var chartSignature = null;
 
 var stepIndex = 0;
 var isPlaying = 0;
 
+var statsList = [];
+
+//The chart sits on a dark panel, so Chart.js' default mid grey for ticks and labels came
+//out barely readable. Everything the chart draws in a neutral colour is set from here.
+var CHART_INK = '#c9cfdb';
+var CHART_GRID = 'rgba(255, 255, 255, 0.08)';
+
+//A stat is drawn on the left axis or the right one depending on the range it lives in.
+//Every series used to share a single axis, so speed (0-10) and the satellite counts were
+//pressed into the bottom few percent of a scale that blood pressure stretched to 140, and
+//on a phone they were a flat line along the bottom. The groups drive the filter chips.
+var STAT_SERIES = {
+    heartrate:     { group: 'vitals',   axis: 'y',  colour: '#ff5c7a', label: 'heart rate' },
+    systole:       { group: 'vitals',   axis: 'y',  colour: '#ffa14a', label: 'systolic' },
+    diastole:      { group: 'vitals',   axis: 'y',  colour: '#ffd166', label: 'diastolic' },
+    SPO2:          { group: 'vitals',   axis: 'y',  colour: '#4cc9f0', label: 'SpO2 %' },
+    temperature:   { group: 'vitals',   axis: 'y',  colour: '#f78fb3', label: 'temperature' },
+    speed:         { group: 'activity', axis: 'y2', colour: '#06d6a0', label: 'speed km/h' },
+    steps_k:       { group: 'activity', axis: 'y2', colour: '#a7e34d', label: 'steps x1000' },
+    battery_level: { group: 'device',   axis: 'y',  colour: '#9d8df1', label: 'battery %' },
+    signal:        { group: 'device',   axis: 'y',  colour: '#6c8cff', label: 'signal' },
+    gps_sats:      { group: 'device',   axis: 'y2', colour: '#c8b6ff', label: 'gps sats' },
+    wifi_networks: { group: 'device',   axis: 'y2', colour: '#7bdff2', label: 'wifi seen' },
+    lbs_stations:  { group: 'device',   axis: 'y2', colour: '#b0b6c8', label: 'cell towers' }
+};
+
+var STAT_GROUPS = [
+    { key: 'vitals',   label: 'Vitals' },
+    { key: 'activity', label: 'Activity' },
+    { key: 'device',   label: 'Device' },
+    { key: 'other',    label: 'Other' }
+];
+
+//the device health series are the noisiest and the least often wanted, so they start folded
+//away rather than crowding eleven other lines off a phone screen. one tap brings them back
+//and the choice is remembered.
+//store.js is not loaded on this page, so this keeps its own storage rather than reaching for
+//helpers that are not there. private browsing can refuse localStorage outright, in which case
+//the choice simply does not persist.
+var HIDDEN_GROUPS_KEY = 'statGroupsHidden';
+
+function hiddenStatGroups() {
+    try {
+        var stored = window.localStorage.getItem(HIDDEN_GROUPS_KEY);
+
+        if (stored === null) {
+            return ['device'];
+        }
+
+        return stored ? stored.split('|') : [];
+
+    } catch (e) {
+        return ['device'];
+    }
+}
+
+function toggleStatGroup(key) {
+    var hidden = hiddenStatGroups();
+    var at = hidden.indexOf(key);
+
+    if (at === -1) {
+        hidden.push(key);
+    } else {
+        hidden.splice(at, 1);
+    }
+
+    try {
+        window.localStorage.setItem(HIDDEN_GROUPS_KEY, hidden.join('|'));
+    } catch (e) {
+        //not being able to remember the choice is not a reason to ignore it
+    }
+
+    renderStatChips();
+    makeChart(makeDataset(statsShown));
+}
+
+function statMeta(name) {
+    if (STAT_SERIES[name]) {
+        return STAT_SERIES[name];
+    }
+
+    //an unrecognised stat still gets a readable colour rather than the old hash, which
+    //multiplied character codes into steps of 25 and could land on near black, or on a
+    //shade another series already had
+    var hash = 0;
+
+    for (var i = 0; i < name.length; i++) {
+        hash = (hash * 31 + name.charCodeAt(i)) % 360;
+    }
+
+    return { group: 'other', axis: 'y', colour: 'hsl(' + hash + ', 70%, 62%)', label: name };
+}
+
+function narrowScreen() {
+    return window.innerWidth < 700;
+}
+
+//Thin a series down to roughly what the canvas can actually resolve. Every bucket keeps its
+//lowest and its highest reading, so a heart rate peak survives the thinning instead of being
+//skipped over - a plain stride would drop exactly the moments worth seeing.
+function decimate(points, budget) {
+    if (points.length <= budget) {
+        return points;
+    }
+
+    var perBucket = points.length / budget;
+    var out = [];
+
+    for (var b = 0; b < budget; b++) {
+        var from = Math.floor(b * perBucket);
+        var to = Math.min(points.length, Math.floor((b + 1) * perBucket));
+
+        if (to <= from) {
+            continue;
+        }
+
+        var lo = from;
+        var hi = from;
+
+        for (var i = from; i < to; i++) {
+            if (points[i].y < points[lo].y) { lo = i; }
+            if (points[i].y > points[hi].y) { hi = i; }
+        }
+
+        if (lo === hi) {
+            out.push(points[lo]);
+        } else if (lo < hi) {
+            out.push(points[lo], points[hi]);
+        } else {
+            out.push(points[hi], points[lo]);
+        }
+    }
+
+    return out;
+}
+
+//A straight line drawn across a gap in the data claims readings that were never taken - the
+//device goes quiet for hours at a time. Break the line instead.
+var STAT_GAP_MS = 45 * 60 * 1000;
+
+function breakGaps(points) {
+    var out = [];
+
+    for (var i = 0; i < points.length; i++) {
+        if (i > 0 && (points[i].x - points[i - 1].x) > STAT_GAP_MS) {
+            out.push({ x: new Date(points[i - 1].x.getTime() + 1), y: null });
+        }
+
+        out.push(points[i]);
+    }
+
+    return out;
+}
+
+var statsShown = [];
+
+function makeDataset(itemList) {
+    statsShown = itemList;
+
+    var hidden = hiddenStatGroups();
+    var budget = narrowScreen() ? 400 : 1000;
+    var byType = {};
+
+    //one pass, rather than filtering the whole list once per series
+    for (var i = 0; i < itemList.length; i++) {
+        var name = itemList[i][1];
+
+        //a torn log line used to fuse a stat name onto the timestamp of the next row and
+        //left entries like "temperature2025-09-04T03:45:10Z" in the legend. anything that
+        //is not a plain name is not a series.
+        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) {
+            continue;
+        }
+
+        if (!byType[name]) {
+            byType[name] = [];
+        }
+
+        byType[name].push({ x: itemList[i][0], y: itemList[i][2] });
+    }
+
+    var datasets = [];
+
+    Object.keys(byType).sort().forEach(function(name) {
+        var meta = statMeta(name);
+
+        if (hidden.indexOf(meta.group) !== -1) {
+            return;
+        }
+
+        var points = byType[name].sort(function(a, b) { return a.x - b.x; });
+
+        datasets.push({
+            label: meta.label,
+            yAxisID: meta.axis,
+            backgroundColor: meta.colour,
+            borderColor: meta.colour,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            pointHitRadius: 14,
+            lineTension: 0,
+            fill: false,
+            spanGaps: false,
+            data: breakGaps(decimate(points, budget))
+        });
+    });
+
+    return datasets;
+}
+
+function renderStatChips() {
+    var host = document.getElementById('statsControls');
+
+    if (!host) {
+        return;
+    }
+
+    var hidden = hiddenStatGroups();
+
+    host.innerHTML = STAT_GROUPS.map(function(g) {
+        var off = hidden.indexOf(g.key) !== -1 ? ' off' : '';
+        return '<button type="button" class="chip' + off + '" onclick="toggleStatGroup(\'' + g.key + '\')">' + g.label + '</button>';
+    }).join('');
+}
+
 function makeChart(datasets) {
     var ctx = document.getElementById("lineChart");
+    var narrow = narrowScreen();
+
+    renderStatChips();
+
     var options = {
         type: 'line',
         data: {
             datasets: datasets
         },
         options: {
+            //the canvas is sized by its wrapper. left to itself Chart.js holds a 2:1 ratio
+            //and threw away the height the page asked for, so on a phone the graph came out
+            //about as tall as a line of text.
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
             onClick: (e) => {
                 const canvasPosition = Chart.helpers.getRelativePosition(e, lineChart);
                 // Substitute the appropriate scale IDs
@@ -490,9 +727,29 @@ function makeChart(datasets) {
                     }
                 }
             },
-            plugins: {
-                legend: {
-                    position: 'top',
+            //a finger is not a mouse pointer: without this nothing responds unless the tap
+            //lands exactly on a plotted point
+            hover: {
+                mode: 'nearest',
+                intersect: false
+            },
+            tooltips: {
+                mode: 'nearest',
+                intersect: false,
+                caretPadding: 8,
+                titleFontSize: 12,
+                bodyFontSize: 13
+            },
+            legend: {
+                //the chips do this job on a narrow screen, where twelve legend entries wrap
+                //into rows that eat most of the plot
+                display: !narrow,
+                position: 'top',
+                labels: {
+                    fontColor: CHART_INK,
+                    boxWidth: 12,
+                    padding: 10,
+                    usePointStyle: true
                 }
             },
 
@@ -500,84 +757,109 @@ function makeChart(datasets) {
                 xAxes: [{
                     type: 'time',
                     display: true,
+                    //no fixed unit - a hard coded 'minute' made the labels meaningless
+                    //across a 30 day range
                     time: {
-                        unit: 'minute'
+                        tooltipFormat: 'MMM D, HH:mm',
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour: 'HH:mm',
+                            day: 'MMM D'
+                        }
                     },
                     scaleLabel: {
-                        display: true,
-                        labelString: 'Date'
+                        display: false
+                    },
+                    gridLines: {
+                        color: CHART_GRID,
+                        zeroLineColor: CHART_GRID
                     },
                     ticks: {
                         autoSkip: true,
+                        maxRotation: 0,
+                        maxTicksLimit: narrow ? 4 : 9,
+                        fontColor: CHART_INK,
                         major: {
                             fontStyle: 'bold',
-                            fontColor: '#FF0000'
+                            fontColor: CHART_INK
                         }
                     },
                     id: 'x'
                 }],
                 yAxes: [{
                     display: true,
+                    position: 'left',
                     scaleLabel: {
-                        display: true,
-                        labelString: 'value'
+                        display: false
+                    },
+                    gridLines: {
+                        color: CHART_GRID,
+                        zeroLineColor: CHART_GRID
                     },
                     ticks: {
-                        autoSkip: true
+                        autoSkip: true,
+                        maxTicksLimit: narrow ? 6 : 10,
+                        fontColor: CHART_INK
                     },
                     id: 'y'
+                }, {
+                    //the small ranged series, so they are not flattened against the bottom
+                    //of a scale whose top blood pressure sets
+                    display: true,
+                    position: 'right',
+                    scaleLabel: {
+                        display: false
+                    },
+                    gridLines: {
+                        drawOnChartArea: false,
+                        color: CHART_GRID
+                    },
+                    ticks: {
+                        autoSkip: true,
+                        maxTicksLimit: narrow ? 6 : 10,
+                        fontColor: CHART_INK,
+                        beginAtZero: true
+                    },
+                    id: 'y2'
                 }]
             }
         }
     };
 
-    if (!lineChart) {
-        lineChart = new Chart(ctx, options);
-    } else {
+    //The stats refresh every 80 seconds. Rebuilding the chart each time would throw away
+    //any series the user had switched off from the legend, so only swap the data when the
+    //shape is unchanged - Chart.js keeps the per-series hidden flags across an update. A
+    //changed series list or a move between the narrow and wide layouts needs the axes and
+    //legend built again.
+    var signature = (narrow ? 'n|' : 'w|') + datasets.map(function(d) { return d.label; }).join('|');
+
+    if (lineChart && signature === chartSignature) {
         lineChart.data.datasets = datasets;
         lineChart.update();
+        return;
     }
+
+    if (lineChart) {
+        lineChart.destroy();
+    }
+
+    chartSignature = signature;
+    lineChart = new Chart(ctx, options);
 }
 
+//crossing between the narrow and wide layouts changes the legend and how hard the series are
+//thinned, and neither is something Chart.js re-evaluates on its own
+var lastNarrow = null;
 
-var statsList = [];
+window.addEventListener('resize', function() {
+    var now = narrowScreen();
 
+    if (lastNarrow !== null && now !== lastNarrow && lineChart) {
+        makeChart(makeDataset(statsShown));
+    }
 
-function makeDataset(itemList) {
-    var types = itemList.map(x => x[1]);
-    types = [...new Set(types)];
-
-    return types.map(type => {
-        var dataItems = itemList.filter(x => x[1] == type);
-
-        if (dataItems.length) {
-            var c1 = 0;
-            for (let i = 0; i < type.length; i++) {
-                c1 += type.charCodeAt(i);
-            }
-
-            var fillcolor = 'rgba(' + (Math.floor(c1) % 10) * 25 + ', ' + (Math.floor(c1 / 100) % 10) * 25 + ', ' + (Math.floor(c1 / 10) % 10) * 25 + ', 1)';
-            var noFill = 'rgba(' + (Math.floor(c1) % 10) * 25 + ', ' + (Math.floor(c1 / 100) % 10) * 25 + ', ' + (Math.floor(c1 / 10) % 10) * 25 + ', 0.1)';
-
-
-            var newDataset = {
-                label: type,
-                backgroundColor: noFill,
-                borderColor: fillcolor,
-                borderWidth: 1,
-                data: itemList.filter(x => x[1] == type).map(x => {
-                    return {
-                        "x": x[0],
-                        "y": x[2]
-                    };
-                })
-            }
-
-            return newDataset;
-        }
-    });
-}
-
+    lastNarrow = now;
+});
 
 function fetchStats() {
     $.ajax({
@@ -732,6 +1014,10 @@ function searchdateChange() {
     unfilteredHistory = [];
     refreshData();
 }
+
+//the chips label a panel that may be opened before any stats have arrived, and makeChart -
+//which normally draws them - is never reached when a device has no readings yet
+renderStatChips();
 
 setTimeout(updateCurrentPosition, 500);
 setInterval(updateCurrentPosition, 10000);

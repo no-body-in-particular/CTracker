@@ -79,7 +79,10 @@ validateSession();
             </section>
 
             <section id='stats' align="left">
-                <canvas id="lineChart" style="width:100%;height:90vh;"></canvas>
+               <div id="statsControls" class="chips"></div>
+               <!-- the canvas is sized by this wrapper: Chart.js overrides a height set on the
+                    canvas itself, which is why the graph used to collapse to half its width -->
+               <div id="chartWrap"><canvas id="lineChart"></canvas></div>
                <!--
                   <span class="narrow"></span>
                   <button id="downloadbtn" class="button">Download as CSV</button><span id="distance"></span>--> 
