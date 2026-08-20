@@ -1084,6 +1084,14 @@ section {
     /* a compact group in the middle, rather than five buttons stretched across the page */
     justify-content: center;
     gap: 6pt;
+    /* Fixed rather than absolute, so the middle of this bar is the middle of the screen. The
+       other panels are positioned inside .container, which starts where the icon rail ends -
+       centring within that puts the centre half a rail's width right of where the eye expects
+       it, which is obvious on a phone where the rail is a large share of the width. The bar
+       passes behind the rail, which is opaque and sits above it. */
+    position: fixed;
+    left: var(--gutter);
+    right: var(--gutter);
 }
 
 .playctl {
