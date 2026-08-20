@@ -581,8 +581,50 @@ section:target h1 {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    padding: 4pt 8pt 8pt 34pt;
+    /* the top padding is replaced at runtime with the measured height of the range controls,
+       which float over this corner and wrap onto a second line on a narrow screen. this value
+       is only what is used until that first measurement. */
+    padding: 44pt 8pt 8pt 34pt;
     overflow: hidden;
+}
+
+/* The date, time and range pickers belong to the map but choose what the graph draws, so
+   they have to stay usable with the panel open - which means sitting above it rather than
+   being covered by it. Styled to match the panel instead of the pale inputs the tables use. */
+#rangeControls {
+    position: absolute;
+    top: 4pt;
+    right: 4pt;
+    z-index: 30;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5pt;
+    max-width: 70vw;
+}
+
+#rangeControls .input {
+    background: #313443;
+    color: #e6e9f0;
+    border: 1px solid #4a4f63;
+    border-radius: 14pt;
+    padding: 5pt 10pt;
+    margin: 0;
+    font-family: Montserrat, sans-serif;
+    font-size: 10pt;
+    min-height: 30pt;
+    box-sizing: border-box;
+}
+
+/* the native arrow renders dark on dark in some mobile browsers */
+#rangeControls select.input {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 22pt;
+    background-image: linear-gradient(45deg, transparent 50%, #e6e9f0 50%), linear-gradient(135deg, #e6e9f0 50%, transparent 50%);
+    background-position: right 11pt top 52%, right 6pt top 52%;
+    background-size: 5pt 5pt, 5pt 5pt;
+    background-repeat: no-repeat;
 }
 
 @media (orientation: landscape) {
@@ -616,6 +658,19 @@ section:target h1 {
 #stats:target {
     opacity: 1;
     background: #22252E;
+    /* The readouts and buttons along the bottom right belong to the map and carry z-index 2
+       so they sit above its canvas. Over a full screen graph they are just clutter drawn on
+       top of the plot, so the panel is lifted clear above them - and still well under the
+       icon rail at 50, which has to stay reachable to close the panel again. */
+    z-index: 20;
+}
+
+/* Clicking a point on the chart moves the marker on a map that is completely hidden behind
+   the panel, so nothing appeared to happen. The panel steps out of the way for a moment to
+   show the move, then fades back. section already carries the .5s transition this rides on. */
+#stats.peek {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .chips .chip {

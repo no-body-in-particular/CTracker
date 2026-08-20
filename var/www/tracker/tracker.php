@@ -224,7 +224,7 @@ validateSession();
             <a style="font-size:22pt;color:blue;position:absolute;right:1em;bottom:3.5em;z-index: 2;"><i id="signal" class="icon signal"></i></a>
             <a style="font-size:22pt;color:blue;position:absolute;right:1em;bottom:4.5em;z-index: 2;" onclick="recenter();"><i id="current" class="icon crosshair"></i></a>
 
-            <div  style="color:red;position:absolute;right:3pt;top:3pt;z-index: 2;">
+            <div id="rangeControls">
                <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" type="date" onchange="searchdateChange()" class="input"/>
                <input value="00:00" id="beginTime" type="time" onchange="searchdateChange()" class="input"/>
                <select id="hourCount" class="input" onchange="searchdateChange()">

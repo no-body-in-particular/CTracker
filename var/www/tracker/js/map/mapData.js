@@ -482,18 +482,18 @@ var CHART_GRID = 'rgba(255, 255, 255, 0.08)';
 //pressed into the bottom few percent of a scale that blood pressure stretched to 140, and
 //on a phone they were a flat line along the bottom. The groups drive the filter chips.
 var STAT_SERIES = {
-    heartrate:     { group: 'vitals',   axis: 'y',  colour: '#ff5c7a', label: 'heart rate' },
-    systole:       { group: 'vitals',   axis: 'y',  colour: '#ffa14a', label: 'systolic' },
-    diastole:      { group: 'vitals',   axis: 'y',  colour: '#ffd166', label: 'diastolic' },
-    SPO2:          { group: 'vitals',   axis: 'y',  colour: '#4cc9f0', label: 'SpO2 %' },
-    temperature:   { group: 'vitals',   axis: 'y',  colour: '#f78fb3', label: 'temperature' },
-    speed:         { group: 'activity', axis: 'y2', colour: '#06d6a0', label: 'speed km/h' },
-    steps_k:       { group: 'activity', axis: 'y2', colour: '#a7e34d', label: 'steps x1000' },
-    battery_level: { group: 'device',   axis: 'y',  colour: '#9d8df1', label: 'battery %' },
-    signal:        { group: 'device',   axis: 'y',  colour: '#6c8cff', label: 'signal' },
-    gps_sats:      { group: 'device',   axis: 'y2', colour: '#c8b6ff', label: 'gps sats' },
-    wifi_networks: { group: 'device',   axis: 'y2', colour: '#7bdff2', label: 'wifi seen' },
-    lbs_stations:  { group: 'device',   axis: 'y2', colour: '#b0b6c8', label: 'cell towers' }
+    heartrate:     { group: 'vitals',   axis: 'y',  colour: '#ff5c7a', label: 'heart rate',    unit: 'bpm' },
+    systole:       { group: 'vitals',   axis: 'y',  colour: '#ffa14a', label: 'systolic',      unit: 'mmHg' },
+    diastole:      { group: 'vitals',   axis: 'y',  colour: '#ffd166', label: 'diastolic',     unit: 'mmHg' },
+    SPO2:          { group: 'vitals',   axis: 'y',  colour: '#4cc9f0', label: 'blood oxygen',  unit: '%' },
+    temperature:   { group: 'vitals',   axis: 'y',  colour: '#f78fb3', label: 'temperature',   unit: '\u00b0C' },
+    speed:         { group: 'activity', axis: 'y2', colour: '#06d6a0', label: 'speed',         unit: 'km/h' },
+    steps_k:       { group: 'activity', axis: 'y2', colour: '#a7e34d', label: 'steps',         unit: 'thousand' },
+    battery_level: { group: 'device',   axis: 'y',  colour: '#9d8df1', label: 'battery',       unit: '%' },
+    signal:        { group: 'device',   axis: 'y',  colour: '#6c8cff', label: 'gsm signal',    unit: '' },
+    gps_sats:      { group: 'device',   axis: 'y2', colour: '#c8b6ff', label: 'gps satellites', unit: '' },
+    wifi_networks: { group: 'device',   axis: 'y2', colour: '#7bdff2', label: 'wifi networks', unit: '' },
+    lbs_stations:  { group: 'device',   axis: 'y2', colour: '#b0b6c8', label: 'cell towers',   unit: '' }
 };
 
 var STAT_GROUPS = [
@@ -560,7 +560,7 @@ function statMeta(name) {
         hash = (hash * 31 + name.charCodeAt(i)) % 360;
     }
 
-    return { group: 'other', axis: 'y', colour: 'hsl(' + hash + ', 70%, 62%)', label: name };
+    return { group: 'other', axis: 'y', colour: 'hsl(' + hash + ', 70%, 62%)', label: name, unit: '' };
 }
 
 function narrowScreen() {
@@ -663,7 +663,10 @@ function makeDataset(itemList) {
         var points = byType[name].sort(function(a, b) { return a.x - b.x; });
 
         datasets.push({
-            label: meta.label,
+            //the legend is where someone finds out that the orange line is systolic pressure
+            //and the green one is km/h, so the unit belongs in the name
+            label: meta.unit ? meta.label + ' (' + meta.unit + ')' : meta.label,
+            unit: meta.unit,
             yAxisID: meta.axis,
             backgroundColor: meta.colour,
             borderColor: meta.colour,
@@ -681,6 +684,21 @@ function makeDataset(itemList) {
     return datasets;
 }
 
+//The range pickers float over the top right corner and sit above this panel, because they
+//choose what the graph draws. Their height is not fixed - on a narrow screen they wrap onto a
+//second line - so the space held clear for them is measured rather than guessed. Without this
+//the chip row ends up underneath them.
+function layoutStatsPanel() {
+    var panel = document.getElementById('stats');
+    var controls = document.getElementById('rangeControls');
+
+    if (!panel || !controls) {
+        return;
+    }
+
+    panel.style.paddingTop = (controls.offsetHeight + 12) + 'px';
+}
+
 function renderStatChips() {
     var host = document.getElementById('statsControls');
 
@@ -694,6 +712,36 @@ function renderStatChips() {
         var off = hidden.indexOf(g.key) !== -1 ? ' off' : '';
         return '<button type="button" class="chip' + off + '" onclick="toggleStatGroup(\'' + g.key + '\')">' + g.label + '</button>';
     }).join('');
+
+    layoutStatsPanel();
+}
+
+//Picking a moment on the chart moves the marker on the map, but the panel covers the map
+//completely, so the only sign anything had happened was the map having jumped by the time you
+//next opened it. Drop the panel out of the way long enough to watch the marker settle, then
+//bring it back. The fade itself comes from the .5s transition already on section, so the map
+//is fully visible for about a second in the middle.
+var mapPeekTimer = null;
+var MAP_PEEK_MS = 1600;
+
+function peekAtMap() {
+    var panel = document.getElementById('stats');
+
+    if (!panel) {
+        return;
+    }
+
+    panel.classList.add('peek');
+
+    //a second click while the map is showing extends the look rather than cutting it short
+    if (mapPeekTimer) {
+        clearTimeout(mapPeekTimer);
+    }
+
+    mapPeekTimer = setTimeout(function() {
+        panel.classList.remove('peek');
+        mapPeekTimer = null;
+    }, MAP_PEEK_MS);
 }
 
 function makeChart(datasets) {
@@ -718,13 +766,20 @@ function makeChart(datasets) {
                 const canvasPosition = Chart.helpers.getRelativePosition(e, lineChart);
                 // Substitute the appropriate scale IDs
                 const dataX = lineChart.scales.x.getValueForPixel(canvasPosition.x);
+                var moved = false;
                 for (var i = 0; i < (historyItems.length - 1); i++) {
                     if (dataX >= historyItems[i][0] && dataX <= historyItems[i + 1][0]) {
                         stepIndex=i;
                         isPlaying=0;
                         noUpdateCurrentPosition=true;
                         updateMarker(historyItems[i][1], historyItems[i][2], historyItems[i][0], true);
+                        moved = true;
                     }
+                }
+
+                //the marker moved on a map nobody can see, so show it happening
+                if (moved) {
+                    peekAtMap();
                 }
             },
             //a finger is not a mouse pointer: without this nothing responds unless the tap
@@ -738,17 +793,28 @@ function makeChart(datasets) {
                 intersect: false,
                 caretPadding: 8,
                 titleFontSize: 12,
-                bodyFontSize: 13
+                bodyFontSize: 13,
+                callbacks: {
+                    label: function(item, data) {
+                        var set = data.datasets[item.datasetIndex];
+                        //trailing zeros on a heart rate of 58.00 read as false precision
+                        var value = parseFloat(Number(item.yLabel).toFixed(2));
+                        return set.unit ? set.label.replace(' (' + set.unit + ')', '') + ': ' + value + ' ' + set.unit
+                                        : set.label + ': ' + value;
+                    }
+                }
             },
             legend: {
-                //the chips do this job on a narrow screen, where twelve legend entries wrap
-                //into rows that eat most of the plot
-                display: !narrow,
+                //A phone needs this more than a desktop does, not less - without it the lines
+                //have no names at all. It is the chips that keep it to a readable size: with
+                //the device group folded away it is seven entries, not twelve.
+                display: true,
                 position: 'top',
                 labels: {
                     fontColor: CHART_INK,
-                    boxWidth: 12,
-                    padding: 10,
+                    boxWidth: narrow ? 8 : 12,
+                    fontSize: narrow ? 10 : 12,
+                    padding: narrow ? 6 : 10,
                     usePointStyle: true
                 }
             },
@@ -853,6 +919,10 @@ var lastNarrow = null;
 
 window.addEventListener('resize', function() {
     var now = narrowScreen();
+
+    //the range pickers wrap differently as the width changes, so the space held for them has
+    //to be measured again whether or not the chart itself needs rebuilding
+    layoutStatsPanel();
 
     if (lastNarrow !== null && now !== lastNarrow && lineChart) {
         makeChart(makeDataset(statsShown));
@@ -1018,6 +1088,7 @@ function searchdateChange() {
 //the chips label a panel that may be opened before any stats have arrived, and makeChart -
 //which normally draws them - is never reached when a device has no readings yet
 renderStatChips();
+layoutStatsPanel();
 
 setTimeout(updateCurrentPosition, 500);
 setInterval(updateCurrentPosition, 10000);
