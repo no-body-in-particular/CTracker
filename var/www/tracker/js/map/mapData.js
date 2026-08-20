@@ -1248,13 +1248,24 @@ window.addEventListener('hashchange', syncStatsMode);
  * off the page. A field or a dropdown having focus is left alone: Escape there is the browser's.
  */
 document.addEventListener('keydown', function(e) {
-    if (e.key !== 'Escape' && e.keyCode !== 27) {
+    var focused = document.activeElement;
+
+    //never steal a key while a field or dropdown has focus - Escape and '=' both belong to it
+    if (focused && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName)) {
         return;
     }
 
-    var focused = document.activeElement;
+    //'=' zooms in, matching the '+' openlayers already binds. On a mac keyboard '+' needs shift,
+    //so '=' is the key actually under the finger - the same one the browser uses for its own
+    //zoom-in. The map's built in '-' handles zooming out.
+    if (e.key === '=' || e.key === '+' || e.keyCode === 187) {
+        e.preventDefault();
+        var view = map.getView();
+        view.animate({ zoom: Math.min(view.getMaxZoom(), view.getZoom() + 1), duration: 200 });
+        return;
+    }
 
-    if (focused && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName)) {
+    if (e.key !== 'Escape' && e.keyCode !== 27) {
         return;
     }
 
