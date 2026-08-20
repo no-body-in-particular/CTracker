@@ -603,6 +603,26 @@ section:target h1 {
     max-width: 70vw;
 }
 
+/* three pickers in 70vw wrapped onto a second line on a phone, and the panel then held that
+   whole second row clear for them. Given the width and a smaller size they fit on one. */
+@media (max-width: 700px) {
+    #rangeControls {
+        max-width: calc(100vw - 46pt);
+        gap: 3pt;
+    }
+
+    #rangeControls .input {
+        font-size: 9pt;
+        padding: 3pt 6pt;
+        min-height: 26pt;
+    }
+
+    #rangeControls select.input {
+        padding-right: 18pt;
+        background-position: right 9pt top 52%, right 5pt top 52%;
+    }
+}
+
 #rangeControls .input {
     background: #313443;
     color: #e6e9f0;
@@ -791,13 +811,15 @@ section:not(#stats) {
     border-color: var(--accent);
 }
 
+/* the same neutral pill as the chips - a green wash on every button was loud, and it read as
+   a state rather than as a control */
 .button {
     font-family: Montserrat, sans-serif;
     text-transform: none;
     font-size: 10pt;
-    background: rgba(6, 214, 160, 0.14);
-    color: #7ef0cd;
-    border: 1px solid rgba(6, 214, 160, 0.45);
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
     border-radius: 14pt;
     padding: 5pt 12pt;
     min-height: 28pt;
@@ -807,16 +829,45 @@ section:not(#stats) {
 .button:hover,
 .button:active,
 .button:focus {
-    background: rgba(6, 214, 160, 0.26);
-    border-color: var(--accent);
-    color: #b6f7e3;
+    background: var(--surface-hi);
+    border-color: var(--ink-dim);
+    color: #ffffff;
 }
 
-/* the icon rail sat at 0.7 opacity over the map, which left the icons washed out */
+/* The rail was a fixed 98% tall with space-around and ten items in it. When they did not fit
+   the spacing went negative and the top and bottom icons were clipped, which is why the ends
+   of the rail looked cut off. It is sized by its contents now, centred, and allowed to scroll
+   if a short screen really cannot hold them all.
+   It also sat at 0.7 opacity over the map, which left the icons washed out. */
+#aroundNav {
+    align-items: center;
+    flex: 0 0 auto;
+}
+
 nav {
     opacity: 1;
     background: rgba(49, 52, 67, 0.94);
     border-radius: 0 10pt 10pt 0;
+    height: auto;
+    max-height: 98%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4pt 0;
+    box-sizing: border-box;
+}
+
+nav a {
+    flex: 0 0 auto;
+    padding: 6pt 7pt;
+    line-height: 1.05;
+}
+
+/* the map's own readouts and buttons sit over the map so they clear its canvas. Over a full
+   screen graph they are clutter on top of the plot, and lifting the panel above them was not
+   enough - so while the graph is open they are simply not drawn. The range pickers are a
+   different case and stay: they choose what the graph shows. */
+body.statsOpen #map > a {
+    display: none;
 }
 
 .tooltip .tooltiptext {

@@ -690,13 +690,38 @@ function makeDataset(itemList) {
 //the chip row ends up underneath them.
 function layoutStatsPanel() {
     var panel = document.getElementById('stats');
-    var controls = document.getElementById('rangeControls');
 
-    if (!panel || !controls) {
+    if (!panel) {
         return;
     }
 
-    panel.style.paddingTop = (controls.offsetHeight + 12) + 'px';
+    var controls = document.getElementById('rangeControls');
+    var rail = document.querySelector('nav');
+
+    if (controls) {
+        panel.style.paddingTop = (controls.offsetHeight + 12) + 'px';
+    }
+
+    //the rail is as wide as its icons and their padding, which changes with the font size the
+    //browser settles on. measuring it beats the fixed guess that left the plot running under it
+    if (rail) {
+        panel.style.paddingLeft = (rail.offsetWidth + 10) + 'px';
+    }
+}
+
+//The map keeps its own readouts and buttons in the bottom right corner. Raising the panel
+//above them was not enough to keep them off the plot, so the graph being open is published as
+//a class on the body and the stylesheet takes them out of the layout entirely.
+function syncStatsMode() {
+    var open = window.location.hash === '#stats';
+
+    if (document.body.classList) {
+        document.body.classList.toggle('statsOpen', open);
+    }
+
+    if (open) {
+        layoutStatsPanel();
+    }
 }
 
 function renderStatChips() {
@@ -1089,6 +1114,8 @@ function searchdateChange() {
 //which normally draws them - is never reached when a device has no readings yet
 renderStatChips();
 layoutStatsPanel();
+syncStatsMode();
+window.addEventListener('hashchange', syncStatsMode);
 
 setTimeout(updateCurrentPosition, 500);
 setInterval(updateCurrentPosition, 10000);
