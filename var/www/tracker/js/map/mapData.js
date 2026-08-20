@@ -729,7 +729,12 @@ function syncStatsMode() {
     var target = hash ? document.getElementById(hash) : null;
 
     //the close link is href="#", which is a hash that names nothing
-    var open = !!(target && target.tagName === 'SECTION');
+    var isPanel = !!(target && target.tagName === 'SECTION');
+
+    //Playback is the exception. It is a row of transport controls for a trip drawing itself on
+    //the map, so blacking the map out behind it hides the thing being played back. It gets no
+    //dark ground - it is a bar over the map, not a window instead of it.
+    var open = isPanel && hash !== 'history';
 
     if (document.body.classList) {
         document.body.classList.toggle('panelOpen', open);

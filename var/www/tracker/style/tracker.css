@@ -880,9 +880,6 @@ nav {
     background: rgba(49, 52, 67, 0.94);
     border-radius: 0 10pt 10pt 0;
     height: auto;
-    max-height: 98%;
-    overflow-y: auto;
-    overflow-x: hidden;
     padding: 4pt 0;
     box-sizing: border-box;
 }
@@ -909,8 +906,16 @@ body.statsOpen #map > a {
     font-family: Montserrat, sans-serif;
     font-size: 9pt;
     padding: 3pt 7pt;
+    /* it was a fixed 160pt box, wider than any label it held */
     width: auto;
     white-space: nowrap;
+    /* just clear of the icon and level with it. the old left:2em was measured from whatever
+       happened to be the containing block, which put every label at the same offset down the
+       column rather than beside the link it describes. */
+    left: 100%;
+    margin-left: 5pt;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* The playback controls were table cells carrying an inline blue that never applied - the
@@ -986,21 +991,21 @@ body {
    need their own breathing room rather than borrowing the body's. overflow-x on the rail is
    also dropped: with the links centred, anything wider than the rail was trimmed off both
    sides at once, which is what took the left edge off the icons. */
+/* No overflow of any kind on the rail. Asking for overflow-y:auto turned overflow-x:visible
+   into auto and gave it a horizontal scrollbar; answering that with overflow-x:hidden then
+   clipped the hover labels, which are positioned inside it and have to reach out past its
+   edge. The rail is sized by its contents and scales down on a short screen, so it has nothing
+   to scroll in the first place. */
 nav {
-    /* overflow-x:visible alongside overflow-y:auto does not stay visible - the spec computes it
-       to auto, which is where the horizontal scrollbar came from. Hidden on that axis, and the
-       vertical bar is suppressed too: the rail scales down on a short screen rather than
-       scrolling, so a bar there would only ever be chrome. */
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
     flex-shrink: 0;
     padding-left: 3pt;
     padding-right: 2pt;
 }
 
-nav::-webkit-scrollbar {
-    display: none;
+/* each label is placed against its own link rather than against the rail, so it appears beside
+   the icon it belongs to instead of at a fixed offset down the whole column */
+.tooltip {
+    position: relative;
 }
 
 nav a {
@@ -1055,9 +1060,14 @@ section {
     padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
 }
 
-/* the playback controls are a row across the panel, not a column down it */
+/* The playback controls are transport buttons for a trip playing out on the map behind them,
+   so a full height window is the wrong shape - it would cover the very thing being played
+   back. A row of buttons along the bottom of the page, as tall as they are and no taller. */
 #history {
     flex-direction: row;
+    top: auto;
+    height: auto;
+    padding: 6pt;
 }
 
 /* the scrolling area takes whatever the panel has left. min-height:0 is what lets a flex child
