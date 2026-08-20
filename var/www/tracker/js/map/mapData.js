@@ -1103,12 +1103,15 @@ function updateSpeed(spd) {
  * it, or the marker states a heart rate for a moment nobody measured one.
  */
 var HEARTRATE_FRESH_MS = 30 * 60 * 1000;
+//a speed is written with every position, so anything much older than the idle reporting
+//interval belongs to a different moment than the one being shown
+var SPEED_FRESH_MS = 15 * 60 * 1000;
 
-function heartrateAt(dt) {
+function statAt(name, dt, freshMs) {
     var best = null;
 
     for (var i = 0; i < statsList.length; i++) {
-        if (statsList[i][1] !== 'heartrate' || statsList[i][0] > dt) {
+        if (statsList[i][1] !== name || statsList[i][0] > dt) {
             continue;
         }
 
@@ -1117,11 +1120,13 @@ function heartrateAt(dt) {
         }
     }
 
-    if (!best || !best[2]) {
-        return 0;
+    //null rather than 0: a speed of zero is a device standing still, which is a different
+    //statement from having no reading to show
+    if (!best) {
+        return null;
     }
 
-    return (dt - best[0]) <= HEARTRATE_FRESH_MS ? best[2] : 0;
+    return (dt - best[0]) <= freshMs ? best[2] : null;
 }
 
 function updateMarker(lat, lng, dt, forceMove = false) {
@@ -1133,14 +1138,27 @@ function updateMarker(lat, lng, dt, forceMove = false) {
     setBattery(batlvl);
     setSignal(signal);
 
-    var bpm = heartrateAt(dt);
+    var bpm = statAt('heartrate', dt, HEARTRATE_FRESH_MS);
+    var labelSpeed = statAt('speed', dt, SPEED_FRESH_MS);
 
-    //written under the pin as well as in the popup, so it can be read without opening anything
-    pointFeature.setStyle(markerStyleWithLabel(bpm ? Math.round(bpm) + ' bpm' : ''));
+    //Written under the pin as well as in the popup, so both can be read without opening
+    //anything. Either half is left out when there is nothing to say - a tower fix measures no
+    //speed, and a tracker without a sensor reports no pulse.
+    var label = [];
+
+    if (labelSpeed !== null) {
+        label.push(labelSpeed.toFixed(1) + ' km/h');
+    }
+
+    if (bpm !== null) {
+        label.push(Math.round(bpm) + ' bpm');
+    }
+
+    pointFeature.setStyle(markerStyleWithLabel(label.join('   ')));
 
     var moveMarker = forceMove || (new Date().getTime() - newImei) < 30000;
     setMarker(lat, lng, moveMarker, 'Last seen on: ' + readableDate(dt) + ' <br>Moving at speed ' + spd + 'km/h<br><br>'
-        + (bpm ? 'Heart rate: ' + Math.round(bpm) + ' bpm<br>' : '')
+        + (bpm !== null ? 'Heart rate: ' + Math.round(bpm) + ' bpm<br>' : '')
         + 'Battery: ' + batlvl + '%<br>' + 'Gsm signal strength: ' + signal + '%<br>');
     updateSpeed(spd);
 }
