@@ -576,14 +576,14 @@ section:target h1 {
    from the edge of the page on the right - so the panels line up with each other instead of
    each having its own margin. */
 :root {
-    --gutter: 8pt;
+    --gutter: 5px;
     --rail: 34pt;
     --pickers: 40pt;
 }
 
 #stats {
     position: fixed;
-    top: calc(var(--pickers) + var(--gutter));
+    top: var(--gutter);
     left: calc(var(--rail) + var(--gutter));
     right: var(--gutter);
     bottom: var(--gutter);
@@ -592,7 +592,10 @@ section:target h1 {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    padding: 6pt;
+    /* The panel reaches the top of the screen, but the range pickers float over that corner
+       and stay above it, so the contents start below them. Padding rather than a top offset,
+       so the panel is edge to edge and only what is written in it steps out of the way. */
+    padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
     overflow: hidden;
 }
 
@@ -768,10 +771,18 @@ section:target {
     opacity: 1;
 }
 
+section {
+    box-sizing: border-box;
+}
+
 section:not(#stats) {
     border-radius: 10pt;
+}
+
+/* the short ones - a form and the playback bar - keep their own modest padding */
+#accountUpdate,
+#history {
     padding: 6pt;
-    box-sizing: border-box;
 }
 
 .table {
@@ -1007,6 +1018,8 @@ section {
 
 #history {
     width: auto;
+    /* the same gap from the bottom as the panels keep from the sides */
+    bottom: var(--gutter);
 }
 
 /* Ten icons at 16pt with room to tap them do not fit the height of a phone held sideways, so
@@ -1024,4 +1037,41 @@ section {
         font-size: 10pt;
         padding: 2pt 5pt;
     }
+}
+
+/* The panels that hold a table were sized by whatever was in them. A section is absolutely
+   positioned and anchored at the bottom with no top, so its height came entirely from its
+   content - and when the table had little in it the panel collapsed to a strip across the
+   bottom of the screen rather than a window. They are given a top and a bottom now, so each
+   one is a card of the same size in the same place, and the scrolling area inside grows to
+   fill it. min-height:0 is what lets that area shrink inside a flex column instead of pushing
+   the panel taller than the space it has.
+   #history is the playback bar and #accountUpdate a short form, so both stay as tall as their
+   contents and stay anchored at the bottom. */
+#account,
+#alarms,
+#geofence,
+#commands,
+#serverLogging,
+#trips,
+#settings {
+    top: var(--gutter);
+    bottom: var(--gutter);
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
+}
+
+#account #table-scroll,
+#alarms #table-scroll,
+#geofence #table-scroll,
+#commands #table-scroll,
+#serverLogging #table-scroll,
+#trips #table-scroll,
+#settings #table-scroll {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
 }
