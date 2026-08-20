@@ -4,7 +4,13 @@
 
 const maxWanderDistance = 0.10; //maximum distance around a center point a user can wander before a new trip is started
 const minAverageTime = 140000; //time over which to compute a center point for a stop
-const maxStopWanderDistance = 0.5; //maximum distance traveled over minstopDuration
+//A stop used to be "under 500m covered in the averaging window", which over 140 seconds is
+//12.8 km/h - faster than most people run. A run was therefore read as a series of stops and
+//every trip was cut short at the first one. What makes something a stop is not the distance
+//but the pace, and the window is not a fixed length either: the reporting interval stretches
+//to ten minutes once the device settles, so the same distance can span 140 seconds or 600.
+//Measure the pace over whatever the window actually turned out to be.
+const stopSpeedKmh = 2.0; //below an amble. a walk is about 5, a run about 9
 const minTripDuration = 120000; //maximum distance traveled over minstopDuration
 const minTripDance = 0.5; //minimum distance of a trip
 
@@ -37,25 +43,47 @@ function isStop(rows, index, backwards) {
     var longAvg = 0;
     var loopCount = 0;
     var distanceTraveled = 0;
+    var step = backwards ? -1 : 1;
+    var furthest = index;
 
-    for (var n = index; n > 0 && n < rows.length; n += (backwards ? -1 : 1)) {
+    for (var n = index; n >= 0 && n < rows.length; n += step) {
         latAvg += rows[n][1];
         longAvg += rows[n][2];
         loopCount++;
-        distanceTraveled += haversineDistance(rows[n][1], rows[n][2], rows[n + 1][1], rows[n + 1][2]);
+
+        var next = n + step;
+
+        //rows[n + 1] was read regardless of which way the walk was going, so walking forwards
+        //off the end of the array produced a NaN distance that then failed every comparison
+        if (next < 0 || next >= rows.length) {
+            break;
+        }
+
+        distanceTraveled += haversineDistance(rows[n][1], rows[n][2], rows[next][1], rows[next][2]);
+        furthest = next;
+
         if (Math.abs(rows[index][0] - rows[n][0]) > minAverageTime) {
             break;
         }
     }
 
+    if (loopCount < 2) {
+        return false;
+    }
+
     latAvg = latAvg / loopCount;
     longAvg = longAvg / loopCount;
 
-    if (haversineDistance(latAvg, longAvg, rows[index][1], rows[index][2]) < (maxWanderDistance * 2) && distanceTraveled < maxStopWanderDistance) {
-        return true;
+    var hours = Math.abs(rows[index][0] - rows[furthest][0]) / 3600000;
+
+    //no elapsed time is no evidence either way, and calling it a stop would end a trip on the
+    //strength of nothing
+    if (hours <= 0) {
+        return false;
     }
 
-    return false;
+    return haversineDistance(latAvg, longAvg, rows[index][1], rows[index][2]) < (maxWanderDistance * 2)
+        && (distanceTraveled / hours) < stopSpeedKmh;
 }
 
 //function that begins a trip at the previous stop

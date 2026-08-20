@@ -709,15 +709,18 @@ function layoutStatsPanel() {
 
     var controls = document.getElementById('rangeControls');
     var rail = document.querySelector('nav');
+    var root = document.documentElement;
 
-    if (controls) {
-        panel.style.paddingTop = (controls.offsetHeight + 12) + 'px';
+    //Published as custom properties rather than written onto this one panel, because every
+    //panel is positioned off them - they all keep the same gutter from the rail and from the
+    //edge of the page. Both are measured: the rail is as wide as its icons and whatever font
+    //size the browser settled on, and the pickers are one row or two depending on the width.
+    if (rail && root.style.setProperty) {
+        root.style.setProperty('--rail', rail.offsetWidth + 'px');
     }
 
-    //the rail is as wide as its icons and their padding, which changes with the font size the
-    //browser settles on. measuring it beats the fixed guess that left the plot running under it
-    if (rail) {
-        panel.style.paddingLeft = (rail.offsetWidth + 10) + 'px';
+    if (controls && root.style.setProperty) {
+        root.style.setProperty('--pickers', controls.offsetHeight + 'px');
     }
 }
 

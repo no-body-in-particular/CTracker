@@ -570,21 +570,29 @@ section:target h1 {
    chips do not, instead of being pinned to a guessed fraction of the screen.
    The left padding clears the icon rail, which has a higher z-index and would otherwise
    draw over the left edge of the plot. */
+/* --rail and --pickers are replaced at runtime with the measured width of the icon rail and
+   the measured height of the range pickers; the values here are only what is used until that
+   first measurement. --gutter is the one gap every panel keeps - from the rail on the left and
+   from the edge of the page on the right - so the panels line up with each other instead of
+   each having its own margin. */
+:root {
+    --gutter: 8pt;
+    --rail: 34pt;
+    --pickers: 40pt;
+}
+
 #stats {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: calc(var(--pickers) + var(--gutter));
+    left: calc(var(--rail) + var(--gutter));
+    right: var(--gutter);
+    bottom: var(--gutter);
     width: auto;
-    height: 100%;
+    height: auto;
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    /* the top padding is replaced at runtime with the measured height of the range controls,
-       which float over this corner and wrap onto a second line on a narrow screen. this value
-       is only what is used until that first measurement. */
-    padding: 44pt 8pt 8pt 34pt;
+    padding: 6pt;
     overflow: hidden;
 }
 
@@ -663,12 +671,6 @@ section:target h1 {
     background-position: right 11pt top 52%, right 6pt top 52%;
     background-size: 5pt 5pt, 5pt 5pt;
     background-repeat: no-repeat;
-}
-
-@media (orientation: landscape) {
-    #stats {
-        padding-left: 32pt;
-    }
 }
 
 .chips {
@@ -989,4 +991,37 @@ nav a {
 .icon {
     background-position: center center;
     flex-shrink: 0;
+}
+
+/* ---- one gutter for every panel ---------------------------------------- */
+
+/* The panels were a flat 90vw - 80vw in portrait, 70vw for the playback bar - anchored at
+   whatever their static position happened to be. That left a different gap on the left than on
+   the right, and a different one again per orientation. They all sit between the icon rail and
+   the edge of the page now, with the same gutter on each side. */
+section {
+    left: calc(var(--rail) + var(--gutter));
+    right: var(--gutter);
+    width: auto;
+}
+
+#history {
+    width: auto;
+}
+
+/* Ten icons at 16pt with room to tap them do not fit the height of a phone held sideways, so
+   the rail overflowed and the ends were clipped. Held sideways there is height to save and
+   little to lose by being smaller. */
+@media (max-height: 560px) {
+    nav a {
+        font-size: 12pt;
+        padding: 3pt 6pt;
+    }
+}
+
+@media (max-height: 420px) {
+    nav a {
+        font-size: 10pt;
+        padding: 2pt 5pt;
+    }
 }
