@@ -481,8 +481,11 @@ void myrope_r18_identify(void * vp) {
         fprintf(stdout, "  device type is myrope r18\n");
         conn->PROCESS_FUNCTION = myrope_r18_process;
         conn->COMMAND_FUNCTION = myrope_r18_send_command;
-        //implements HEARTRATE# (hrtstart) but no interval command
-        conn->supports_health_poll = true;
+        //the device sends hrtstart back as a bare echo and uploads no reading with it, so
+        //there is nothing to feed note_health(). Advertising the poll only had the server
+        //firing an unanswerable HEARTRATE# every interval, so leave it off until a real
+        //health upload is understood for this protocol.
+        conn->supports_health_poll = false;
         conn->WARNING_FUNCTION = myrope_r18_warn;
         conn->AUDIO_WARNING_FUNCTION = myrope_r18_warn_audio;
         conn->MOTOR_WARNING_FUNCTION = myrope_r18_warn;
