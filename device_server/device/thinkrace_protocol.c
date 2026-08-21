@@ -452,6 +452,9 @@ void thinkrace_process_heartrate(connection * conn, size_t parse_count, unsigned
     write_stat(conn, "heartrate", parse_float(data_buffers[1]));
     write_stat(conn, "systole", parse_float(data_buffers[2]));
     write_stat(conn,  "diastole", parse_float(data_buffers[3]));
+
+    //a dedicated pulse/pressure upload answers the health poll just as a JK packet does
+    note_health(conn);
 }
 
 
@@ -462,6 +465,8 @@ void thinkrace_process_temperature(connection * conn, size_t parse_count, unsign
     }
 
     write_stat(conn,  "temperature", parse_float(data_buffers[1]));
+
+    note_health(conn);
 }
 
 
@@ -474,6 +479,8 @@ void thinkrace_process_saturation(connection * conn, size_t parse_count, unsigne
     }
 
     write_stat(conn,  "SPO2", parse_float(data_buffers[1]));
+
+    note_health(conn);
 }
 
 void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char * data_buffers[40]) {
