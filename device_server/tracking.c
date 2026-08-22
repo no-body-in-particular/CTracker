@@ -2,6 +2,10 @@
 #include "logfiles.h"
 #include <stdio.h>
 #include <memory.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/file.h>
 
 /*
  * Adaptive tracking.
@@ -101,6 +105,53 @@ static void write_state(connection * conn, tracking_state * st)
 }
 
 /*
+ * The tracking file is a single struct rewritten whole, and a device routinely holds
+ * several connections at once - each its own thread sharing this file. Without a lock,
+ * two poll passes in the same second both read the same polls_missed and both write it
+ * back plus one, so the counter climbs in bursts and a healthy device that is still
+ * answering trips the health-recovery restart; equally, an activity or interval write
+ * that read the count a moment earlier can clobber a reset note_health() just made.
+ *
+ * Every read-modify-write of the file therefore runs under an exclusive advisory lock,
+ * held from the read through the write. The lock lives in a sibling .lock file so the
+ * "w" truncation of the state file itself never races the lock, and the network send
+ * that follows a write is done after unlocking, so no I/O happens under the lock.
+ *
+ * Read-only lookups (is_command_owner) are left unlocked: at worst they see the state
+ * a moment stale, which the next pass corrects, and they never touch the counter.
+ */
+static int lock_state(connection * conn)
+{
+    if (strlen(conn->tracking_file) < 16) {
+        return -1;                  //no per device file yet - nothing to serialise against
+    }
+
+    char lockpath[FILENAME_MAX];
+    snprintf(lockpath, sizeof(lockpath), "%s.lock", conn->tracking_file);
+
+    int fd = open(lockpath, O_CREAT | O_RDWR, 0660);
+
+    if (fd < 0) {
+        return -1;                  //fall back to lockless rather than drop the update
+    }
+
+    if (flock(fd, LOCK_EX) < 0) {
+        close(fd);
+        return -1;
+    }
+
+    return fd;
+}
+
+static void unlock_state(int fd)
+{
+    if (fd >= 0) {
+        flock(fd, LOCK_UN);
+        close(fd);
+    }
+}
+
+/*
  * A device commonly leaves an older connection half open after reconnecting. Both are live
  * as far as the server is concerned, but only the newest one is actually being read by the
  * device - anything written to the older socket disappears. Sending from every connection
@@ -113,15 +164,18 @@ static void write_state(connection * conn, tracking_state * st)
  */
 void claim_command_ownership(connection * conn)
 {
+    int lock = lock_state(conn);
     tracking_state st;
     read_state(conn, &st);
 
     if (st.owner == conn->connection_id) {
+        unlock_state(lock);
         return;
     }
 
     st.owner = conn->connection_id;
     write_state(conn, &st);
+    unlock_state(lock);
     log_line(conn, "command ownership taken by connection %lu\n", conn->connection_id);
 }
 
@@ -136,10 +190,12 @@ bool is_command_owner(connection * conn)
 
 static void mark_activity(connection * conn)
 {
+    int lock = lock_state(conn);
     tracking_state st;
     read_state(conn, &st);
     st.last_activity = time(0);
     write_state(conn, &st);
+    unlock_state(lock);
 }
 
 /*
@@ -149,16 +205,19 @@ static void mark_activity(connection * conn)
  */
 void note_health(connection * conn)
 {
+    int lock = lock_state(conn);
     tracking_state st;
     read_state(conn, &st);
 
     if (st.polls_missed == 0 && st.health_seen == 1) {
+        unlock_state(lock);
         return;                     //nothing to record, and no need to rewrite the file
     }
 
     st.polls_missed = 0;
     st.health_seen = 1;
     write_state(conn, &st);
+    unlock_state(lock);
 }
 
 void note_heartrate(connection * conn, int bpm)
@@ -214,10 +273,12 @@ void poll_health(connection * conn)
         return;
     }
 
+    int lock = lock_state(conn);
     tracking_state st;
     read_state(conn, &st);
 
     if ((time(0) - st.last_health_poll) < HEALTH_POLL_INTERVAL) {
+        unlock_state(lock);
         return;
     }
 
@@ -231,16 +292,20 @@ void poll_health(connection * conn)
         st.last_recovery = time(0);
         st.last_health_poll = time(0);
         write_state(conn, &st);
+        unlock_state(lock);
         log_line(conn, "no health reading in %d polls - restarting the device\n", HEALTH_RECOVERY_POLLS);
         conn->COMMAND_FUNCTION(conn, "RESTART#");
         return;
     }
 
     //claim the slot before sending, so a second connection reaching here at the same
-    //moment sees the updated time and backs off instead of sending a duplicate
+    //moment sees the updated time and backs off instead of sending a duplicate. The lock
+    //makes that read-and-claim atomic: without it two connections in the same second both
+    //read the old time, both pass the interval check, and both increment polls_missed.
     st.last_health_poll = time(0);
     st.polls_missed++;
     write_state(conn, &st);
+    unlock_state(lock);
 
     conn->COMMAND_FUNCTION(conn, "HEARTRATE#");
 }
@@ -259,6 +324,7 @@ void update_tracking_interval(connection * conn)
         return;
     }
 
+    int lock = lock_state(conn);
     tracking_state st;
     read_state(conn, &st);
 
@@ -279,6 +345,7 @@ void update_tracking_interval(connection * conn)
     //blind would mean a command on every single connect
     if (conn->current_interval == 0) {
         write_state(conn, &st);
+        unlock_state(lock);
         return;
     }
 
@@ -288,6 +355,7 @@ void update_tracking_interval(connection * conn)
     if (conn->current_interval == target) {
         st.interval = target;
         write_state(conn, &st);
+        unlock_state(lock);
         return;
     }
 
@@ -297,16 +365,19 @@ void update_tracking_interval(connection * conn)
     //actively disagrees with what we asked for.
     if (st.interval == target && conn->current_interval == target) {
         write_state(conn, &st);
+        unlock_state(lock);
         return;
     }
 
     if (st.interval == target && (time(0) - st.last_change) < DEVICE_CONFIRM_GRACE) {
         write_state(conn, &st);
+        unlock_state(lock);
         return;
     }
 
     if ((time(0) - st.last_change) < INTERVAL_CHANGE_COOLDOWN) {
         write_state(conn, &st);
+        unlock_state(lock);
         return;
     }
 
@@ -314,6 +385,7 @@ void update_tracking_interval(connection * conn)
     st.last_change = time(0);
     st.interval = target;
     write_state(conn, &st);
+    unlock_state(lock);
 
     char command[64] = {0};
     snprintf(command, sizeof(command) - 1, "UPDATE=%u#", target);
