@@ -41,9 +41,10 @@ typedef struct {
     int active;                 //whether the wearer is currently considered active
     time_t last_activity;       //last movement or raised heart rate, any connection
     unsigned long owner;        //connection_id allowed to send to this device
-    unsigned long polls_missed; //health polls sent with no reading back since
+    unsigned long polls_missed; //health polls sent with no reading back since (diagnostic only)
     unsigned long health_seen;  //this device has answered a health poll at least once
     time_t last_recovery;       //when the device was last restarted to recover health
+    time_t last_health_reading; //when a reading was last received, drives the recovery timeout
 } tracking_state;
 
 static void read_state(connection * conn, tracking_state * st)
@@ -64,11 +65,13 @@ static void read_state(connection * conn, tracking_state * st)
     unsigned int b = 0;
     int d = 0;
 
-    unsigned long f = 0, g = 0, h = 0, i = 0;
+    unsigned long f = 0, g = 0, h = 0, i = 0, j = 0;
 
-    //still accepts a file written before the last three fields existed - fscanf simply stops
-    //early and they keep the zero memset put there, which reads as "has never reported health"
-    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i) >= 5) {
+    //still accepts a file written before the later fields existed - fscanf simply stops early
+    //and they keep the zero memset put there. A missing last_health_reading reads as 0, which
+    //the recovery check treats as "no reading time on record yet" and so never restarts on it
+    //until the device sends a reading and stamps a real time.
+    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i, &j) >= 5) {
         st->last_change = (time_t)a;
         st->interval = b;
         st->last_health_poll = (time_t)c;
@@ -78,6 +81,7 @@ static void read_state(connection * conn, tracking_state * st)
         st->polls_missed = g;
         st->health_seen = h;
         st->last_recovery = (time_t)i;
+        st->last_health_reading = (time_t)j;
     }
 
     fclose(fp);
@@ -95,12 +99,13 @@ static void write_state(connection * conn, tracking_state * st)
         return;
     }
 
-    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu\n",
+    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu\n",
             (unsigned long)st->last_change, st->interval,
             (unsigned long)st->last_health_poll, st->active,
             (unsigned long)st->last_activity, st->owner,
             st->polls_missed, st->health_seen,
-            (unsigned long)st->last_recovery);
+            (unsigned long)st->last_recovery,
+            (unsigned long)st->last_health_reading);
     fclose(fp);
 }
 
@@ -209,11 +214,8 @@ void note_health(connection * conn)
     tracking_state st;
     read_state(conn, &st);
 
-    if (st.polls_missed == 0 && st.health_seen == 1) {
-        unlock_state(lock);
-        return;                     //nothing to record, and no need to rewrite the file
-    }
-
+    //stamp the reading time every time, since the recovery timeout is measured from it
+    st.last_health_reading = time(0);
     st.polls_missed = 0;
     st.health_seen = 1;
     write_state(conn, &st);
@@ -284,16 +286,21 @@ void poll_health(connection * conn)
 
     //A device that has been answering and then stops keeps its connection up and keeps
     //reporting positions, so nothing else notices. Restarting it is what brings the readings
-    //back. Only ever for a device that has answered before, and not again until the cooldown
-    //has passed, so a watch that is simply not being worn is not restarted in a loop.
-    if (st.health_seen && st.polls_missed >= HEALTH_RECOVERY_POLLS
+    //back. Timed from the last reading actually received, not from a poll count: only for a
+    //device that has answered before (last_health_reading > 0), and not again until the
+    //cooldown has passed, so a watch that is simply not being worn is not restarted in a loop.
+    if (st.last_health_reading > 0
+            && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
             && (time(0) - st.last_recovery) > HEALTH_RECOVERY_COOLDOWN) {
+        long unsigned int gone = (long unsigned int)(time(0) - st.last_health_reading);
         st.polls_missed = 0;
         st.last_recovery = time(0);
         st.last_health_poll = time(0);
+        //restart the clock so the reboot gets a full window to answer before we try again
+        st.last_health_reading = time(0);
         write_state(conn, &st);
         unlock_state(lock);
-        log_line(conn, "no health reading in %d polls - restarting the device\n", HEALTH_RECOVERY_POLLS);
+        log_line(conn, "no health reading in %lu s - restarting the device\n", gone);
         conn->COMMAND_FUNCTION(conn, "RESTART#");
         return;
     }

@@ -60,10 +60,14 @@
 #define HEALTH_POLL_INTERVAL 180        //how often to ask the device for a reading, seconds
 //A watch that has been answering health polls and then stops has been seen to keep the
 //connection up, keep reporting positions, and simply never answer again until it is restarted.
-//After this many polls in a row go unanswered it is sent a restart. Only devices that have
-//answered at least once are ever considered - a tracker with no sensor is not broken for
+//Recovery is timed from the last reading actually received rather than counted in polls: a
+//device that reconnects constantly fires its polls in clumps, so a count reached the limit
+//in minutes and restarted a device that was still reporting, while a device whose polls stop
+//firing (no longer the command owner, say) was never restarted however long its health was
+//gone. Once no reading has arrived for this long the device is restarted. Only devices that
+//have answered at least once are ever considered - a tracker with no sensor is not broken for
 //failing to report a heart rate.
-#define HEALTH_RECOVERY_POLLS 5         //unanswered polls before restarting the device
+#define HEALTH_RECOVERY_TIMEOUT 900     //seconds without any reading before restarting the device
 #define HEALTH_RECOVERY_COOLDOWN 1800   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
 #define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again
