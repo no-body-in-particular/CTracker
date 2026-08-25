@@ -514,6 +514,16 @@ var STAT_SERIES = {
     temperature:   { group: 'vitals',   axis: 'y',  colour: '#f78fb3', label: 'temperature',   unit: '\u00b0C' },
     speed:         { group: 'activity', axis: 'y2', colour: '#06d6a0', label: 'speed',         unit: 'km/h' },
     steps_k:       { group: 'activity', axis: 'y2', colour: '#a7e34d', label: 'steps',         unit: 'thousand' },
+    sleep_deep:    { group: 'sleep',    axis: 'y',  colour: '#7c5cff', label: 'sleep',         unit: 'min' },
+    sleep_light:   { group: 'sleep',    axis: 'y',  colour: '#b3a0ff', label: 'light sleep',   unit: 'min' },
+    sleep_score:   { group: 'sleep',    axis: 'y2', colour: '#5f7cff', label: 'sleep recorded', unit: '' },
+    sleep_tst:     { group: 'sleep',    axis: 'y',  colour: '#8f7bff', label: 'total sleep',   unit: 'min' },
+    sleep_spt:     { group: 'sleep',    axis: 'y',  colour: '#6f5ce0', label: 'sleep period',  unit: 'min' },
+    sleep_waso:    { group: 'sleep',    axis: 'y',  colour: '#ff8fb0', label: 'awake in bed',  unit: 'min' },
+    sleep_efficiency: { group: 'sleep', axis: 'y2', colour: '#4de3c1', label: 'efficiency',    unit: '%' },
+    sleep_wakeups: { group: 'sleep',    axis: 'y2', colour: '#ffc75f', label: 'awakenings',    unit: '' },
+    sleeping:      { group: 'sleep',    axis: 'y2', colour: '#a06bff', label: 'asleep',        unit: '' },
+    sleep_day:     { group: 'sleep',    axis: 'y',  colour: '#c0a0ff', label: 'slept today',   unit: 'min' },
     battery_level: { group: 'device',   axis: 'y',  colour: '#9d8df1', label: 'battery',       unit: '%' },
     signal:        { group: 'device',   axis: 'y',  colour: '#6c8cff', label: 'gsm signal',    unit: '' },
     gps_sats:      { group: 'device',   axis: 'y2', colour: '#c8b6ff', label: 'gps satellites', unit: '' },
@@ -524,6 +534,7 @@ var STAT_SERIES = {
 var STAT_GROUPS = [
     { key: 'vitals',   label: 'Vitals' },
     { key: 'activity', label: 'Activity' },
+    { key: 'sleep',    label: 'Sleep' },
     { key: 'device',   label: 'Device' },
     { key: 'other',    label: 'Other' }
 ];

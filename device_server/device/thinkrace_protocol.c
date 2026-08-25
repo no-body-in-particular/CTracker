@@ -489,7 +489,12 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
         return;
     }
 
-    int type = parse_int(data_buffers[2], 1);
+    //two characters, not one. the vendor only ever sends 1 to 4 so a single
+    //digit was enough, but the launcher's computed sleep metrics run past 9 and
+    //a one character read turned type 10 into type 1 - a WASO figure recorded
+    //as a blood pressure. widening is safe for the existing types: memcpy takes
+    //min(count, strlen), so a one character field still reads as itself.
+    int type = parse_int(data_buffers[2], 2);
     int systole = 0;
     int diastole = 0;
 
@@ -525,11 +530,81 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
             write_stat(conn,  "SPO2", parse_int(data_buffers[3], 3));
             break;
 
+        //5 to 7 are the nightly sleep summary, which the vendor firmware
+        //measures into its own SLEEP_STATUS table and then never uploads - the
+        //live protocol has no sleep opcode at all. The launcher app reads that
+        //table and sends it here on the same JK frame, one reading per type,
+        //stamped 08:00 UTC on the night it belongs to.
+        //
+        //These are minutes as the firmware counts them, which is not what the
+        //column names promise: DEEP_SLEEP reaches 675, so it is closer to total
+        //sleep than to deep sleep, and LIGHT_SLEEP is almost always zero.
+        //Recorded as given rather than reinterpreted here.
+        case 5:
+            write_stat(conn,  "sleep_deep", parse_int(data_buffers[3], 4));
+            break;
+
+        case 6:
+            write_stat(conn,  "sleep_light", parse_int(data_buffers[3], 4));
+            break;
+
+        //98 on every night with data and 0 on every night without, so this is
+        //a "was it recorded" flag rather than a quality score. Kept because it
+        //costs nothing, but it is not worth plotting on its own.
+        case 7:
+            write_stat(conn,  "sleep_score", parse_int(data_buffers[3], 3));
+            break;
+
+        //8 to 12 are scored on the watch from its own accelerometer log, by
+        //the van Hees angle heuristic, and are the ones worth reading. They
+        //are sleep and wake and the timings that follow - not sleep stages,
+        //which a wrist accelerometer cannot see whatever the vendor firmware
+        //claims by reporting eleven hours of "deep sleep".
+        //
+        //Standing caveat of all actigraphy: it spots sleep well and wake
+        //poorly, because lying still looks like sleeping. Expect total sleep
+        //to run long and awakenings to run short.
+        case 8:
+            write_stat(conn,  "sleep_tst", parse_int(data_buffers[3], 4));
+            break;
+
+        case 9:
+            write_stat(conn,  "sleep_spt", parse_int(data_buffers[3], 4));
+            break;
+
+        case 10:
+            write_stat(conn,  "sleep_waso", parse_int(data_buffers[3], 4));
+            break;
+
+        case 11:
+            write_stat(conn,  "sleep_efficiency", parse_int(data_buffers[3], 3));
+            break;
+
+        case 12:
+            write_stat(conn,  "sleep_wakeups", parse_int(data_buffers[3], 3));
+            break;
+
+        //asleep right now, 1 or 0, sent on every change and refreshed every
+        //half hour in between. the chart breaks a series at a 45 minute gap,
+        //so without the refresh a night would be two points and no line.
+        case 13:
+            write_stat(conn,  "sleeping", parse_int(data_buffers[3], 1));
+            break;
+
+        //minutes slept so far today, counted against the day the sleep ended:
+        //last night plus any nap since.
+        case 14:
+            write_stat(conn,  "sleep_day", parse_int(data_buffers[3], 4));
+            break;
+
         default:
             break;
     }
 
-    //any recognised reading answers the outstanding poll, whichever kind it was
+    //any recognised reading answers the outstanding poll, whichever kind it was.
+    //sleep deliberately does not: it is a nightly summary arriving hours late,
+    //not an answer to a health poll, and counting it as one would make the
+    //server think a stale reading had satisfied a request it had just made.
     if (type >= 1 && type <= 4) {
         note_health(conn);
     }
