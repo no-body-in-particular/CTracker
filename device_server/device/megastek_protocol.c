@@ -248,7 +248,13 @@ void process_message(connection * conn, char * string, size_t length) {
     }
 
     if (deep_sleep_time > 0) {
-        write_stat(conn, "deep_sleep_time", shallow_sleep_time);
+        //this wrote shallow_sleep_time under the deep name, so deep_sleep_time
+        //was parsed at the top of the function, used once as the condition
+        //here, and then thrown away. every deep sleep row ever recorded was a
+        //copy of the shallow one, and the two series were identical wherever
+        //both were non-zero - which reads as agreement between two
+        //measurements rather than as one measurement printed twice.
+        write_stat(conn, "deep_sleep_time", deep_sleep_time);
     }
 }
 
