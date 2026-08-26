@@ -27,6 +27,10 @@ validateIMEI($IMEI);
 // A recording lives in its own store next to the pictures, and the caller says which it
 // wants. Both containers have the same shape, only the magic and the media type differ.
 $isAudio = isset($_GET['kind']) && 'audio' === $_GET['kind'];
+// A recording is AMR, which no browser decodes. With ?play=1 it is converted to mp3 on the
+// way out so it can go straight into an <audio> element; without it the original bytes are
+// served, so what the watch actually recorded is still downloadable untouched.
+$transcode = $isAudio && isset($_GET['play']);
 $path = DEVPATH.$IMEI.($isAudio ? '.audio.db' : '.images.db');
 $wantMagic = $isAudio ? 'CTAUD1' : 'CTIMG2';
 $mediaType = $isAudio ? 'audio/amr' : 'image/jpeg';
@@ -90,6 +94,53 @@ while (!feof($fp)) {
     $offset = ftell($fp);
 
     if (!$wantList && $ts === $wantTs) {
+        if ($transcode) {
+            // Fixed argument list and the audio piped through stdin - nothing from the query
+            // string reaches a shell, and ffmpeg is never handed a path.
+            header('Content-Type: audio/mpeg');
+            header('Cache-Control: private, max-age=86400');
+            $cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error',
+                    '-i', 'pipe:0', '-vn', '-ar', '22050', '-ac', '1',
+                    '-c:a', 'libmp3lame', '-b:a', '32k', '-f', 'mp3', 'pipe:1'];
+            $spec = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];
+            $proc = @proc_open($cmd, $spec, $pipes);
+
+            if (!is_resource($proc)) {
+                fclose($fp);
+                http_response_code(500);
+
+                exit('could not start the converter');
+            }
+
+            // ffmpeg cannot start emitting mp3 until it has the whole input, and a recording
+            // is a few tens of KB, so the simple order - write it all, then read it all - is
+            // fine here and avoids a select loop.
+            $sent = 0;
+
+            while ($sent < $onwire && !feof($fp)) {
+                $chunk = fread($fp, min(65536, $onwire - $sent));
+
+                if (false === $chunk || '' === $chunk) {
+                    break;
+                }
+
+                $sent += strlen($chunk);
+                fwrite($pipes[0], $hex ? (string) @hex2bin($chunk) : $chunk);
+            }
+
+            fclose($pipes[0]);
+
+            while (!feof($pipes[1])) {
+                echo fread($pipes[1], 65536);
+            }
+
+            fclose($pipes[1]);
+            proc_close($proc);
+            fclose($fp);
+
+            exit();
+        }
+
         header('Content-Type: '.$mediaType);
         header('Content-Length: '.$len);
         // the pictures are immutable once written, so let the browser keep them

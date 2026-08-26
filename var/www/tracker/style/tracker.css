@@ -1357,3 +1357,18 @@ nav {
 .audioLink:hover {
     border-color: var(--accent);
 }
+
+/* A recording: the player plays a converted copy, the link next to it gives the original
+   AMR the watch actually produced. */
+.audioBlock {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.audioPlayer {
+    height: 30px;
+    max-width: 220px;
+    vertical-align: middle;
+}

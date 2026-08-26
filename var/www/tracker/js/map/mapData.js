@@ -65,12 +65,18 @@ function audioUrl(ts) {
     return 'image.php?kind=audio&imei=' + encodeURIComponent(imei) + '&ts=' + encodeURIComponent(ts);
 }
 
-/* AMR is what the watch records, and browsers do not decode it, so this is a download
-   rather than a player - a link that hands over a file the user can open in anything. */
+/* The watch records AMR, which no browser decodes, so the player is pointed at the
+   converted stream while the link beside it still hands over the original bytes. */
+function audioPlayUrl(ts) {
+    return audioUrl(ts) + '&play=1';
+}
+
 function audioMarkup(ts) {
-    return "<a class='audioLink' href='" + escapeHtml(audioUrl(ts)) + "'"
-           + " download='recording-" + escapeNumber(ts) + ".amr'"
-           + " onclick='event.stopPropagation();'>&#9654; recording (.amr)</a>";
+    return "<span class='audioBlock' onclick='event.stopPropagation();'>"
+           + "<audio class='audioPlayer' controls preload='none' src='"
+           + escapeHtml(audioPlayUrl(ts)) + "'></audio>"
+           + "<a class='audioLink' href='" + escapeHtml(audioUrl(ts)) + "'"
+           + " download='recording-" + escapeNumber(ts) + ".amr'>original .amr</a></span>";
 }
 
 function photoUrl(ts) {
