@@ -433,7 +433,28 @@ void poll_health(connection * conn)
         conn->COMMAND_FUNCTION(conn, cmd);
     }
 
-    conn->COMMAND_FUNCTION(conn, "HEARTRATE#");
+    /*
+     * Which trigger to use.
+     *
+     * HEARTRATE# is IWBPXL, which acknowledges and then measures - usually.
+     * When it stops measuring it goes on acknowledging, so nothing looks
+     * wrong from here: the watch answers every poll, holds its connection and
+     * keeps reporting positions, and only the absence of readings says
+     * anything. That state used to persist until the recovery timeout
+     * rebooted the watch, half an hour later, on somebody's wrist.
+     *
+     * PULSE# is IWBP50, the other trigger the protocol defines. It answers
+     * with the reading rather than with an acknowledgement, and against this
+     * hardware it measured when XL would not. So after a couple of empty
+     * polls, ask the other way before reaching for the restart.
+     */
+    const char * trigger = "HEARTRATE#";
+    if (HEALTH_ESCALATE_AFTER > 0 && st.polls_missed > HEALTH_ESCALATE_AFTER) {
+        trigger = "PULSE#";
+        log_line(conn, "%lu polls with no reading - asking with PULSE# instead\n",
+                 st.polls_missed);
+    }
+    conn->COMMAND_FUNCTION(conn, trigger);
 }
 
 void update_tracking_interval(connection * conn)

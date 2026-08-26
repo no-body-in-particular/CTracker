@@ -1,6 +1,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <memory.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -477,8 +478,25 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
     //bounded: the field is attacker sized and imei is 64 bytes
     snprintf(imei, sizeof(imei), "%s", first_message_part[1]);
 
+    /*
+     * Which field holds the message type. Normally the fourth: [3G*imei*length*TYPE. The ZJ
+     * wrapper puts two lengths there instead - [ZJ*imei*0075*0064*AL,... - so the type is one
+     * further along and everything below was comparing against a hex number.
+     *
+     * Decided by looking rather than by the wrapper, because a four digit hex field where the
+     * type belongs is the thing that actually distinguishes them.
+     */
+    size_t cmd_idx = 3;
+
+    if (initial_count > 4 && strlen(first_message_part[3]) == 4
+            && strspn(first_message_part[3], "0123456789abcdefABCDEF") == 4) {
+        cmd_idx = 4;
+    }
+
+    unsigned char * type = first_message_part[cmd_idx];
+
 //keepalive message
-    if (memcmp(first_message_part[3], "LK", 2) == 0) {
+    if (strncasecmp((char *)type, "LK", 2) == 0) {
         snprintf(conn->imei, sizeof(conn->imei), "%s", imei);
         pad_imei(conn->imei);
         init_imei(conn);
@@ -489,14 +507,14 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
         return;
     }
 
-    if (memcmp(first_message_part[3], "ICCID", 5) == 0) {
+    if (strncasecmp((char *)type, "ICCID", 5) == 0) {
         snprintf(response, sizeof(response), "[3g*%s*0005*ICCID]", imei);
         send_string(conn, response);
         conn->timeout_time = time(0) + MYROPE_TIMEOUT;
         return;
     }
 
-    if (memcmp(first_message_part[3], "AL", 2) == 0) {
+    if (strncasecmp((char *)type, "AL", 2) == 0) {
         myrope_r18_process_event(conn, str_count, data_buffers);
         snprintf(response, sizeof(response), "[3g*%s*0002*AL]", imei);
         send_string(conn, response);
@@ -505,7 +523,7 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
 
     //this compared two bytes of a fifteen byte name, so every message beginning "DE" was
     //answered as if it were DEVICEFUNCCOUNT
-    if (strlen(first_message_part[3]) >= 15 && memcmp(first_message_part[3], "DEVICEFUNCCOUNT", 15) == 0) {
+    if (strncasecmp((char *)type, "DEVICEFUNCCOUNT", 15) == 0) {
         snprintf(response, sizeof(response), "[3g*%s*000f*DEVICEFUNCCOUNT]", imei);
         send_string(conn, response);
         return;
@@ -513,21 +531,21 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
 
     //WT carries the same position layout as UD - see the watch decoder in traccar, which
     //treats UD, AL and WT through one path
-    if (memcmp(first_message_part[3], "UD", 2) == 0 || memcmp(first_message_part[3], "WT", 2) == 0) {
+    if (strncasecmp((char *)type, "UD", 2) == 0 || strncasecmp((char *)type, "WT", 2) == 0) {
         myrope_r18_process_position(conn, str_count, data_buffers);
         return;
     }
 
-    if (strcmp(first_message_part[3], "INIT") == 0) {
+    if (strcasecmp((char *)type, "INIT") == 0) {
         snprintf(response, sizeof(response), "[3g*%s*0006*INIT,1]", imei);
         send_string(conn, response);
         return;
     }
 
     //a bare poll the watch expects echoed back
-    if (strcmp(first_message_part[3], "TKQ") == 0 || strcmp(first_message_part[3], "TKQ2") == 0) {
+    if (strcasecmp((char *)type, "TKQ") == 0 || strcasecmp((char *)type, "TKQ2") == 0) {
         snprintf(response, sizeof(response), "[3g*%s*%04x*%s]", imei,
-                 (unsigned)strlen(first_message_part[3]), first_message_part[3]);
+                 (unsigned)strlen((char *)type), type);
         send_string(conn, response);
         conn->timeout_time = time(0) + MYROPE_TIMEOUT;
         return;
@@ -539,18 +557,27 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
      * None of these were recognised, so a watch of this family could report a pulse, a blood
      * pressure or a temperature and none of it was written anywhere.
      */
-    if (strcmp(first_message_part[3], "BPHRT") == 0 || strcmp(first_message_part[3], "BLOOD") == 0) {
-        if (str_count > 3) {
+    if (strcasecmp((char *)type, "BPHRT") == 0 || strcasecmp((char *)type, "BLOOD") == 0) {
+        /*
+         * BPHRT carries a pulse after the two pressures; BLOOD is sometimes just the two -
+         * "BLOOD,109,68" is a real packet. Requiring all three threw the pressures away with
+         * the missing pulse.
+         */
+        if (str_count > 2) {
             write_stat(conn, "systole", parse_float(data_buffers[1]));
             write_stat(conn, "diastole", parse_float(data_buffers[2]));
-            write_stat(conn, "heartrate", parse_float(data_buffers[3]));
+
+            if (str_count > 3 && parse_float(data_buffers[3]) > 0) {
+                write_stat(conn, "heartrate", parse_float(data_buffers[3]));
+            }
+
             note_health(conn);
         }
 
         return;
     }
 
-    if (strcmp(first_message_part[3], "PULSE") == 0 || strcmp(first_message_part[3], "HEART") == 0) {
+    if (strcasecmp((char *)type, "PULSE") == 0 || strcasecmp((char *)type, "HEART") == 0) {
         if (str_count > 1) {
             write_stat(conn, "heartrate", parse_float(data_buffers[1]));
             note_health(conn);
@@ -559,7 +586,7 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
         return;
     }
 
-    if (strcmp(first_message_part[3], "TEMP") == 0) {
+    if (strcasecmp((char *)type, "TEMP") == 0) {
         if (str_count > 1) {
             write_stat(conn, "temperature", parse_float(data_buffers[1]));
         }
@@ -568,7 +595,7 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
     }
 
     //btemp2 sends a validity flag first and the reading second
-    if (strcmp(first_message_part[3], "btemp2") == 0) {
+    if (strcasecmp((char *)type, "btemp2") == 0) {
         if (str_count > 2 && parse_float(data_buffers[1]) > 0) {
             write_stat(conn, "temperature", parse_float(data_buffers[2]));
         }
@@ -576,7 +603,7 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
         return;
     }
 
-    if (strcmp(first_message_part[3], "oxygen") == 0) {
+    if (strcasecmp((char *)type, "oxygen") == 0) {
         if (str_count > 2) {
             write_stat(conn, "SPO2", parse_float(data_buffers[2]));
             note_health(conn);
@@ -592,8 +619,8 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
      * looked as though it had gone unanswered. Record it as the command reply it is, and
      * leave a line in the log naming anything genuinely unrecognised.
      */
-    log_line(conn, "unhandled message: %s\n", first_message_part[3]);
-    log_command_response(conn, first_message_part[3]);
+    log_line(conn, "unhandled message: %s\n", type);
+    log_command_response(conn, type);
 }
 
 
@@ -636,7 +663,17 @@ void myrope_r18_identify(void * vp) {
     memset(first_bytes, 0, sizeof(first_bytes));
     memcpy(first_bytes, conn->recv_buffer, 12);
 
-    if (first_bytes[0] == '[' && (first_bytes[1] == '2' || first_bytes[1] == '3' || first_bytes[1] == '4') && first_bytes[2] == 'G' && first_bytes[3] == '*' ) {
+    /*
+     * [3G* is not the only wrapper this family uses. Real traffic also carries [SG*, [ZJ* and
+     * [CS*, and this accepted only a digit followed by G - so a watch announcing itself any
+     * other way was never recognised as this protocol at all. Everything between the bracket
+     * and the star is the vendor's badge; what matters is the shape.
+     */
+    if (first_bytes[0] == '[' && first_bytes[3] == '*'
+            && ((first_bytes[2] == 'G' && (first_bytes[1] == '2' || first_bytes[1] == '3' || first_bytes[1] == '4'))
+                || (first_bytes[1] == 'S' && first_bytes[2] == 'G')
+                || (first_bytes[1] == 'Z' && first_bytes[2] == 'J')
+                || (first_bytes[1] == 'C' && first_bytes[2] == 'S'))) {
         fprintf(stdout, "  device type is myrope r18\n");
         conn->PROCESS_FUNCTION = myrope_r18_process;
         conn->COMMAND_FUNCTION = myrope_r18_send_command;

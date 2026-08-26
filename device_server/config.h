@@ -109,6 +109,25 @@
  * seven minutes with no idea why, and the only trace was a line in the device log. It now
  * writes an event too, so a restart appears where the wearer will actually see it.
  */
+/*
+ * How many polls may go unanswered before the other trigger is tried.
+ *
+ * The IW protocol has two ways to ask for a pulse and they fail differently.
+ * IWBPXL - HEARTRATE# - acknowledges with a bare IWAPXL and then may or may
+ * not actually measure; when the sensor is in this mood it answers every poll
+ * politely and returns nothing, for hours. IWBP50 - PULSE# - does not
+ * acknowledge at all and answers with the reading itself, and against this
+ * hardware it measured when XL would not: a pulse of 61, twenty two seconds
+ * after being asked.
+ *
+ * So a run of empty acknowledgements is worth escalating rather than waiting
+ * out. Two is enough to tell a wedged sensor from a watch that was simply off
+ * the wrist for one poll, and at a three minute period it costs six minutes
+ * before trying the thing that works - against the half hour it otherwise
+ * takes to reach the restart, which reboots a watch somebody is wearing.
+ */
+#define HEALTH_ESCALATE_AFTER 2         //unanswered polls before trying PULSE# instead
+
 #define HEALTH_RECOVERY_TIMEOUT 1800    //seconds without any reading before restarting; 0 disables
 #define HEALTH_RECOVERY_COOLDOWN 3600   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
