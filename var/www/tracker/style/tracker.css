@@ -483,6 +483,10 @@ section:target h1 {
     background-image: url('../icons/camera.svg');
 }
 
+.microphone {
+    background-image: url('../icons/microphone.svg');
+}
+
 .globe {
     background-image: url('../icons/globe.svg');
 }

@@ -110,6 +110,32 @@ function hidePhoto() {
     }
 }
 
+/* Each poll asks for rows from the newest one already held, and the server includes that
+   row again rather than starting after it, so a straight concat re-adds the boundary row
+   every few seconds. It was invisible while rows were plain text and obvious as soon as
+   they carried a picture. Rows are identified by their time and their text, which is what
+   distinguishes them on screen too. */
+function concatNewRows(existing, parsed) {
+    var seen = {};
+
+    for (var i = 0; i < existing.length; i++) {
+        seen[(+existing[i][0]) + '|' + existing[i].slice(1).join(',')] = true;
+    }
+
+    var fresh = parsed.filter(function (row) {
+        var key = (+row[0]) + '|' + row.slice(1).join(',');
+
+        if (seen[key]) {
+            return false;
+        }
+
+        seen[key] = true;
+        return true;
+    });
+
+    return existing.concat(fresh);
+}
+
 function computeEventRow(cols) {
     var ts = photoTsOf(cols[4]);
     var ats = audioTsOf(cols[4]);
@@ -256,7 +282,7 @@ function fetchEvents() {
                 return;
             }
 
-            eventList = eventList.concat(parsed);
+            eventList = concatNewRows(eventList, parsed);
 
             var lastCaption;
             var features = [];
@@ -413,7 +439,7 @@ function fetchCommandResults() {
                 return;
             }
 
-            commandResults = commandResults.concat(parsed);
+            commandResults = concatNewRows(commandResults, parsed);
 
             const tableBody = document.getElementById("commandBody");
             tableBody.innerHTML = commandResults.reverse().map(rv => computeLogRow(rv)).join('');

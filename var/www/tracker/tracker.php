@@ -176,10 +176,11 @@ validateSession();
                         </tr>
                         <tr>
                            <th></th>
-                           <th><input type="text" name="command" id="command" aria-label="Command to send" class="input_small" /><button onclick="sendCommand(document.getElementById('command').value)" class="button">Send</button>
-                              <button class="button" onclick="sendCommand('WARNAUDIO#');"><i style="font-size:14pt;" class="icon bullhorn"></i></button>
-                              <button class="button" onclick="sendCommand('WARNMOTOR#');"><i  style="font-size:14pt;" class="icon exclamation-circle"></i></button>
+                           <th><input type="text" name="command" id="command" aria-label="Command to send" class="input_small" /><button onclick="sendCommand(document.getElementById('command').value)" class="button" title="Send the typed command to the device">Send</button>
+                              <button class="button" onclick="sendCommand('WARNAUDIO#');" title="Sound an audible alarm on the device" aria-label="Audible alarm"><i style="font-size:14pt;" class="icon bullhorn"></i></button>
+                              <button class="button" onclick="sendCommand('WARNMOTOR#');" title="Vibrate the device" aria-label="Vibrate"><i  style="font-size:14pt;" class="icon exclamation-circle"></i></button>
                               <button class="button" onclick="sendCommand('PHOTO#');" title="Ask the device to take a picture" aria-label="Take a picture"><i style="font-size:14pt;" class="icon camera"></i></button>
+                              <button class="button" onclick="sendCommand('RECORD#');" title="Record ten seconds from the device microphone and upload it" aria-label="Record from the device"><i style="font-size:14pt;" class="icon microphone"></i></button>
                            </th>
                         </tr>
                      </thead>
@@ -233,7 +234,7 @@ validateSession();
             <button type="button" class="mapOverlay mapBtn" style="font-size:22pt;position:absolute;right:1em;bottom:1.5em;z-index: 2;" onclick="toggleSat();" aria-label="Toggle satellite view"><i class="icon globe"></i></button>
             <span class="mapOverlay" style="font-size:22pt;position:absolute;right:1em;bottom:2.5em;z-index: 2;" role="img" aria-label="Battery level"><i id="batt" class="icon battery-full"></i></span>
             <span class="mapOverlay" style="font-size:22pt;position:absolute;right:1em;bottom:3.5em;z-index: 2;" role="img" aria-label="Signal strength"><i id="signal" class="icon signal"></i></span>
-            <button type="button" class="mapOverlay mapBtn" style="font-size:22pt;position:absolute;right:1em;bottom:4.5em;z-index: 2;" onclick="recenter();" aria-label="Recentre on the device"><i id="current" class="icon crosshair"></i></button>
+            <button type="button" class="mapOverlay mapBtn" style="font-size:22pt;position:absolute;right:1em;bottom:4.5em;z-index: 2;" onclick="recenter();" title="Recentre the map on the device" aria-label="Recentre on the device"><i id="current" class="icon crosshair"></i></button>
 
             <div id="rangeControls">
                <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" aria-label="Start date" type="date" onchange="searchdateChange()" class="input"/>

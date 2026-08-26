@@ -24,6 +24,31 @@
 
 #define THINKRACE_TIMEOUT 1200
 
+/*
+ * The older commands here take the terminating '#' from whatever the caller typed, so
+ * "UPDATE=600#" works and "UPDATE=600" silently goes out unterminated - the watch then waits
+ * for an end of packet that never arrives and ignores the whole thing. Rather than repeat
+ * that trap for every command added below, this appends the value with exactly one '#' on
+ * the end however the caller wrote it.
+ */
+static void send_value_terminated(connection * conn, const char * value) {
+    char buf[BUF_SIZE] = {0};
+    size_t n = 0;
+
+    while (value[n] && n + 2 < sizeof(buf)) {
+        buf[n] = value[n];
+        n++;
+    }
+
+    while (n > 0 && (buf[n - 1] == '#' || buf[n - 1] == '\r' || buf[n - 1] == '\n')) {
+        n--;
+    }
+
+    buf[n++] = '#';
+    buf[n] = 0;
+    send_string(conn, buf);
+}
+
 bool thinkrace_send_command( void * c, const char * cmd) {
     connection * conn = (connection *)c;
     char buffer[4] = {0};
@@ -79,6 +104,57 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, ",080835,");
         send_string(conn, escaped);
         send_string(conn, "#");
+
+    /*
+     * The commands below are not in the protocol document. Their shapes are taken from the
+     * watch's own handlers in protocol_beehome, where each one checks the field count before
+     * doing anything - so the count is the specification. Three fields means imei and serial,
+     * four adds one value, five adds two.
+     *
+     *   handleBPOX  4 fields   blood oxygen reading
+     *   handleBPTE  4 fields   temperature reading
+     *   handleBPTF  3 fields   clock format, logged there as "is24Hour ==> "
+     *   handleBPPH  4 fields   call switch, writes persist.sys.phone.enable
+     *   handleBPMC  4 fields   motion detection, "BPMC index ==> value==> "
+     *   handleBP86  5 fields   heart rate and blood pressure periods, in minutes
+     *
+     * Untested against hardware; a command the watch does not accept it simply ignores.
+     */
+    } else if (strcmp(cmd, "SPO2#") == 0) {
+        send_string(conn, "IWBPOX,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,1#");
+
+    } else if (strcmp(cmd, "TEMP#") == 0) {
+        send_string(conn, "IWBPTE,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,1#");
+
+    } else if (strlen(cmd) > 6 && memcmp(cmd, "HOURS=", 6) == 0) {
+        //the watch wants a flag, not the number of hours: 1 means the 24 hour clock
+        send_string(conn, "IWBPTF,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",");
+        send_string(conn, (strstr(cmd + 6, "24") != 0) ? "1#" : "0#");
+
+    } else if (strlen(cmd) > 6 && memcmp(cmd, "PHONE=", 6) == 0) {
+        send_string(conn, "IWBPPH,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 6);
+
+    } else if (strlen(cmd) > 7 && memcmp(cmd, "MOTION=", 7) == 0) {
+        send_string(conn, "IWBPMC,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 7);
+
+    } else if (strlen(cmd) > 10 && memcmp(cmd, "HEALTHINT=", 10) == 0) {
+        //"<heart rate>,<blood pressure>" in minutes - the comma is what makes the fifth field
+        send_string(conn, "IWBP86,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 10);
 
     } else if (strcmp(cmd, "RECORD#") == 0) {
         /*
