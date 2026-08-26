@@ -99,7 +99,17 @@
  * long enough not to fire on a watch that was taken off for a while, and the cooldown stays
  * well clear of it so a device that rebooting will not fix is not rebooted in a loop.
  */
-#define HEALTH_RECOVERY_TIMEOUT 1800    //seconds without any reading before restarting the device
+/*
+ * 0 disables the restart entirely. It is on, because it works: the watch stopped sending
+ * readings while still answering every poll and holding a GPS fix - its sensor had wedged,
+ * not its radio - and the restart brought heart rate, blood pressure and oxygen back within
+ * seconds. Nothing short of a restart would have.
+ *
+ * What was wrong with it was that it did this silently. The wearer saw a black screen for
+ * seven minutes with no idea why, and the only trace was a line in the device log. It now
+ * writes an event too, so a restart appears where the wearer will actually see it.
+ */
+#define HEALTH_RECOVERY_TIMEOUT 1800    //seconds without any reading before restarting; 0 disables
 #define HEALTH_RECOVERY_COOLDOWN 3600   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
 #define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again

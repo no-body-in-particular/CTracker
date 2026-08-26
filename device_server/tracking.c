@@ -335,7 +335,8 @@ void poll_health(connection * conn)
     //back. Timed from the last reading actually received, not from a poll count: only for a
     //device that has answered before (last_health_reading > 0), and not again until the
     //cooldown has passed, so a watch that is simply not being worn is not restarted in a loop.
-    if (st.last_health_reading > 0
+    if (HEALTH_RECOVERY_TIMEOUT > 0
+            && st.last_health_reading > 0
             && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
             && (time(0) - st.last_recovery) > HEALTH_RECOVERY_COOLDOWN) {
         long unsigned int gone = (long unsigned int)(time(0) - st.last_health_reading);
@@ -347,6 +348,15 @@ void poll_health(connection * conn)
         write_state(conn, &st);
         unlock_state(lock);
         log_line(conn, "no health reading in %lu s - restarting the device\n", gone);
+        /*
+         * In the event log as well as the device log. This restarts a watch somebody is
+         * wearing: it goes dark for several minutes, and the first anyone knew of it was the
+         * black screen. Whatever else it is, it should not be a surprise.
+         */
+        char note[128];
+        snprintf(note, sizeof(note),
+                 "restarted the device - no health reading for %lu minutes", gone / 60);
+        log_event(conn, note);
         conn->COMMAND_FUNCTION(conn, "RESTART#");
         return;
     }
