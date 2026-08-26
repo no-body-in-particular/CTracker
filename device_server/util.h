@@ -22,6 +22,10 @@
 #define SWAP_UINT16(x) (((x&0xff00) >> 8) | ((x&0xff) << 8))
 #define SWAP_UINT32(x) (((x&0xff000000) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | ((x&0xFF) << 24))
 #define SWAP_FLOAT(FLT)  *( (uint32_t *)& FLT) = SWAP_UINT32((* (uint32_t *)& FLT));
+//the same for the eight byte kind, which XEXUN uses for its higher precision coordinates
+#define SWAP_UINT64(X) ((((uint64_t)SWAP_UINT32((uint32_t)((X) & 0xffffffffULL))) << 32) \
+                        | SWAP_UINT32((uint32_t)((X) >> 32)))
+#define SWAP_DOUBLE(DBL) *( (uint64_t *)& DBL) = SWAP_UINT64((* (uint64_t *)& DBL));
 
 
 #define MAX_TIME ((((time_t) 1 << (sizeof(time_t) * 8 - 2)) - 1) * 2 + 1)

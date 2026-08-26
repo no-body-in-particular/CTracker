@@ -235,16 +235,28 @@ size_t xex_process_alarm(connection * c, alarm_data * d) {
     return sizeof(alarm_data);
 }
 
-//handle east/west correctly. need new formula.
+/*
+ * ddmm.mmmm to decimal degrees.
+ *
+ * The comment that used to sit here said "handle east/west correctly, need new formula", and
+ * it was right on both counts. The old version printed the number into a string with gcvt,
+ * padded it with leading zeros chosen by how large it was, and then read three characters of
+ * degrees back out of it - which works for a two digit latitude padded to three and falls
+ * apart for a three digit longitude, because the padding it needs is none and the digits it
+ * then reads are the wrong ones. A packet whose expected position is -121.64531 came out of
+ * it as -1.000023.
+ *
+ * Arithmetic instead, which is what traccar's decoder for this protocol does: whole hundreds
+ * are degrees, the remainder is minutes. No formatting, no padding, and it does not care how
+ * many digits the number happens to have.
+ */
 float parseCoordinate(float f) {
-    char buf[16] = {0};
     bool neg = f < 0;
-    f *= (neg ? -1 : 1);
-    float n = f * 1000000;
-    size_t idx = (f <= 10000.0f) + (f <= 1000.0f);
-    memset(buf, '0', idx);
-    gcvt (n, 10,  buf + idx);
-    return (neg ? -1 : 1) * ( parse_int(buf, 3) + (parse_int(buf + 3, strlen(buf) - 3) / (6 * (pow(10, strlen(buf) - 4)))));
+    double value = neg ? -f : f;
+    double degrees = (double)((int)(value / 100));
+    double minutes = value - degrees * 100;
+    double result = degrees + minutes / 60.0;
+    return (float)(neg ? -result : result);
 }
 
 size_t process_gps_data(connection * c, time_t timestamp,  position_packet * packet, gps_data * d) {
@@ -376,6 +388,21 @@ size_t process_position_data(connection * c, time_t timestamp, position_packet *
 
     if (d->data_type & 32) {
         offset += process_differential_gps(c, (differential_gps_data *)(d->data + offset));
+    }
+
+    /*
+     * Bit 7 carries a higher precision position - a satellite count then a longitude and a
+     * latitude as eight byte doubles, longitude first. Traccar decodes it and its test set
+     * has one packet expected to come out at 51.68715, 0.06103.
+     *
+     * Not implemented, because I could not work out where in the packet it starts. Traccar
+     * reads it from a second mask that this parser does not model, and an implementation
+     * assuming it follows the other blocks decoded zeroes. One sample and a partial reading
+     * is not enough to lay out a binary block from, so it is logged as unhandled rather than
+     * guessed at.
+     */
+    if (d->data_type & 128) {
+        log_line(c, "  position carries the double precision block, which is not decoded\n");
     }
 
     return offset + 1;
