@@ -113,6 +113,189 @@ static const char * megastek_event_name(const char * raw) {
     return raw;
 }
 
+/*
+ * A coordinate in the form NMEA uses: degrees, then two digits of minutes, then a fraction.
+ * The two helpers above assume a fixed width for the degrees - two for latitude, three for
+ * longitude - which holds for the MGV messages, where 00830.77057 is 008 degrees 30.77
+ * minutes. It does not hold for the STX family: 2321.931251 there is 23 degrees 21.93
+ * minutes, with the leading zero left off.
+ *
+ * The minutes are always the two digits before the point, whatever the width, so find the
+ * point and count back from it rather than counting forward from the start.
+ */
+static float nmea_coord(const char * str) {
+    if (str == 0) {
+        return 0;
+    }
+
+    const char * dot = strchr(str, '.');
+    size_t digits = dot ? (size_t)(dot - str) : strlen(str);
+
+    if (digits < 3) {
+        return parse_float((char *)str);
+    }
+
+    char degrees[8] = {0};
+    size_t degree_digits = digits - 2;
+
+    if (degree_digits > sizeof(degrees) - 1) {
+        degree_digits = sizeof(degrees) - 1;
+    }
+
+    memcpy(degrees, str, degree_digits);
+    return parse_int(degrees, degree_digits) + parse_float((char *)(str + digits - 2)) / 60.0f;
+}
+
+/*
+ * The other shape this family speaks. Where an MGV message is one long comma separated line
+ * of its own design, an STX message wraps a standard NMEA RMC sentence:
+ *
+ *   STX,<id>,$GPRMC,<time>,<valid>,<lat>,<N/S>,<lon>,<E/W>,<speed>,<course>,<date>,,,<mode>
+ *       ,<fix>,<alarm>,imei:<imei>,<sats>,<altitude>,Battery=<n>%,,<charging>,<mcc>,<mnc>,<lac>,<cid>;
+ *
+ * and some devices leave out the comma after STX and pad the id to a fixed width instead:
+ *
+ *   STX863070014949464   $GPRMC,...,<mcc>,<mnc>,<lac>,<cid>,...,<alarm>;
+ *
+ * so rather than count fields from the left, find the $GPRMC and read the sentence from
+ * there, then pick the named fields - imei:, Battery= - out of whatever follows. What is left
+ * over differs between the two shapes and between vendors, and naming the fields is the only
+ * thing that survives that.
+ */
+static void process_stx_message(connection * conn, char * string, size_t length) {
+    unsigned char bufstr[BUF_SIZE] = {0};
+    unsigned char * fields[48] = {0};
+    unsigned char imei[18] = {0};
+    memcpy(bufstr, string, min(length, sizeof(bufstr) - 1));
+    //the trailing ;<checksum> is not part of the last field
+    unsigned char * semi = (unsigned char *)strchr((char *)bufstr, ';');
+
+    if (semi) {
+        *semi = 0;
+    }
+
+    size_t count = split_to(',', bufstr, BUF_SIZE, fields, 48);
+    size_t gprmc = count;
+
+    for (size_t i = 0; i < count; i++) {
+        if (strstr((char *)fields[i], "$GPRMC")) {
+            gprmc = i;
+            break;
+        }
+    }
+
+    if (gprmc == count || (gprmc + 9) >= count) {
+        log_line(conn, "  STX message with no usable RMC sentence\n");
+        return;
+    }
+
+    /*
+     * The identifier. Named as imei:<n> where the device sends one, which is the only field
+     * that is reliably the imei - the id right after STX is a user settable name on some of
+     * these ("GerAL22" is one of the real ones), and is padded rubbish on others.
+     */
+    for (size_t i = 0; i < count; i++) {
+        if (strncasecmp((char *)fields[i], "imei:", 5) == 0) {
+            snprintf((char *)imei, sizeof(imei), "%s", fields[i] + 5);
+            break;
+        }
+    }
+
+    if (imei[0] == 0) {
+        const char * id = (const char *)fields[0];
+
+        if (gprmc == 0) {
+            //STX<id>$GPRMC with no commas - the id sits between the two
+            id += 3;
+
+        } else if (count > 1) {
+            id = (const char *)fields[1];
+        }
+
+        snprintf((char *)imei, sizeof(imei), "%s", id);
+    }
+
+    strip_whitespace((char *)imei);
+    pad_imei((char *)imei);
+
+    if (strlen(imei) <= 1) {
+        log_line(conn, "  STX message with no identifier\n");
+        return;
+    }
+
+    if (strlen(conn->imei) <= 1 || strcmp(conn->imei, (char *)imei) != 0) {
+        snprintf(conn->imei, sizeof(conn->imei), "%s", imei);
+        init_imei(conn);
+    }
+
+    log_line(conn, "  STX message: %s\n", bufstr);
+    bool valid = fields[gprmc + 2][0] == 'A';
+    float lat = nmea_coord((char *)fields[gprmc + 3]);
+    float lon = nmea_coord((char *)fields[gprmc + 5]);
+
+    if (fields[gprmc + 4][0] == 'S') {
+        lat = -lat;
+    }
+
+    if (fields[gprmc + 6][0] == 'W') {
+        lon = -lon;
+    }
+
+    //hhmmss.sss and ddmmyy
+    const char * t = (const char *)fields[gprmc + 1];
+    const char * d = (const char *)fields[gprmc + 9];
+    time_t when = time(0);
+
+    if (strlen(t) >= 6 && strlen(d) >= 6) {
+        when = date_to_time(parse_int((char *)d + 4, 2), parse_int((char *)d + 2, 2), parse_int((char *)d, 2),
+                            parse_int((char *)t, 2), parse_int((char *)t + 2, 2), parse_int((char *)t + 4, 2));
+    }
+
+    //named fields, wherever they landed
+    int battery = -1;
+    const char * alarm = 0;
+
+    /*
+     * An RMC sentence runs to twelve fields past the $GPRMC - time, validity, the two
+     * coordinates and their hemispheres, speed, course, date, magnetic variation and its
+     * hemisphere, then the mode with the checksum stuck to it. So the vendor's own fields
+     * start at thirteen. Starting at ten put the scan inside the sentence and it took the
+     * "A*62" of the mode and checksum for an alarm on every message.
+     */
+    for (size_t i = gprmc + 13; i < count; i++) {
+        if (strncasecmp((char *)fields[i], "Battery=", 8) == 0) {
+            battery = parse_int((char *)fields[i] + 8, 3);
+
+        } else if (alarm == 0 && strlen((char *)fields[i]) > 2
+                   && strchr((char *)fields[i], ':') == 0
+                   && strchr((char *)fields[i], '*') == 0
+                   && strspn((char *)fields[i], "0123456789.") != strlen((char *)fields[i])
+                   //a location area or cell id is four hex digits, and one containing a letter
+                   //otherwise reads as text - 0E6A and B20E were being reported as alarms
+                   && !(strlen((char *)fields[i]) == 4
+                        && strspn((char *)fields[i], "0123456789abcdefABCDEF") == 4)) {
+            //the first field that is neither a number, an identifier nor a named value
+            alarm = (const char *)fields[i];
+        }
+    }
+
+    if (valid) {
+        move_to(conn, when, 0, lat, lon);
+        write_sat_count(conn, 0, 1);
+    }
+
+    if (battery >= 0) {
+        write_stat(conn, "battery_level", battery);
+        set_status(conn, battery, 0, 0, 1);
+    }
+
+    if (alarm && strcasecmp(alarm, "Nil-Alarms") != 0 && strcasecmp(alarm, "Timer") != 0) {
+        log_event(conn, megastek_event_name(alarm));
+    }
+
+    conn->timeout_time = time(0) + MTEK_TIMEOUT;
+}
+
 void process_message(connection * conn, char * string, size_t length) {
     fprintf(stdout, "string: \n", string);
     msleep(1000);
@@ -134,6 +317,11 @@ void process_message(connection * conn, char * string, size_t length) {
     memcpy(bufstr, string, len);
     size_t str_count = split_to(',', bufstr, strlen(bufstr), data_buffers, 40);
     conn->timeout_time = time(0) + MTEK_TIMEOUT;
+
+    if (memcmp(string, "STX", 3) == 0) {
+        process_stx_message(conn, string, length);
+        return;
+    }
 
     if (strstr(data_buffers[0], "CMV001") || strstr(data_buffers[0], ";")) {
         memcpy(bufstr, conn->recv_buffer, min(length, BUF_SIZE - 1));
@@ -325,7 +513,19 @@ void megastek_process(void * vp) {
     //if we've at least got a header
     if (conn->read_count > 5) {
         rep(conn->recv_buffer, 0, ' ', conn->read_count); //remove all null characters up to read count
-        size_t index = idx(conn->recv_buffer, '!');
+        /*
+         * An MGV message ends ";!" and an STX one ends ";<checksum>" followed by a newline,
+         * so framing on '!' alone found the end of the first shape and never the second - the
+         * STX devices were identified and then never had a message read off them at all.
+         * Whichever terminator comes first ends the message.
+         */
+        size_t bang = idx(conn->recv_buffer, '!');
+        size_t newline = idx(conn->recv_buffer, '\n');
+        size_t index = bang;
+
+        if (newline > 0 && newline < conn->read_count && (bang == 0 || bang >= conn->read_count || newline < bang)) {
+            index = newline;
+        }
 
         if (index > 0 && index < conn->read_count) {
             process_message(conn, conn->recv_buffer, index - 1);
@@ -357,7 +557,13 @@ void megastek_identify(void * vp) {
     memset(first_bytes, 0, sizeof(first_bytes));
     memcpy(first_bytes, conn->recv_buffer, 12);
 
-    if (strstr(first_bytes, megastek_start_contains) != 0) {
+    /*
+     * The same family sends two shapes and this only recognised one. An STX message wraps an
+     * NMEA sentence and puts $GPRMC well past the twelve bytes searched here, so those devices
+     * were never identified at all - they fell through every protocol and were dropped.
+     */
+    if (strstr(first_bytes, megastek_start_contains) != 0
+            || memcmp(first_bytes, "STX", 3) == 0) {
         // MEGASTEK device
         fprintf(stdout, "  device type is megastek\n");
         conn->PROCESS_FUNCTION = megastek_process;

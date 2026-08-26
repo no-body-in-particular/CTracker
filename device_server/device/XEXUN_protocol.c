@@ -274,8 +274,10 @@ size_t process_speed_data(connection * c, speed_data * d) {
 
 size_t process_lbs_data(connection * c, position_packet * packet, lbs_data * d) {
     if (d->network_count > 6) {
+        //logged before the clamp, not after - this reported the six it had just written
+        //rather than the number that was wrong
+        log_line(c, "  invalid number of lbs networks: %u, using six\n", d->network_count);
         d->network_count = 6;
-        log_line(c, "  invalid number of lbs networks: %u\n", d->network_count);
 
     } else {
         log_line(c, "lbs network count: %u\n", d->network_count);
@@ -291,8 +293,10 @@ size_t process_wifi_data(connection * c, time_t timestamp, position_packet * pac
     double over_time = 0;
 
     if (d->network_count > 6) {
+        //logged before the clamp, not after - this reported the six it had just written
+        //rather than the number that was wrong
+        log_line(c, "  invalid number of wifi networks: %u, using six\n", d->network_count);
         d->network_count = 6;
-        log_line(c, "  invalid number of wifi networks: %u\n", d->network_count);
 
     } else {
         log_line(c, "wifi count: %u\n", d->network_count);
