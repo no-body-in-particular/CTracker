@@ -267,7 +267,18 @@ void process_message(connection * conn, char * string, size_t length) {
         log_event(conn, megastek_event_name(data_buffers[34]));
     }
 
-    int rssi = parse_int(data_buffers[23], 2) * 3.33f;
+    /*
+     * GSM signal strength is 0 to 31, and 99 is the value that means "not known" rather than
+     * a measurement. Scaling it like a measurement gave 329 percent, thirty one times in the
+     * recorded history, and a full scale 31 gave 103. Treat 99 as absent and hold the rest
+     * inside a hundred.
+     */
+    int raw_rssi = parse_int(data_buffers[23], 2);
+    int rssi = (raw_rssi >= 99) ? 0 : (int)(raw_rssi * 3.33f);
+
+    if (rssi > 100) {
+        rssi = 100;
+    }
     set_status(conn, parse_float( data_buffers[33]), rssi, 0, num_sats);
     write_stat(conn, "battery_level", battery_level);
     write_stat(conn, "signal", rssi);

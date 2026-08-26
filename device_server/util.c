@@ -186,10 +186,29 @@ void pad_imei(char * imei) {
     }
 }
 
+/*
+ * A percentage, so it has to end at a hundred.
+ *
+ * The curve below reaches 100 at 4.094V, but the guard against it only stood at 4.15, so
+ * every reading in the 56mV between the two came out over a hundred percent - 101.9, 105.4,
+ * 112, 119. Five hundred and seventy two of them are in the recorded history. Clamping the
+ * result rather than moving the guard means the curve can be retuned later without the same
+ * hole reopening at whatever its new crossing point is.
+ */
 float voltage_to_soc(float voltage) {
     if (voltage > 4.15) {
         return 100;
     }
 
-    return exp(3.4f * (voltage - 2.74f));
+    float soc = exp(3.4f * (voltage - 2.74f));
+
+    if (soc > 100) {
+        soc = 100;
+    }
+
+    if (soc < 0) {
+        soc = 0;
+    }
+
+    return soc;
 }

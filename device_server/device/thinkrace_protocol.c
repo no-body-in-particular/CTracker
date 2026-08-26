@@ -749,13 +749,29 @@ void thinkrace_process_heartrate(connection * conn, size_t parse_count, unsigned
 }
 
 
+/*
+ * A body temperature the watch could not take comes up as zero, and zero was being written
+ * as though it were a reading - 4591 of them across the recorded history, against 62607 real
+ * ones. On a chart that drags every average down and puts a spike to the axis through every
+ * series it appears in. A skin temperature outside twenty to forty five degrees is not a
+ * measurement, so record it in the log where it can be seen and keep it out of the numbers.
+ */
+static void write_temperature(connection * conn, float value) {
+    if (value < 20.0f || value > 45.0f) {
+        log_line(conn, "   temperature reading of %.2f is outside anything a body does, ignoring\n", value);
+        return;
+    }
+
+    write_stat(conn, "temperature", value);
+}
+
 void thinkrace_process_temperature(connection * conn, size_t parse_count, unsigned char * data_buffers[40]) {
     if (parse_count < 3) {
         log_line(conn, "   invalid temperature package.\n");
         return;
     }
 
-    write_stat(conn,  "temperature", parse_float(data_buffers[1]));
+    write_temperature(conn, parse_float(data_buffers[1]));
 
     note_health(conn);
 }
@@ -814,7 +830,7 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
         }
 
         case 3:
-            write_stat(conn,  "temperature", parse_float(data_buffers[3]));
+            write_temperature(conn, parse_float(data_buffers[3]));
             break;
 
         case 4:
