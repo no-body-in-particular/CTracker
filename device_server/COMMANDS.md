@@ -28,10 +28,12 @@ Everything here has been sent to a watch and answered.
 | `PHOTO#` | take a picture; it arrives over the next minute or so |
 | `RECORD#` | record ten seconds from the microphone and upload it |
 | `UPDATE=<seconds>#` | how often to report a position |
-| `HEALTHINT=<hr>,<bp>#` | how often the watch reports health, in minutes, on its own |
+| `HEALTHINT=<on>,<minutes>#` | turn health monitoring on (1) or off (0), and how often it measures |
 | `MODE=<n>#` | working mode |
-| `TIMES=<hhmm@hhmm>#` | working hours |
+| `LOCMODE=<mode>,<seconds>[,<gps>]` | location working mode, position interval, and whether the GPS module stays on |
 | `HOURS=12#` / `HOURS=24#` | clock format |
+| `BLOODPRESSURE#` | take a blood pressure reading |
+| `OXYGEN#` | take a blood oxygen reading |
 | `PHONE=0#` / `PHONE=1#` | allow or block calls |
 | `MOTION=0#` / `MOTION=1#` | motion detection |
 | `MSG=<text>#` | show a message on the watch |

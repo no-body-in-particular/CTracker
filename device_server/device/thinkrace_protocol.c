@@ -120,6 +120,23 @@ bool thinkrace_send_command( void * c, const char * cmd) {
      *
      * Untested against hardware; a command the watch does not accept it simply ignores.
      */
+    /*
+     * The three separate measurement triggers the IW protocol defines - BPXL for a pulse,
+     * BPXY for a blood pressure, BPXZ for a blood oxygen. Only BPXL was implemented, on the
+     * strength of this firmware answering an XL with all three readings. It does not always:
+     * the watch acknowledges IWAPXL and measures nothing, and there was then no other way to
+     * ask. Each command is IWBPxx,IMEI,serial# and is answered with a bare IWAPxx.
+     */
+    } else if (strcmp(cmd, "BLOODPRESSURE#") == 0) {
+        send_string(conn, "IWBPXY,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835#");
+
+    } else if (strcmp(cmd, "OXYGEN#") == 0) {
+        send_string(conn, "IWBPXZ,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835#");
+
     } else if (strcmp(cmd, "SPO2#") == 0) {
         send_string(conn, "IWBPOX,");
         send_string(conn, conn->imei);
@@ -135,7 +152,9 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, "IWBPTF,");
         send_string(conn, conn->imei);
         send_string(conn, ",");
-        send_string(conn, (strstr(cmd + 6, "24") != 0) ? "1#" : "0#");
+        //IW protocol V2.10: 1 is the 24 hour system and 2 is the 12 hour system. This sent
+        //0 for 12 hour, which is not a value the command defines.
+        send_string(conn, (strstr(cmd + 6, "24") != 0) ? "1#" : "2#");
 
     } else if (strlen(cmd) > 6 && memcmp(cmd, "PHONE=", 6) == 0) {
         send_string(conn, "IWBPPH,");
@@ -150,7 +169,13 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_value_terminated(conn, cmd + 7);
 
     } else if (strlen(cmd) > 10 && memcmp(cmd, "HEALTHINT=", 10) == 0) {
-        //"<heart rate>,<blood pressure>" in minutes - the comma is what makes the fifth field
+        /*
+         * IWBP86,IMEI,serial,<switch>,<value>#. The switch opens (1) or closes (0) health
+         * monitoring and the value is the detection interval in minutes - it is not, as this
+         * previously assumed, a heart rate period and a blood pressure period. Sending a 3
+         * into the switch field is undefined, and the readings that matter stopped when it
+         * was. Callers pass "<switch>,<minutes>".
+         */
         send_string(conn, "IWBP86,");
         send_string(conn, conn->imei);
         send_string(conn, ",080835,");
@@ -212,13 +237,52 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, ",080835,");
         send_string(conn, cmd + 5);
 
-    } else if (strlen(cmd) > 6 && memcmp(cmd, "TIMES=", 6) == 0) {
+    /*
+     * IWBP34,IMEI,serial,<working mode>,<location interval seconds>,<GPS switch>#
+     *
+     * This was reached through a command called TIMES=, documented on both sides as "working
+     * hours" and sent as IWBP34,imei,serial,1,0000@2359# - a time range in the field that
+     * takes an interval in seconds, and no GPS switch at all. The IW protocol has no working
+     * hours command; BP34 never set them. Since the third field decides whether the GPS
+     * module stays on, leaving it off meant every login sent the watch a command whose last
+     * parameter was missing.
+     *
+     * The value is passed through as given so any mode the firmware knows can be reached, but
+     * a GPS switch is appended when the caller leaves it out, because defaulting that to
+     * absent is what the old command effectively did.
+     */
+    } else if (strlen(cmd) > 8 && memcmp(cmd, "LOCMODE=", 8) == 0) {
+        const char * value = cmd + 8;
+        //count the commas: mode,interval is two fields, mode,interval,gps is three
+        size_t fields = 1;
+
+        for (const char * p = value; *p && *p != '#' && *p != '\n'; p++) {
+            if (*p == ',') {
+                fields++;
+            }
+        }
+
         send_string(conn, "IWBP34,");
         send_string(conn, conn->imei);
-        send_string(conn, ",080835,1,");
-        //"TIMES=" is six characters; +7 skipped the first character of the value, so
-        //TIMES=30 went out as "0"
-        send_string(conn, cmd + 6);
+        send_string(conn, ",080835,");
+
+        if (fields >= 3) {
+            send_value_terminated(conn, value);
+
+        } else {
+            //no GPS switch given - keep the module on rather than send the field empty
+            char padded[64] = {0};
+            size_t w = 0;
+
+            for (const char * p = value; *p && *p != '#' && *p != '\n' && w + 3 < sizeof(padded); p++) {
+                padded[w++] = *p;
+            }
+
+            padded[w++] = ',';
+            padded[w++] = '1';
+            padded[w] = 0;
+            send_value_terminated(conn, padded);
+        }
 
     } else if (strlen(cmd) > 6 && memcmp(cmd, "MSG=", 4) == 0) {
         send_string(conn, "IWBP40,");
@@ -884,8 +948,13 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
     //send responses
     switch (message_type) {
         case 0:
+            /*
+             * Only the time sync. This also sent TIMES=0000@2359#, which became a malformed
+             * BP34 - see the LOCMODE= handler above - on every single login. The location
+             * interval is owned by BP15 through UPDATE= and by the adaptive tracking, so
+             * there was nothing for it to set here even had it been well formed.
+             */
             thinkrace_send_command(conn, "SYNCTIME#");
-            thinkrace_send_command(conn, "TIMES=0000@2359#");
             break;
 
         case 1:
