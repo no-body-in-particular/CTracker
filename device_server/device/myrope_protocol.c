@@ -216,7 +216,7 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
         if (strlen(data_buffers[8]) > 0) {
             size_t tower_count = split_to('/', data_buffers[8], strlen(data_buffers[8]) + 1, cell_split, 128) / 5;
             size_t point_count = 0;
-            multilaterate_point points[10];
+            multilaterate_point points[10] = {0};
 
             //points[] holds ten and the field can describe twenty five, so bound the loop by
             //the array as well as by what arrived - point_count indexes it directly
@@ -234,6 +234,9 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
                     points[point_count].lat = tower.location.lat;
                     points[point_count].lng = tower.location.lng;
                     points[point_count].strength = atoi(cell_split[tower_idx + 4]) * 25;
+                    //the lookup says how far out it thinks it is, and that is a far better
+                    //weight than a signal bar. It was being thrown away here.
+                    points[point_count].accuracy = tower.location.radius;
                     point_count++;
                 }
             }
@@ -245,6 +248,8 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
                 lng = result.lng;
                 valid_position = true;
                 num_sats = point_count;
+                log_line(conn, "multilaterated %u towers to %f,%f, good to about %.0f metres\n",
+                         (unsigned)point_count, result.lat, result.lng, result.accuracy);
             }
         }
     }
