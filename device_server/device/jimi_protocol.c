@@ -538,96 +538,143 @@ static bool jimi_v2_text(connection * conn, data_packet_v2_header header, size_t
 }
 
 /*
- * 0x17 and its relatives: the device is asking the server to turn its position into a street
- * address, naming the phone number the answer should be sent to. The number arrives as ASCII
- * inside an otherwise binary packet.
+ * The address request, in both the forms this protocol family uses.
  *
- * The lookup is attempted here and the result recorded, so the address at least reaches the
- * command log and the operator. Delivering it back to the handset is the part that is still
- * missing: the reply format is not documented in anything we have, and the alternative the
- * protocol assumes - the server sending an SMS to that number - needs a gateway this system
- * does not have. Recording the request beats discarding it, which is what happened before.
+ * 0x1A and 0x2A carry a GPS fix: date and time, satellite count, latitude, longitude, speed
+ * and course, then the phone number and a language flag. 0x17 and 0xA7 carry the serving cell
+ * instead - mcc, mnc, lac and cell id - for a device with no fix. Either way the device is
+ * asking the server to turn a position into a street address and send it to that number.
+ *
+ * The cell form is worth having for more than the address: it tells us where the device is,
+ * which is a position we can resolve and record even when the request itself cannot be
+ * answered.
+ *
+ * The reply goes back as 0x17 for Chinese or 0x97 for English, framed as the specification
+ * describes: a length byte, four bytes of server flag, then ALARMSMS&&<address>&&<phone>##.
+ * That frame is what traccar sends too, which is worth something given it is deployed against
+ * far more of these devices than this server will ever see.
  */
-void process_address_request(connection * conn) {
+static void send_address_response(connection * conn, const char * text, uint8_t protocol) {
+    data_packet response = get_basic_packet();
+    size_t textlen = strlen(text);
+
+    if (textlen > sizeof(response.data) - 8) {
+        textlen = sizeof(response.data) - 8;
+    }
+
+    response.header.protocol_number = protocol;
+    //length of what sits between the server flag and the serial number
+    response.data[0] = (uint8_t)textlen;
+    //server flag bit, which nothing here uses
+    response.data[1] = 0;
+    response.data[2] = 0;
+    response.data[3] = 0;
+    response.data[4] = 0;
+    memcpy(response.data + 5, text, textlen);
+    response.header.length = (uint8_t)min(255, 5 + 5 + textlen);
+    response.footer.serial_number = PACKET(conn).footer.serial_number;
+    response.footer.crc = crc16(response);
+    send_data_packet(conn, response);
+}
+
+void process_address_request(connection * conn, bool cell_form) {
     char number[32] = {0};
     char address[BUF_SIZE] = {0};
     char line[BUF_SIZE] = {0};
+    char text[BUF_SIZE] = {0};
     size_t length = data_length(PACKET(conn));
+    const uint8_t * d = PACKET(conn).data;
     size_t w = 0;
+    size_t phone_offset;
+    float lat = conn->current_lat;
+    float lon = conn->current_lon;
+    bool have_position = (lat != 0 || lon != 0);
 
-    /*
-     * The documented layout for 0x1A is: 6 bytes of date and time, 1 byte of satellite count
-     * and GPS information length, 4 of latitude, 4 of longitude, 1 of speed, 2 of course and
-     * status - 18 bytes - and then the phone number as 21 bytes of ascii, followed by a 2
-     * byte language flag. Read it from there when the packet is long enough to hold it, and
-     * fall back to hunting for the longest digit run otherwise, which is what the variants
-     * that put the number somewhere else need.
-     */
-    const size_t phone_offset = 18;
-    const size_t phone_field = 21;
-
-    if (length >= phone_offset + phone_field) {
-        for (size_t i = 0; i < phone_field && w + 1 < sizeof(number); i++) {
-            uint8_t c = PACKET(conn).data[phone_offset + i];
-
-            if (c == 0) {
-                break;
-            }
-
-            if (c >= '0' && c <= '9') {
-                number[w++] = (char)c;
-            }
+    if (cell_form) {
+        /*
+         * mcc(2) mnc(1 or 2) lac(2) cellid(3). The top bit of the mcc says how wide the mnc
+         * is - set means two bytes - which is how a country whose codes need two is told
+         * apart from one whose codes do not.
+         */
+        if (length < 8) {
+            log_line(conn, "cell address request too short: %u bytes\n", (unsigned)length);
+            return;
         }
 
-        number[w] = 0;
+        uint16_t mcc_raw = (uint16_t)((d[0] << 8) | d[1]);
+        size_t mnc_len = (mcc_raw & 0x8000) ? 2 : 1;
+        cell_tower tower;
+        memset(&tower, 0, sizeof(tower));
+        tower.mcc = mcc_raw & 0x7fff;
+        tower.mnc = d[2];
+
+        if (mnc_len == 2) {
+            tower.mnc = (uint8_t)((d[2] << 8) | d[3]);
+        }
+
+        size_t p = 2 + mnc_len;
+        tower.lac = (uint16_t)((d[p] << 8) | d[p + 1]);
+        tower.cell_id = (uint32_t)((d[p + 2] << 16) | (d[p + 3] << 8) | d[p + 4]);
+        phone_offset = p + 5;
+        log_line(conn, "address request from cell mcc %u mnc %u lac %u cell %u\n",
+                 (unsigned)tower.mcc, (unsigned)tower.mnc, (unsigned)tower.lac,
+                 (unsigned)tower.cell_id);
+        location_result found = geolocate_tower(&tower);
+
+        if (found.valid) {
+            lat = found.lat;
+            lon = found.lng;
+            have_position = true;
+            //a request that carries a cell is also a position report, so record it
+            move_to(conn, time(0), 2, lat, lon);
+        }
+
+    } else {
+        //datetime(6) sats(1) lat(4) lon(4) speed(1) course and status(2)
+        phone_offset = 18;
     }
 
-    //the longest run of digits in the payload is the phone number
-    size_t best_start = 0, best_len = 0, run_start = 0, run = 0;
+    for (size_t i = 0; i < 21 && phone_offset + i < length && w + 1 < sizeof(number); i++) {
+        uint8_t c = d[phone_offset + i];
 
-    for (size_t i = 0; i < length; i++) {
-        uint8_t c = PACKET(conn).data[i];
+        if (c == 0) {
+            break;
+        }
 
-        if (c >= '0' && c <= '9') {
-            if (run == 0) {
-                run_start = i;
-            }
-
-            run++;
-
-            if (run > best_len) {
-                best_len = run;
-                best_start = run_start;
-            }
-
-        } else {
-            run = 0;
+        if ((c >= '0' && c <= '9') || c == '+') {
+            number[w++] = (char)c;
         }
     }
 
-    if (w == 0) {
-        for (size_t i = 0; i < best_len && w + 1 < sizeof(number); i++) {
-            number[w++] = (char)PACKET(conn).data[best_start + i];
-        }
+    number[w] = 0;
 
-        number[w] = 0;
+    //the language flag sits straight after the number; 1 is Chinese, anything else English
+    uint8_t language = 2;
+
+    if (phone_offset + 22 < length) {
+        language = d[phone_offset + 21 + 1];
     }
 
-    if (conn->current_lat == 0 && conn->current_lon == 0) {
+    if (!have_position) {
+        snprintf(address, sizeof(address), "NA");
         snprintf(line, sizeof(line), "address request for %s, but no position is known yet",
                  w ? number : "an unnamed number");
 
-    } else if (here_reverse_geocode(conn->current_lat, conn->current_lon, address, sizeof(address))) {
+    } else if (here_reverse_geocode(lat, lon, address, sizeof(address))) {
         snprintf(line, sizeof(line), "address request for %s: %s",
                  w ? number : "an unnamed number", address);
 
     } else {
-        snprintf(line, sizeof(line), "address request for %s at %f,%f - no address could be looked up",
-                 w ? number : "an unnamed number", conn->current_lat, conn->current_lon);
+        //no geocoder to hand, so answer with the position itself rather than nothing
+        snprintf(address, sizeof(address), "%f,%f", lat, lon);
+        snprintf(line, sizeof(line), "address request for %s at %s - no street address available",
+                 w ? number : "an unnamed number", address);
     }
 
     log_line(conn, "%s\n", line);
     log_command_response(conn, (unsigned char *)line);
+    snprintf(text, sizeof(text), "ALARMSMS&&%s&&%s##", address, w ? number : "0");
+    send_address_response(conn, text, language == 1 ? 0x17 : 0x97);
 }
 
 void process_v2(connection * conn) {
@@ -785,10 +832,23 @@ void process_v1(connection * conn) {
          * reuse it for wifi or rfid data, which is not an address request at all, so it now
          * falls through to the unhandled-protocol logging where it can be identified.
          */
+        //carrying a gps fix
         case 0x1A:
         case 0x2A:
-            process_address_request(conn);
-            send_data_packet(conn, create_response(PACKET(conn).header.protocol_number, PACKET(conn).footer.serial_number));
+            process_address_request(conn, false);
+            break;
+
+        /*
+         * Carrying the serving cell instead. 0x17 was taken out of this list earlier on the
+         * strength of the base GT06 document, which has 0x17 only as the server's Chinese
+         * address reply. The JM-LL301 document for this same family has it as the terminal's
+         * LBS address request, and the packet this server captured matches that layout field
+         * for field - mcc 204, mnc 8, then "+31619036989" in ascii - so both are true: the
+         * number is used in each direction. Reading one document was not enough.
+         */
+        case 0x17:
+        case 0xA7:
+            process_address_request(conn, true);
             break;
 
         default: {
