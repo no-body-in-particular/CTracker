@@ -158,7 +158,7 @@ void process_message(connection * conn, char * string, size_t length) {
     pad_imei(imei);
 
     if (strlen(conn->imei) <= 1 || strcmp(conn->imei, imei) != 0) {
-        memcpy(conn->imei, imei, strlen(imei) + 1);
+        snprintf(conn->imei, sizeof(conn->imei), "%s", imei);
         init_imei(conn);
         //default wifi on
         megastek_send_command(conn, "W040,0");

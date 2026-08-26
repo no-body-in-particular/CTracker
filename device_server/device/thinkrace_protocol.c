@@ -1034,7 +1034,8 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
             //data_buffers[0] is attacker sized; imei is 64 bytes
             snprintf(imei, sizeof(imei), "%s", data_buffers[0]);
             pad_imei(imei);
-            memcpy(conn->imei, imei, strlen(imei) + 1);
+            //and conn->imei is seventeen, which is the bound that matters here
+            snprintf(conn->imei, sizeof(conn->imei), "%s", imei);
             init_imei(conn);
             break;
 

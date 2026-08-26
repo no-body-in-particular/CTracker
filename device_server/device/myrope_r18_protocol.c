@@ -479,7 +479,7 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
 
 //keepalive message
     if (memcmp(first_message_part[3], "LK", 2) == 0) {
-        memcpy(conn->imei, imei, strlen(imei) + 1);
+        snprintf(conn->imei, sizeof(conn->imei), "%s", imei);
         pad_imei(conn->imei);
         init_imei(conn);
         snprintf(response, sizeof(response), "[3g*%s*0002*LK]", imei);

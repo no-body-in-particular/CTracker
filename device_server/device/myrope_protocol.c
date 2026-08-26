@@ -350,9 +350,9 @@ void myrope_process_message(connection * conn, char * string, size_t length) {
 
     switch (message_type) {
         case 1:
-            strcpy(imei, data_buffers[2]);
+            snprintf(imei, sizeof(imei), "%s", data_buffers[2]);
             pad_imei(imei);
-            memcpy(conn->imei, imei, strlen(imei) + 1);
+            snprintf(conn->imei, sizeof(conn->imei), "%s", imei);
             init_imei(conn);
             snprintf(response, sizeof(response), "$HX,0001,%s,%s,OK,#", data_buffers[2], data_buffers[3]);
             myrope_send_command(conn, response);
