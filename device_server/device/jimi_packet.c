@@ -25,20 +25,45 @@ size_t data_length(data_packet packet) {
 
 
 // calculate 16 bits CRC of the given length data.
+/*
+ * CRC-ITU over everything from the packet length to the serial number inclusive, which is
+ * what the GT06 specification says and what both framings use - the only difference is that
+ * the long packet's length is two bytes rather than one.
+ *
+ * The v2 case used to be a comment saying the calculation was unknown, which left two
+ * problems. Long packets were never checked at all, so a corrupted one was parsed as though
+ * it were sound. And crc was declared without an initial value and only set in the v1 branch,
+ * so anything that did reach the loop below through the v2 path was folding bytes into an
+ * uninitialised variable. Nothing called it that way, but only by luck of a short circuit in
+ * the one caller.
+ *
+ * Verified against a captured 0x9C packet - 79 79 00 08 9c 04 00 00 00 7c bf 82 0d 0a - whose
+ * stored checksum this reproduces exactly.
+ */
 uint16_t crc16(data_packet packet) {
-    uint16_t crc;
+    uint16_t crc = crc16_init();
     uint16_t length = data_length(packet);
 
-    if (!is_v2(packet)) {
-        crc = crc16_addbyte(crc16_init(), packet.header.length);
-        crc =  crc16_addbyte(crc, packet.header.protocol_number);
+    if (is_v2(packet)) {
+        //the length as it arrived, both bytes, in wire order
+        const uint8_t * len_bytes = (const uint8_t *) & packet.v2_header.length;
+        crc = crc16_addbyte(crc, len_bytes[0]);
+        crc = crc16_addbyte(crc, len_bytes[1]);
+        crc = crc16_addbyte(crc, packet.v2_header.protocol_number);
+        //the information byte belongs to the content, so it is covered too
+        crc = crc16_addbyte(crc, packet.v2_header.information);
 
     } else {
-        //unknown how the crc for a v2 packet is calculated
+        crc = crc16_addbyte(crc, packet.header.length);
+        crc = crc16_addbyte(crc, packet.header.protocol_number);
     }
 
-    for (int i = 0; i < min(250, length); i++) {
-        crc =  crc16_addbyte(crc, packet.data[i]);
+    //a v1 packet cannot carry more than 250 bytes of payload - its length field is a single
+    //byte - so this bound only ever bites on a long packet, where it must not
+    size_t covered = is_v2(packet) ? length : min(250, length);
+
+    for (size_t i = 0; i < covered && i < sizeof(packet.data); i++) {
+        crc = crc16_addbyte(crc, packet.data[i]);
     }
 
     crc = crc16_adduint16(crc, packet.footer.serial_number);

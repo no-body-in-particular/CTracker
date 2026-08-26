@@ -805,10 +805,13 @@ void process_v1(connection * conn) {
 }
 
 void process_current_packet(connection * conn) {
-    //test if crc and end bytes valid. not for a v2 packet because the checksum for that is weird.
+    //Both framings are checked now - see crc16(). A failure is still only reported rather
+    //than acted on: the parser has always carried on regardless, and starting to drop
+    //packets on a checksum this server has only just begun computing would be a poor way to
+    //find out it had it wrong.
     if (PACKET(conn).footer.stop_bit[0] != 0xD ||
-            PACKET(conn).footer.stop_bit[1] != 0xA || (
-                !is_v2(PACKET(conn)) && PACKET(conn).footer.crc != crc16(PACKET(conn)))) {
+            PACKET(conn).footer.stop_bit[1] != 0xA ||
+            PACKET(conn).footer.crc != crc16(PACKET(conn))) {
         log_line(conn, "invalid footer bytes or checksum.\n");
     }
 
