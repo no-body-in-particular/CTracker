@@ -42,4 +42,12 @@ location_result here_geolocate_wifi(wifi_network * network, size_t network_count
 location_result geolocate_tower(cell_tower * tower);
 location_result geolocate_wifi(wifi_network * network, size_t network_count);
 
+/*
+ * Turn a position into a street address. The JIMI protocol has packets in which the device
+ * asks the server for one - see process_address_request() - and this is the lookup behind
+ * that. Writes at most out_size bytes including the terminator and returns true if an
+ * address was found.
+ */
+bool here_reverse_geocode(float lat, float lon, char * out, size_t out_size);
+
 #endif

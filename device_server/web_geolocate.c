@@ -263,3 +263,72 @@ location_result geolocate_wifi(wifi_network * network, size_t network_count) {
 
     return ret;
 }
+
+
+/*
+ * A GET, unlike the positioning calls above which post a JSON body, so it cannot reuse
+ * do_geolocate(). The reply is JSON; the field wanted is the "label" of the first item,
+ * which HERE gives as a full one line address.
+ */
+bool here_reverse_geocode(float lat, float lon, char * out, size_t out_size) {
+    CURL * curl;
+    CURLcode res;
+    memory chunk = {{0}, 0};
+    char url[BUF_SIZE];
+
+    if (!out || out_size == 0) {
+        return false;
+    }
+
+    out[0] = 0;
+    snprintf(url, sizeof(url),
+             "https://revgeocode.search.hereapi.com/v1/revgeocode?at=%f,%f&lang=en-US&apiKey=%s",
+             lat, lon, HERE_API_KEY);
+    curl = curl_easy_init();
+
+    if (!curl) {
+        return false;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    //a device is waiting on this inside its own connection thread, so it must not hang
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+    res = curl_easy_perform(curl);
+
+    if (res != CURLE_OK) {
+        fprintf(stderr, "reverse geocode failed: %s\n", curl_easy_strerror(res));
+        curl_easy_cleanup(curl);
+        return false;
+    }
+
+    curl_easy_cleanup(curl);
+
+    if (!chunk.size) {
+        return false;
+    }
+
+    char * label = strstr(chunk.response, "\"label\":\"");
+
+    if (!label) {
+        return false;
+    }
+
+    label += 9;
+    size_t w = 0;
+
+    //copy up to the closing quote, honouring the JSON escapes that can appear in a street name
+    for (size_t i = 0; label[i] && label[i] != '"' && w + 1 < out_size; i++) {
+        if (label[i] == '\\' && label[i + 1]) {
+            i++;
+        }
+
+        out[w++] = label[i];
+    }
+
+    out[w] = 0;
+    return w > 0;
+}

@@ -427,8 +427,15 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
 
     logprintf(conn, "\n");
 
-    if (str_count < 2) {
-        log_line(conn, "invalid message size.\n", string);
+    /*
+     * This demanded a comma. The structure that actually matters is the '*' split checked
+     * just below, and a whole class of message carries no comma at all - the bare
+     * acknowledgements FIND, SOS1, CENTER and ppsync - so every one of them was rejected
+     * here before reaching the dispatch below. The handlers that need several comma fields
+     * check the count themselves.
+     */
+    if (str_count < 1) {
+        log_line(conn, "empty message.\n", string);
         return;
     }
 
@@ -471,7 +478,9 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
         return;
     }
 
-    if (memcmp(first_message_part[3], "DEVICEFUNCCOUNT", 2) == 0) {
+    //this compared two bytes of a fifteen byte name, so every message beginning "DE" was
+    //answered as if it were DEVICEFUNCCOUNT
+    if (strlen(first_message_part[3]) >= 15 && memcmp(first_message_part[3], "DEVICEFUNCCOUNT", 15) == 0) {
         snprintf(response, sizeof(response), "[3g*%s*000f*DEVICEFUNCCOUNT]", imei);
         send_string(conn, response);
         return;
@@ -481,6 +490,16 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
         myrope_r18_process_position(conn, str_count, data_buffers);
         return;
     }
+
+    /*
+     * Everything else used to fall off the end of this chain without a word. A watch of this
+     * family acknowledges a command by sending its name back - FIND, CENTER, SOS1 - so those
+     * acknowledgements were being discarded and a command sent to one of these devices
+     * looked as though it had gone unanswered. Record it as the command reply it is, and
+     * leave a line in the log naming anything genuinely unrecognised.
+     */
+    log_line(conn, "unhandled message: %s\n", first_message_part[3]);
+    log_command_response(conn, first_message_part[3]);
 }
 
 

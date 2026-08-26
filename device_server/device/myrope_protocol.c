@@ -317,7 +317,14 @@ void myrope_process_message(connection * conn, char * string, size_t length) {
     unsigned char response[BUF_SIZE] = {0};
     unsigned char * data_buffers[40] = {0};
     unsigned char imei[64] = {0};
-    uint8_t message_type = 0;
+    /*
+     * Not uint8_t. The code is four digits and the confirmations the device sends back carry
+     * codes of 1002, 1010 and 1014, all of which truncated - 1002 became 234 and matched
+     * nothing. Worse than losing them: any code whose low byte collided with a real one was
+     * acted on as that message, so a 257 would have been taken for a login and a 258 for a
+     * heartbeat.
+     */
+    unsigned int message_type = 0;
     string = strip_whitespace(string);
     log_line(conn, "got message: %s\n", string);
     memset(imei, 0, 64);
@@ -370,6 +377,25 @@ void myrope_process_message(connection * conn, char * string, size_t length) {
 
         case 8:
             myrope_process_temperature(conn, str_count, data_buffers);
+            break;
+
+        default:
+
+            /*
+             * The device confirms a command by echoing back the code it was sent - 1002 for
+             * an interval change, 1010 and 1014 for the others - with the value it accepted
+             * and "/OK". The switch had no default, so every one of those confirmations was
+             * dropped and a command sent through this protocol appeared to go unanswered.
+             * Codes below 1000 are device-originated and genuinely unknown, so say so.
+             */
+            if (message_type >= 1000 && str_count > 3) {
+                snprintf(response, sizeof(response), "%s: %s", data_buffers[1], data_buffers[3]);
+                log_command_response(conn, response);
+
+            } else {
+                log_line(conn, "unhandled message type %u\n", message_type);
+            }
+
             break;
     }
 }

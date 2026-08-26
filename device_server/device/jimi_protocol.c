@@ -18,6 +18,7 @@
 #include "../connection.h"
 #include "../commands.h"
 #include "../logfiles.h"
+#include "../web_geolocate.h"
 #include "../events.h"
 #include "../geofence.h"
 #include "../lbs_lookup.h"
@@ -454,12 +455,165 @@ static const char * preview_ascii(const uint8_t * data, size_t length, char * ou
     return out;
 }
 
+/*
+ * Some devices send a 0x79 packet whose payload is plain text and which carries no protocol
+ * or information field at all - the two bytes the header format puts there are simply the
+ * first two characters of the message. A parameter dump beginning "ALM1=C5;ALM2=D5;.."
+ * therefore arrives as protocol number 0x41 ('A') with information 0x4c ('L'), and the
+ * switch below, reading 0x41 as a protocol number, threw the whole thing away. Others put a
+ * short binary marker in front, as the 0xFF passthrough does with ff ff ff 01 before
+ * "<id>:MODE,1,60#".
+ *
+ * These are replies to commands - alarm, SOS, centre number and geofence settings, or an
+ * echo of what the device was told - so they belong in the command log. Only attempted for
+ * protocol numbers the switch does not already claim, because a real binary packet can
+ * easily begin with a byte that happens to be printable.
+ */
+static bool jimi_v2_text(connection * conn, data_packet_v2_header header, size_t length) {
+    uint8_t raw[BUF_SIZE];
+    char text[BUF_SIZE];
+    size_t n = 0;
+
+    switch (header.protocol_number) {
+        //the ones process_v2 handles itself, whatever their bytes look like
+        case 0x01:
+        case 0x21:
+        case 0x70:
+        case 0x94:
+            return false;
+    }
+
+    raw[n++] = header.protocol_number;
+    raw[n++] = header.information;
+
+    for (size_t i = 0; i < length && n < sizeof(raw); i++) {
+        raw[n++] = PACKET(conn).data[i];
+    }
+
+    //step over a binary marker sitting in front of the text
+    size_t start = 0;
+
+    while (start < n && (raw[start] < 32 || raw[start] > 126)) {
+        start++;
+    }
+
+    if (n - start < 4) {
+        return false;
+    }
+
+    //and only believe it is text if what remains really is text
+    size_t printable = 0;
+
+    for (size_t i = start; i < n; i++) {
+        if (raw[i] == 0 || (raw[i] >= 32 && raw[i] <= 126)) {
+            printable++;
+        }
+    }
+
+    if (printable * 10 < (n - start) * 9) {
+        return false;
+    }
+
+    size_t w = 0;
+
+    for (size_t i = start; i < n && w + 1 < sizeof(text); i++) {
+        if (raw[i] == 0) {
+            break;
+        }
+
+        if (raw[i] >= 32 && raw[i] <= 126) {
+            text[w++] = (char)raw[i];
+        }
+    }
+
+    text[w] = 0;
+
+    if (w == 0) {
+        return false;
+    }
+
+    log_line(conn, "text packet (protocol byte 0x%02X): %s\n", header.protocol_number, text);
+    log_command_response(conn, (unsigned char *)text);
+    return true;
+}
+
+/*
+ * 0x17 and its relatives: the device is asking the server to turn its position into a street
+ * address, naming the phone number the answer should be sent to. The number arrives as ASCII
+ * inside an otherwise binary packet.
+ *
+ * The lookup is attempted here and the result recorded, so the address at least reaches the
+ * command log and the operator. Delivering it back to the handset is the part that is still
+ * missing: the reply format is not documented in anything we have, and the alternative the
+ * protocol assumes - the server sending an SMS to that number - needs a gateway this system
+ * does not have. Recording the request beats discarding it, which is what happened before.
+ */
+void process_address_request(connection * conn) {
+    char number[32] = {0};
+    char address[BUF_SIZE] = {0};
+    char line[BUF_SIZE] = {0};
+    size_t length = data_length(PACKET(conn));
+    size_t w = 0;
+
+    //the longest run of digits in the payload is the phone number
+    size_t best_start = 0, best_len = 0, run_start = 0, run = 0;
+
+    for (size_t i = 0; i < length; i++) {
+        uint8_t c = PACKET(conn).data[i];
+
+        if (c >= '0' && c <= '9') {
+            if (run == 0) {
+                run_start = i;
+            }
+
+            run++;
+
+            if (run > best_len) {
+                best_len = run;
+                best_start = run_start;
+            }
+
+        } else {
+            run = 0;
+        }
+    }
+
+    for (size_t i = 0; i < best_len && w + 1 < sizeof(number); i++) {
+        number[w++] = (char)PACKET(conn).data[best_start + i];
+    }
+
+    number[w] = 0;
+
+    if (conn->current_lat == 0 && conn->current_lon == 0) {
+        snprintf(line, sizeof(line), "address request for %s, but no position is known yet",
+                 w ? number : "an unnamed number");
+
+    } else if (here_reverse_geocode(conn->current_lat, conn->current_lon, address, sizeof(address))) {
+        snprintf(line, sizeof(line), "address request for %s: %s",
+                 w ? number : "an unnamed number", address);
+
+    } else {
+        snprintf(line, sizeof(line), "address request for %s at %f,%f - no address could be looked up",
+                 w ? number : "an unnamed number", conn->current_lat, conn->current_lon);
+    }
+
+    log_line(conn, "%s\n", line);
+    log_command_response(conn, (unsigned char *)line);
+}
+
 void process_v2(connection * conn) {
     uint8_t response[BUF_SIZE];
     size_t length = data_length(PACKET(conn));
     data_packet_v2_header header = PACKET(conn).v2_header;
     size_t information_size = header.information;
     size_t data_offs = 4 + information_size;
+
+    //before the length checks below, which are meaningless for a packet whose "information"
+    //byte is really a letter
+    if (jimi_v2_text(conn, header, length)) {
+        conn->timeout_time = time(0) + JIMI_TIMEOUT;
+        return;
+    }
 
     if (length <= data_offs) {
         //Not necessarily malformed - some devices send a long packet whose payload begins
@@ -581,6 +735,13 @@ void process_v1(connection * conn) {
 
         case 0x8a://time request
             send_data_packet(conn, create_time_response(PACKET(conn).footer.serial_number));
+            break;
+
+        case 0x17://address request by phone number
+        case 0x2A:
+        case 0x97:
+            process_address_request(conn);
+            send_data_packet(conn, create_response(PACKET(conn).header.protocol_number, PACKET(conn).footer.serial_number));
             break;
 
         default: {
