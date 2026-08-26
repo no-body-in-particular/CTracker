@@ -218,7 +218,9 @@ void myrope_process_position(connection * conn, size_t parse_count, unsigned cha
             size_t point_count = 0;
             multilaterate_point points[10];
 
-            for (size_t i = 0; i < tower_count; i++) {
+            //points[] holds ten and the field can describe twenty five, so bound the loop by
+            //the array as well as by what arrived - point_count indexes it directly
+            for (size_t i = 0; i < tower_count && point_count < (sizeof(points) / sizeof(points[0])); i++) {
                 size_t tower_idx = i * 5;
                 tower.mcc = atoi(cell_split[tower_idx]);
                 tower.mnc = atoi(cell_split[tower_idx + 1]);
