@@ -194,9 +194,13 @@
     margin-right: 2pt;
 }
 
+/* :focus stays set after a mouse click, so this left the dark green wash sitting behind
+   every button the user had last pressed - most visibly the recentre control over the map,
+   which looked like it had latched on. :focus-visible fires for keyboard navigation but not
+   for a plain click, so the keyboard outline is kept without the button appearing stuck. */
 button:hover,
   button:active,
-  button:focus {
+  button:focus-visible {
     background: #116114;
 }
 

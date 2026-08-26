@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -74,18 +75,24 @@ int create_server_sock(char * addr, int port) {
     client_addr.sin_addr.s_addr = inet_addr(addr);
     client_addr.sin_port = htons(port);
 
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, 4) < 0) {
+    //run_server retries this in a loop, and each failed attempt used to abandon its
+    //descriptor - so a port that stayed busy leaked one fd every ten seconds until the
+    //process ran out entirely.
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0) {
         fprintf(stderr, "Failed to set socket address %s:%d\n", addr, port);
+        close(sock);
         return -1;
     }
 
     if (bind(sock, (struct sockaddr *) &client_addr, sizeof(client_addr)) < 0) {
         fprintf(stderr, "Failed to bind server socket on %s:%d\n", addr, port);
+        close(sock);
         return -1;
     }
 
     if (listen(sock, 5) < 0) {
         fprintf(stderr, "Failed to listen on %s:%d\n", addr, port);
+        close(sock);
         return -1;
     }
 
@@ -99,14 +106,20 @@ int wait_for_client(int s) {
     fprintf(stdout, "Accepting connections with file descriptor: %d\n", s);
     int newsock = accept(s, (struct sockaddr *) &peer, &len);
 
-    if (newsock < 0 && errno != EINTR) {
-        fprintf(stdout, "Failed to accept connection with file descriptor %d: %s\n", s, strerror(errno));
+    if (newsock < 0) {
+        //EINTR used to fall through to set_nonblock() and the logging below with an fd of -1
+        if (errno != EINTR) {
+            fprintf(stdout, "Failed to accept connection with file descriptor %d: %s\n", s, strerror(errno));
+        }
+
         return -1;
     }
 
-    struct hostent * hostinfo = gethostbyaddr((char *) &peer.sin_addr.s_addr, len, AF_INET);
-
-    fprintf(stdout, "Incoming connection accepted from %s[%s]\n", !hostinfo ? "" : hostinfo->h_name, inet_ntoa(peer.sin_addr));
+    //len is sizeof(struct sockaddr) - 16 bytes - but the address handed over is the four
+    //byte s_addr, so this read twelve bytes past it. It is also a blocking reverse lookup
+    //run inside the accept loop, which stalls every new connection behind a DNS round trip,
+    //and gethostbyaddr is not thread safe. The peer address alone is what the log needs.
+    fprintf(stdout, "Incoming connection accepted from [%s]\n", inet_ntoa(peer.sin_addr));
     set_nonblock(newsock);
     return (newsock);
 }
@@ -127,9 +140,15 @@ void determine_device(connection * conn) {
 }
 
 void * process_thread(void * int_ptr) {
-    connection conn = new_connection((int)int_ptr);
-    struct timeval to = { 0, 100 };
+    //nothing ever joins these threads. Left joinable, every finished connection kept its
+    //whole stack - and struct connection is a few hundred KB of buffers and geofence slots
+    //- reserved until the process exited. Detaching lets it be reclaimed at pthread_exit.
+    pthread_detach(pthread_self());
+    //round tripping the fd through void * as a plain int is undefined on LP64; intptr_t is
+    //the type that is actually guaranteed to survive the trip
+    connection conn = new_connection((int)(intptr_t)int_ptr);
     time_t since_packet = time(0);
+    bool buffer_stalled = false;
 
     for (;;) {
         //if we've read data from our cmmand we need to send it
@@ -139,6 +158,9 @@ void * process_thread(void * int_ptr) {
             //if an error happens during sending - the client probably gave up
             if (sent < 0 && errno != EWOULDBLOCK) {
                 fprintf(stdout, "client disconnected: %s\n", strerror(errno));
+                //this path used to leave the socket and every log FILE * open
+                close(conn.socket);
+                close_connection(&conn);
                 pthread_exit(0);
             }
 
@@ -166,7 +188,43 @@ void * process_thread(void * int_ptr) {
         //if our program closed - end the session
         if (rdCount < 0 && errno != EWOULDBLOCK) {
             fprintf(stdout, "socket closed : %s\n", strerror(errno));
+            close(conn.socket);
+            close_connection(&conn);
             pthread_exit(0);
+        }
+
+        //read() returning 0 on a non-empty request is the peer closing cleanly. Neither
+        //branch used to match it, so a device that hung up politely left its thread and
+        //socket sitting here until the inactivity timeout eventually noticed.
+        if (rdCount == 0 && conn.read_count < BUF_SIZE) {
+            fprintf(stdout, "client closed the connection\n");
+
+            if (conn.log_disconnect) {
+                log_event(&conn, "device disconnected");
+            }
+
+            close(conn.socket);
+            close_connection(&conn);
+            pthread_exit(0);
+        }
+
+        //A full buffer leaves read() with a size of zero, so it returns 0 for ever and the
+        //loop spins at full tilt. The parser below drains the buffer in the normal case, so
+        //only give up once it has had a pass at it and the buffer is still full - dropping
+        //on the first sight of a full buffer would kill devices whose packet merely happens
+        //to fill it.
+        if (conn.read_count >= BUF_SIZE) {
+            if (buffer_stalled) {
+                fprintf(stdout, "receive buffer full and not draining, dropping client\n");
+                close(conn.socket);
+                close_connection(&conn);
+                pthread_exit(0);
+            }
+
+            buffer_stalled = true;
+
+        } else {
+            buffer_stalled = false;
         }
 
         //add the amount of data to the buffer that we have to send
@@ -260,8 +318,10 @@ void run_server() {
             continue;
         }
 
-        if ( client > 0 && ( pthread_create(&thread_id, NULL,  process_thread, (void *) client) < 0)) {
+        if ( client > 0 && ( pthread_create(&thread_id, NULL,  process_thread, (void *)(intptr_t) client) < 0)) {
             fprintf(stderr, "Failed to create thread.\n");
+            //the descriptor is ours again if no thread took it
+            close(client);
         }
     }
 }

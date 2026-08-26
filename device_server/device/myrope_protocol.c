@@ -28,11 +28,16 @@ bool myrope_send_string( void * c,  char * cmd) {
     unsigned char cx = 0;
 
     for (size_t i = 0; i < strlen(cmd); i++) {
-        cx ^= cmd[i];
+        cx ^= (unsigned char)cmd[i];
     }
 
-    sprintf(buffer, "%s,%x,\r\n", cmd, cx);
+    //cmd is itself a BUF_SIZE buffer at every call site, so sprintf of "cmd" plus the
+    //checksum and terminator could not fit and wrote past the end of this one.
+    snprintf(buffer, sizeof(buffer), "%s,%x,\r\n", cmd, cx);
     send_string(conn, buffer);
+    //declared bool and fell off the end, which is undefined - callers were reading a
+    //garbage return value
+    return true;
 }
 
 bool myrope_send_command( void * c,  const char * command ) {
@@ -46,11 +51,11 @@ bool myrope_send_command( void * c,  const char * command ) {
             cmd[strlen(cmd) - 1] = 0;
         }
 
-        sprintf(buffer, "$HX,1002,%s,%s,#", conn->imei, cmd + 7);
+        snprintf(buffer, sizeof(buffer), "$HX,1002,%s,%s,#", conn->imei, cmd + 7);
         myrope_send_string(c, buffer);
         unsigned int interval = atoi(cmd + 7) / 60;
         interval += interval == 0;
-        sprintf(buffer, "$HX,1014,%s,0/0/1/%u,#", conn->imei, interval);
+        snprintf(buffer, sizeof(buffer), "$HX,1014,%s,0/0/1/%u,#", conn->imei, interval);
         myrope_send_string(c, buffer);
 
     } else if (strlen(cmd) > 6 && memcmp(cmd, "MSG=", 4) == 0) {
@@ -60,13 +65,29 @@ bool myrope_send_command( void * c,  const char * command ) {
             cmd[strlen(cmd) - 1] = 0;
         }
 
+        size_t hex_used = 0;
+
         for (char * p = cmd + 4; *p != 0 && *p != '\n'; p++) {
             char tmp[10] = {0};
-            sprintf(tmp, "%2X00", *p);
-            strcat(hex_buffer, tmp);
+            //"%2X" of a plain char sign extends anything above 0x7f into eight hex digits,
+            //so a single accented character wrote "FFFFFFE900" - eleven bytes - into tmp.
+            //It is also a space pad rather than a zero pad, which corrupts the encoding for
+            //values under 0x10; the device expects two hex digits per byte.
+            snprintf(tmp, sizeof(tmp), "%02X00", (unsigned char)*p);
+            size_t tlen = strlen(tmp);
+
+            //the old strcat had no bound at all: four output characters per input
+            //character overran hex_buffer for any message past a quarter of its size
+            if (hex_used + tlen + 1 > sizeof(hex_buffer)) {
+                break;
+            }
+
+            memcpy(hex_buffer + hex_used, tmp, tlen);
+            hex_used += tlen;
+            hex_buffer[hex_used] = 0;
         }
 
-        sprintf(buffer, "$HX,1011,%s,%s,#", conn->imei, hex_buffer);
+        snprintf(buffer, sizeof(buffer), "$HX,1011,%s,%s,#", conn->imei, hex_buffer);
         myrope_send_string(c, buffer);
 
     } else if (strlen(cmd) >= 5 && memcmp(cmd, "ALM=", 4) == 0) {
@@ -74,7 +95,7 @@ bool myrope_send_command( void * c,  const char * command ) {
             cmd[strlen(cmd) - 1] = 0;
         }
 
-        sprintf(buffer, "$HX,1010,%s,0/%s,#", conn->imei, cmd + 4);
+        snprintf(buffer, sizeof(buffer), "$HX,1010,%s,0/%s,#", conn->imei, cmd + 4);
         myrope_send_string(c, buffer);
 
     } else {
@@ -321,14 +342,14 @@ void myrope_process_message(connection * conn, char * string, size_t length) {
             pad_imei(imei);
             memcpy(conn->imei, imei, strlen(imei) + 1);
             init_imei(conn);
-            sprintf(response, "$HX,0001,%s,%s,OK,#", data_buffers[2], data_buffers[3]);
+            snprintf(response, sizeof(response), "$HX,0001,%s,%s,OK,#", data_buffers[2], data_buffers[3]);
             myrope_send_command(conn, response);
             break;
 
         case 4:
             tzset();
             int tz = timezone / -3600 ;
-            sprintf(response, "$HX,1004,%s,TIME,", conn->imei);
+            snprintf(response, sizeof(response), "$HX,1004,%s,TIME,", conn->imei);
             strftime(bufstr, BUF_SIZE - 1, "%y%m%d%H%M%S,#",  t);
             strcat(response, bufstr);
             myrope_send_command(conn, response);
@@ -372,20 +393,20 @@ void myrope_process(void * vp) {
 
 void myrope_warn(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
-    sprintf(buffer, "MSG=%s", reason);
+    snprintf(buffer, sizeof(buffer), "MSG=%s", reason);
     ((connection *)vp)->COMMAND_FUNCTION(vp, buffer);
 }
 
 void myrope_warn_audio(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
-    sprintf(buffer, "MSG=%s", reason);
+    snprintf(buffer, sizeof(buffer), "MSG=%s", reason);
     ((connection *)vp)->COMMAND_FUNCTION(vp, buffer);
 }
 
 void myrope_identify(void * vp) {
     connection * conn = (connection *)vp;
     const uint8_t myrope_start_contains[] = "$HX,0001";
-    const uint8_t first_bytes[256];
+    uint8_t first_bytes[256];
     memset(first_bytes, 0, sizeof(first_bytes));
     memcpy(first_bytes, conn->recv_buffer, 255);
 

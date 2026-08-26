@@ -49,7 +49,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
             cmd[strlen(cmd) - 1] = 0;
         }
 
-        sprintf(buffer, "%04X*CENTER,", strlen(cmd));
+        snprintf(buffer, sizeof(buffer), "%04X*CENTER,", strlen(cmd));
         send_string(conn, buffer);
         send_string(conn, cmd + 7);
         send_string(conn, "]");
@@ -58,7 +58,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*SOS1,", strlen(cmd) + 1);
+        snprintf(buffer, sizeof(buffer), "%04X*SOS1,", strlen(cmd) + 1);
         send_string(conn, buffer);
         send_string(conn, cmd + 4);
         send_string(conn, "]");
@@ -107,7 +107,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
             cmd[strlen(cmd) - 1] = 0;
         }
 
-        sprintf(buffer, "%04X*UPLOAD,", strlen(cmd));
+        snprintf(buffer, sizeof(buffer), "%04X*UPLOAD,", strlen(cmd));
         send_string(conn, buffer);
         send_string(conn, cmd + 7);
         send_string(conn, "]");
@@ -116,7 +116,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*LOWBAT,", strlen(cmd));
+        snprintf(buffer, sizeof(buffer), "%04X*LOWBAT,", strlen(cmd));
         send_string(conn, buffer);
         send_string(conn, cmd + 7);
         send_string(conn, "]");
@@ -125,7 +125,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*OFFAL1,", strlen(cmd));
+        snprintf(buffer, sizeof(buffer), "%04X*OFFAL1,", strlen(cmd));
         send_string(conn, buffer);
         send_string(conn, cmd + 7);
         send_string(conn, "]");
@@ -134,7 +134,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*SOSSMS,", strlen(cmd));
+        snprintf(buffer, sizeof(buffer), "%04X*SOSSMS,", strlen(cmd));
         send_string(conn, buffer);
         send_string(conn, cmd + 7);
         send_string(conn, "]");
@@ -143,7 +143,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*REMOVESMS,", strlen(cmd));
+        snprintf(buffer, sizeof(buffer), "%04X*REMOVESMS,", strlen(cmd));
         send_string(conn, buffer);
         send_string(conn, cmd + 10);
         send_string(conn, "]");
@@ -152,7 +152,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*REMOVE,", strlen(cmd));
+        snprintf(buffer, sizeof(buffer), "%04X*REMOVE,", strlen(cmd));
         send_string(conn, buffer);
         send_string(conn, cmd + 7);
         send_string(conn, "]");
@@ -161,11 +161,11 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*DEVOWNER,", 11 + ((strlen(cmd) - 6) * 4));
+        snprintf(buffer, sizeof(buffer), "%04X*DEVOWNER,", 11 + ((strlen(cmd) - 6) * 4));
         send_string(conn, buffer);
 
         for (char * p = cmd + 6; *p != 0 && *p != '\n'; p++) {
-            sprintf(buffer, "00%02X", *p);
+            snprintf(buffer, sizeof(buffer), "00%02X", *p);
             send_string(conn, buffer);
         }
 
@@ -175,11 +175,11 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "[3G*");
         send_string(conn, imei);
         send_string(conn, "*");
-        sprintf(buffer, "%04X*MESSAGE,", 8 + ((strlen(cmd) - 4) * 4));
+        snprintf(buffer, sizeof(buffer), "%04X*MESSAGE,", 8 + ((strlen(cmd) - 4) * 4));
         send_string(conn, buffer);
 
         for (char * p = cmd + 4; *p != 0 && *p != '\n'; p++) {
-            sprintf(buffer, "00%02X", *p);
+            snprintf(buffer, sizeof(buffer), "00%02X", *p);
             send_string(conn, buffer);
         }
 
@@ -229,7 +229,9 @@ void myrope_r18_process_position(connection * conn, size_t parse_count, unsigned
     wifi_db_entry db_entry;
     unsigned char * current_network[3];
 
-    if (parse_count < 22) {
+    //data_buffers[22] (cell id) is read below, so 22 fields is one short - at exactly 22
+    //that slot is still null and strlen() walked into it.
+    if (parse_count < 23) {
         log_line(conn, "   invalid location package.\n");
         return;
     }
@@ -250,8 +252,31 @@ void myrope_r18_process_position(connection * conn, size_t parse_count, unsigned
         position_type = 0;
     }
 
+    //the count of cell towers is a single device supplied digit, so this offset lands
+    //anywhere from 18 to 72 - well past the 40 pointers that exist. Reading data_buffers
+    //at that index handed a wild stack value to parse_int, which then dereferenced it.
     size_t wifi_offs = 18 + (6 * parse_int(data_buffers[18], 1));
-    db_entry.network_count = parse_int(data_buffers[wifi_offs], 2);
+
+    if (wifi_offs >= parse_count) {
+        log_line(conn, "   wifi offset %u past the end of the message, ignoring wifi.\n", wifi_offs);
+        db_entry.network_count = 0;
+
+    } else {
+        db_entry.network_count = parse_int(data_buffers[wifi_offs], 2);
+    }
+
+    //network_buffer holds WIFI_LOOKUP_MAX entries but the count is two device supplied
+    //digits, so it can claim up to 99 networks and the copy below would run off the end
+    //of db_entry entirely.
+    if (db_entry.network_count > WIFI_LOOKUP_MAX) {
+        db_entry.network_count = WIFI_LOOKUP_MAX;
+    }
+
+    //every network reads three more fields, so stop at whatever the message actually holds
+    while (db_entry.network_count > 0
+            && (wifi_offs + 2 + ((db_entry.network_count - 1) * 3)) >= parse_count) {
+        db_entry.network_count--;
+    }
 
     if ( db_entry.network_count > 2) {
         for (int i = 0; i <  db_entry.network_count; i++) {
@@ -392,19 +417,23 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
 
     size_t initial_count = split_to('*', data_buffers[0], BUF_SIZE, first_message_part, 16);
 
-    if (initial_count < 3) {
+    //first_message_part[3] carries the message type and is read directly below, so three
+    //fields is not enough - a header split into exactly three left that pointer null and
+    //memcmp dereferenced it. A device only has to send "[3G*x*y]" to crash the server.
+    if (initial_count < 4) {
         log_line(conn, "invalid message header size.\n", string);
         return;
     }
 
-    strcpy(imei, first_message_part[1]);
+    //bounded: the field is attacker sized and imei is 64 bytes
+    snprintf(imei, sizeof(imei), "%s", first_message_part[1]);
 
 //keepalive message
     if (memcmp(first_message_part[3], "LK", 2) == 0) {
         memcpy(conn->imei, imei, strlen(imei) + 1);
         pad_imei(conn->imei);
         init_imei(conn);
-        sprintf(response, "[3g*%s*0002*LK]", imei);
+        snprintf(response, sizeof(response), "[3g*%s*0002*LK]", imei);
         send_string(conn, response);
         conn->timeout_time = time(0) + MYROPE_TIMEOUT;
         myrope_r18_process_heartbeat(conn, str_count, data_buffers);
@@ -412,7 +441,7 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
     }
 
     if (memcmp(first_message_part[3], "ICCID", 5) == 0) {
-        sprintf(response, "[3g*%s*0005*ICCID]", imei);
+        snprintf(response, sizeof(response), "[3g*%s*0005*ICCID]", imei);
         send_string(conn, response);
         conn->timeout_time = time(0) + MYROPE_TIMEOUT;
         return;
@@ -420,13 +449,13 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
 
     if (memcmp(first_message_part[3], "AL", 2) == 0) {
         myrope_r18_process_event(conn, str_count, data_buffers);
-        sprintf(response, "[3g*%s*0002*AL]", imei);
+        snprintf(response, sizeof(response), "[3g*%s*0002*AL]", imei);
         send_string(conn, response);
         return;
     }
 
     if (memcmp(first_message_part[3], "DEVICEFUNCCOUNT", 2) == 0) {
-        sprintf(response, "[3g*%s*000f*DEVICEFUNCCOUNT]", imei);
+        snprintf(response, sizeof(response), "[3g*%s*000f*DEVICEFUNCCOUNT]", imei);
         send_string(conn, response);
         return;
     }
@@ -461,19 +490,19 @@ void myrope_r18_process(void * vp) {
 
 void myrope_r18_warn(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
-    sprintf(buffer, "FIND#", reason);
+    snprintf(buffer, sizeof(buffer), "FIND#", reason);
     ((connection *)vp)->COMMAND_FUNCTION(vp, buffer);
 }
 
 void myrope_r18_warn_audio(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
-    sprintf(buffer, "FIND#", reason);
+    snprintf(buffer, sizeof(buffer), "FIND#", reason);
     ((connection *)vp)->COMMAND_FUNCTION(vp, buffer);
 }
 
 void myrope_r18_identify(void * vp) {
     connection * conn = (connection *)vp;
-    const uint8_t first_bytes[13];
+    uint8_t first_bytes[13];
     memset(first_bytes, 0, sizeof(first_bytes));
     memcpy(first_bytes, conn->recv_buffer, 12);
 

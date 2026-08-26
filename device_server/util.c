@@ -98,16 +98,32 @@ int msleep(long msec) {
 }
 
 size_t binary_replace(uint8_t * from, size_t fromlen, uint8_t * to, size_t tolen, uint8_t * in, size_t length, size_t safelength) {
-    for (size_t i = 0; i < length; i++) {
+    if (fromlen == 0 || length < fromlen) {
+        return length;
+    }
+
+    //stop where a full needle still fits. The old bound ran i right up to length, so the
+    //comparison read up to fromlen-1 bytes past the end of the packet on every call.
+    for (size_t i = 0; i + fromlen <= length; i++) {
         if (memcmp(in + i, from, fromlen) == 0) {
-            if (fromlen > tolen && (length + tolen - fromlen) > safelength) {
+            //the old guard only fired when the replacement was shorter than what it
+            //replaced - the one direction that cannot overflow. Growing was left entirely
+            //unchecked, and XEXUN unescaping grows 2 bytes into 3 on every marker, so a
+            //packet full of them walked off the end of the buffer.
+            size_t newlength = length + tolen - fromlen;
+
+            if (newlength > safelength) {
                 return 0;
             }
 
-            //copy the data after the identifier the number of bytes ahead
-            memmove(in + i + tolen, in + i + fromlen, length - i);
+            //only the bytes that actually follow the needle move; "length - i" counted the
+            //needle itself and then some, reading and writing past the tail of the buffer.
+            memmove(in + i + tolen, in + i + fromlen, length - i - fromlen);
             memcpy(in + i, to, tolen);
-            length += tolen - fromlen;
+            length = newlength;
+            //skip what was just written so a replacement containing the needle cannot
+            //be rewritten forever
+            i += (tolen > 0) ? (tolen - 1) : 0;
         }
     }
 

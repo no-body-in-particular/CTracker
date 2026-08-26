@@ -567,7 +567,7 @@ void XEXUN_process(void * vp) {
 
 void XEXUN_warn(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
-    sprintf(buffer, "mg=%s", reason);
+    snprintf(buffer, sizeof(buffer), "mg=%s", reason);
     XEXUN_send_command(vp, buffer);
 }
 

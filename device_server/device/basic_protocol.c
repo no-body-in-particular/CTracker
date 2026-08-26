@@ -45,7 +45,10 @@ char * unescape_str(unsigned char * str) {
 
 void basic_process_message(connection * conn, char * string, size_t length) {
     unsigned char bufstr[BUF_SIZE];
-    unsigned char * data_buffers[40];
+    //zeroed: split_to only fills as many slots as the message had fields, and every other
+    //file here relies on the rest reading back as NULL rather than as whatever the stack
+    //happened to hold
+    unsigned char * data_buffers[40] = {0};
     unsigned char imei[18] = {0};
     unsigned char * wifi_split[16];
     unsigned char * coord_split[2];
@@ -242,7 +245,7 @@ void basic_warn_audio(void * vp, const char * reason) {
 void basic_identify(void * vp) {
     connection * conn = (connection *)vp;
     const uint8_t basic_start_contains[] = "BASIC;";
-    const uint8_t first_bytes[8];
+    uint8_t first_bytes[8];
     memset(first_bytes, 0, sizeof(first_bytes));
     memcpy(first_bytes, conn->recv_buffer, 7);
 

@@ -4,13 +4,25 @@
 #include "util.h"
 
 bool is_special(char c) {
-    return (isspace(c) || c == '\r' || c == '\n');
+    //ctype takes an int that must be representable as unsigned char or EOF. Passing a
+    //plain (signed) char hands it a negative value for every byte above 0x7f, which is
+    //undefined - and these protocols carry binary payloads full of them.
+    unsigned char u = (unsigned char)c;
+    return (isspace(u) || u == '\r' || u == '\n');
 }
 
 char * strip_whitespace(char * cmd) {
     for (; strlen(cmd) > 0 && is_special(*cmd); cmd++);
 
-    for (size_t idx = strlen(cmd) - 1; idx > 0 && is_special(cmd[idx]) ; idx--) {
+    //a string that is empty, or entirely whitespace, leaves strlen at 0 here and the old
+    //"strlen - 1" wrapped to SIZE_MAX, so the loop read cmd[SIZE_MAX] on its first test.
+    size_t len = strlen(cmd);
+
+    if (len == 0) {
+        return cmd;
+    }
+
+    for (size_t idx = len - 1; idx > 0 && is_special(cmd[idx]) ; idx--) {
         char c = cmd[idx];
 
         if (!isprint(c)) {
@@ -68,13 +80,22 @@ float parse_float(char * string) {
         string++;
     }
 
-    while (isdigit(ch = *(string++))) {
+    while (isdigit((unsigned char)(ch = *string)) && ch != 0) {
         num = 10 * num + ch - '0';
+        string++;
     }
 
-    while (isdigit(ch = *(string++))) {
-        num = num + (ch - '0') / divisor;
-        divisor *= 10;
+    //the integer loop above used to consume the byte that stopped it. When that byte was
+    //the terminator the fractional loop started one past the end of the string and read
+    //whatever followed it in memory.
+    if (*string == '.' || *string == ',') {
+        string++;
+
+        while (isdigit((unsigned char)(ch = *string)) && ch != 0) {
+            num = num + (ch - '0') / divisor;
+            divisor *= 10;
+            string++;
+        }
     }
 
     return neg ? -num : num;

@@ -71,7 +71,10 @@ void process_message(connection * conn, char * string, size_t length) {
     fprintf(stdout, "string: \n", string);
     msleep(1000);
     unsigned char bufstr[BUF_SIZE];
-    unsigned char * data_buffers[40];
+    //zeroed: split_to only fills as many slots as the message had fields, and every other
+    //file here relies on the rest reading back as NULL rather than as whatever the stack
+    //happened to hold
+    unsigned char * data_buffers[40] = {0};
     unsigned char imei[64] = {0};
     unsigned char * wifi_split[16];
     wifi_db_entry db_entry;
@@ -293,7 +296,7 @@ void megastek_warn_audio(void * vp, const char * reason) {
 void megastek_identify(void * vp) {
     connection * conn = (connection *)vp;
     const uint8_t megastek_start_contains[] = "$MGV0";
-    const uint8_t first_bytes[13];
+    uint8_t first_bytes[13];
     memset(first_bytes, 0, sizeof(first_bytes));
     memcpy(first_bytes, conn->recv_buffer, 12);
 

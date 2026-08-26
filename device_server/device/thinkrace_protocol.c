@@ -80,7 +80,9 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, "IWBP34,");
         send_string(conn, conn->imei);
         send_string(conn, ",080835,1,");
-        send_string(conn, cmd + 7);
+        //"TIMES=" is six characters; +7 skipped the first character of the value, so
+        //TIMES=30 went out as "0"
+        send_string(conn, cmd + 6);
 
     } else if (strlen(cmd) > 6 && memcmp(cmd, "MSG=", 4) == 0) {
         send_string(conn, "IWBP40,");
@@ -88,7 +90,9 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, ",080835,");
 
         for (char * p = cmd + 4; *p != 0 && *p != '\n'; p++) {
-            sprintf(buffer, "%02X", *p);
+            //without the cast a byte above 0x7f becomes a negative int and "%02X" prints
+            //eight digits - nine bytes with the terminator, into a buffer of four
+            snprintf(buffer, sizeof(buffer), "%02X", (unsigned char)*p);
             send_string(conn, buffer);
         }
 
@@ -673,21 +677,22 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
         //"IWBPJK,A#", and without the return below the generic responder then appended a
         //bare "IWBPJK#" as well. The device was being told twice, wrongly, that its health
         //packet had been received.
-        sprintf(response, "IWBPJK,%s#", data_buffers[2]);
+        snprintf(response, sizeof(response), "IWBPJK,%s#", data_buffers[2]);
         send_string(conn, response);
 
         return;
     }
 
     if (!isdigit(string[4]) || !isdigit(string[5])) {
-        sprintf(response, "IWBP%c%c#", string[4], string[5]);
+        snprintf(response, sizeof(response), "IWBP%c%c#", string[4], string[5]);
         send_string(conn, response);
         return;
     }
 
     switch (message_type) {
         case 0:
-            strcpy(imei, data_buffers[0]);
+            //data_buffers[0] is attacker sized; imei is 64 bytes
+            snprintf(imei, sizeof(imei), "%s", data_buffers[0]);
             pad_imei(imei);
             memcpy(conn->imei, imei, strlen(imei) + 1);
             init_imei(conn);
@@ -758,20 +763,20 @@ void thinkrace_process(void * vp) {
 
 void thinkrace_warn(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
-    sprintf(buffer, "MSG=%s", reason);
+    snprintf(buffer, sizeof(buffer), "MSG=%s", reason);
     ((connection *)vp)->COMMAND_FUNCTION(vp, buffer);
 }
 
 void thinkrace_warn_audio(void * vp, const char * reason) {
     char buffer[BUF_SIZE] = {0};
-    sprintf(buffer, "MSG=%s", reason);
+    snprintf(buffer, sizeof(buffer), "MSG=%s", reason);
     ((connection *)vp)->COMMAND_FUNCTION(vp, buffer);
 }
 
 void thinkrace_identify(void * vp) {
     connection * conn = (connection *)vp;
     const uint8_t thinkrace_start_contains[] = "IWAP";
-    const uint8_t first_bytes[13];
+    uint8_t first_bytes[13];
     memset(first_bytes, 0, sizeof(first_bytes));
     memcpy(first_bytes, conn->recv_buffer, 12);
 

@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <unistd.h>
@@ -12,6 +13,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <float.h>
+#include <ctype.h>
 
 #include "connection.h"
 #include "tracking.h"
@@ -95,6 +97,13 @@ void close_connection(connection * conn) {
         fclose(conn->command_response_filehandle);
         conn->command_response_filehandle = 0;
     }
+
+    //an upload interrupted half way leaves its assembly buffer behind otherwise
+    if (conn->image_buffer) {
+        free(conn->image_buffer);
+        conn->image_buffer = 0;
+        conn->image_len = 0;
+    }
 }
 
 void init_position(connection * conn) {
@@ -154,8 +163,47 @@ void init_position(connection * conn) {
     fclose(fp);
 }
 
+//An imei arrives from the device and is pasted straight into every path below, so anything
+//it contains is a filename. A device that sends slashes or dot-dot picks the directory the
+//server writes to; the fuzzer produced imeis like "0v7Q/IpiTJrn_sH$" and the server duly
+//tried to open them. An imei is 15 decimal digits by definition, so anything that is not a
+//digit is not part of one - drop it rather than fold it to a placeholder, which would let
+//two different devices collide on one filename.
+static void sanitise_imei(char * imei) {
+    size_t w = 0;
+    size_t r_seen = 0;
+
+    for (size_t r = 0; imei[r]; r++) {
+        r_seen++;
+        unsigned char c = (unsigned char)imei[r];
+
+        if (c >= '0' && c <= '9') {
+            imei[w++] = (char)c;
+        }
+    }
+
+    imei[w] = 0;
+
+    //Worth saying out loud rather than quietly rewriting. The JIMI imei arrives BCD packed
+    //and CONVERT_HEX turns each nibble into a hex character, so a letter here means the
+    //device sent a nibble above 9 - the imei was not valid BCD. Stripping keeps the path
+    //safe, but two devices differing only in the removed characters would now share a file,
+    //so it should be looked at rather than left running.
+    if (w != r_seen) {
+        fprintf(stdout, "imei contained %u non-digit characters, stripped to '%s'"
+                " - a valid imei is 15 decimal digits, so this device is sending"
+                " malformed data\n", (unsigned)(r_seen - w), imei);
+    }
+
+    //nothing usable came back: refuse to build paths out of it at all
+    if (w == 0) {
+        snprintf(imei, 2, "0");
+    }
+}
+
 void init_imei(connection * conn) {
     //convert our imei and set up paths
+    sanitise_imei(conn->imei);
     memcpy(conn->gps_outfile, OUTDIR, strlen(OUTDIR) + 1);
     strcat(conn->gps_outfile, conn->imei);
     //base paths are all the same
@@ -168,6 +216,7 @@ void init_imei(connection * conn) {
     memcpy(conn->disabled_alarms_infile, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->stats_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->tracking_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
+    memcpy(conn->images_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     //but extensions are not
     strcat(conn->gps_outfile, ".gps.txt");
     strcat(conn->log_outfile, ".log.txt");
@@ -179,6 +228,7 @@ void init_imei(connection * conn) {
     strcat(conn->disabled_alarms_infile, ".disabled-alarms.txt");
     strcat(conn->stats_file, ".stats.txt");
     strcat(conn->tracking_file, ".tracking.txt");
+    strcat(conn->images_file, ".images.db");
     //now that we've got a path/imei we can log things
     conn->can_log = true;
     //take over as the connection that sends to this device. a device often leaves an older
@@ -190,7 +240,7 @@ void init_imei(connection * conn) {
     read_disabled_alarms(conn);
     read_geofence(conn);
     char message[1024] = {0};
-    sprintf(message, "device reconnected after %lu seconds.", time(0) - conn->device_time);
+    snprintf(message, sizeof(message), "device reconnected after %lu seconds.", time(0) - conn->device_time);
 
     if (conn->log_connect) {
         log_event(conn,  message);
@@ -200,6 +250,26 @@ void init_imei(connection * conn) {
 
 
 void send_string(connection * conn, char * str) {
-    strcpy(conn->send_buffer + conn->send_count, str);
-    conn->send_count += strlen(str);
+    //send_buffer is a fixed BUF_SIZE and send_count only falls as the socket drains, so a
+    //blocked or slow device leaves it high while commands keep arriving. The old strcpy
+    //took no account of either and simply wrote past the end - and send_buffer is the
+    //first member of struct connection, so the overflow ran straight through recv_buffer
+    //and the filename fields behind it. Truncate instead: a clipped command is recoverable,
+    //a corrupted connection struct is not.
+    size_t len = strlen(str);
+    size_t room = (conn->send_count < BUF_SIZE) ? (BUF_SIZE - 1 - conn->send_count) : 0;
+
+    if (len > room) {
+        fprintf(stdout, "send buffer full (%u used, %u wanted), truncating\n",
+                (unsigned)conn->send_count, (unsigned)len);
+        len = room;
+    }
+
+    if (len == 0) {
+        return;
+    }
+
+    memcpy(conn->send_buffer + conn->send_count, str, len);
+    conn->send_count += len;
+    conn->send_buffer[conn->send_count] = 0;
 }

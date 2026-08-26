@@ -38,6 +38,7 @@ typedef struct {
     unsigned char current_status_file[FILENAME_MAX];
     unsigned char stats_file[FILENAME_MAX];
     unsigned char tracking_file[FILENAME_MAX];
+    unsigned char images_file[FILENAME_MAX];
     //identifies this connection among the several a device may hold open at once. only the
     //newest one is allowed to send, so commands cannot go out on a socket the device has
     //already abandoned
@@ -90,6 +91,14 @@ typedef struct {
     size_t current_sat_count;
     time_t device_time;
     time_t since_last_locate;
+    //assembly of an image arriving over several packets. The buffer is only allocated while
+    //an upload is in flight - most connections never carry one and should not pay for it.
+    unsigned char * image_buffer;
+    size_t image_len;
+    size_t image_capacity;
+    size_t image_expected_packets;
+    size_t image_next_packet;
+    char image_time[16];
     const char * SINGLE_WARNING;
     unsigned int device_extra;
     void (*PROCESS_FUNCTION)(void *) ;

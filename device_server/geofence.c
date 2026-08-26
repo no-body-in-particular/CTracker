@@ -184,7 +184,7 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
     char buffer[BUF_SIZE * 2] = {0};
 
     if (alarms && fence.warn_enable && !is_alarm_disabled(conn, message)) {
-        sprintf(buffer, "%s: %s", fence.name, message);
+        snprintf(buffer, sizeof(buffer), "%s: %s", fence.name, message);
         conn->WARNING_FUNCTION(conn, buffer);
     }
 
