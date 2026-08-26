@@ -19,6 +19,7 @@
 #include "../multilaterate.h"
 #include "thinkrace_protocol.h"
 #include "../images.h"
+#include <ctype.h>
 #include "../tracking.h"
 
 #define THINKRACE_TIMEOUT 1200
@@ -760,15 +761,52 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
  *
  *   IWAP42,<yyyymmddhhmmss>,<total packets>,<packet no>,<length>,<length bytes>#
  *
- * Returns the number of bytes consumed from the front of recv_buffer, or 0 to mean "not an
- * AP42 packet, or not all of it has arrived yet" - in which case the caller leaves the
- * buffer alone and tries again when more data turns up.
+ * Returns the number of bytes consumed from the front of recv_buffer, 0 for "not an image
+ * packet at all", or IMAGE_INCOMPLETE for "an image packet whose tail has not arrived yet".
+ * Those last two must not be confused: falling through to the text framing while a partial
+ * image sits in the buffer lets rep() rewrite every NUL in it to a space, which quietly
+ * corrupts the picture. Hex payloads survived that because they contain no NULs; raw ones
+ * did not.
  */
-static size_t thinkrace_try_image_packet(connection * conn) {
-    const char prefix[] = "IWAP42,";
-    const size_t plen = sizeof(prefix) - 1;
+#define IMAGE_INCOMPLETE ((size_t) -1)
 
-    if (conn->read_count < plen || memcmp(conn->recv_buffer, prefix, plen) != 0) {
+static unsigned hexval(unsigned char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+
+    return 0;
+}
+
+
+static size_t thinkrace_try_image_packet(connection * conn) {
+    /*
+     * The manual calls this packet AP42. The PT880 firmware does not: it sends the type as
+     * "null", so the packet arrives as "IWnull,..." - the field was left empty and printed
+     * through a %s. Both are accepted here, because the rest of the packet is exactly the
+     * AP42 layout and refusing it on the strength of a firmware typo helps nobody.
+     */
+    static const char * const prefixes[] = { "IWAP42,", "IWnull," };
+    size_t plen = 0;
+
+    for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); i++) {
+        size_t l = strlen(prefixes[i]);
+
+        if (conn->read_count >= l && memcmp(conn->recv_buffer, prefixes[i], l) == 0) {
+            plen = l;
+            break;
+        }
+    }
+
+    if (plen == 0) {
         return 0;
     }
 
@@ -796,11 +834,13 @@ static size_t thinkrace_try_image_packet(connection * conn) {
     if (data_start == 0) {
         //header never completed inside a plausible length: this is not a packet we can use
         if (conn->read_count >= max_header) {
-            log_line(conn, "  image: AP42 header did not complete, dropping buffer\n");
+            log_line(conn, "  image: header did not complete, dropping buffer\n");
             conn->read_count = 0;
+            return 0;
         }
 
-        return 0;
+        //the prefix matched, so this is an image packet whose header is still arriving
+        return IMAGE_INCOMPLETE;
     }
 
     char devtime[16] = {0};
@@ -810,9 +850,10 @@ static size_t thinkrace_try_image_packet(connection * conn) {
     size_t packet  = (size_t)parse_int(conn->recv_buffer + field_start[2], 8);
     size_t datalen = (size_t)parse_int(conn->recv_buffer + field_start[3], 8);
 
-    //a single packet is defined as 1024 bytes, the last one shorter. Anything else is a
-    //malformed header and waiting for that many bytes would only stall the connection.
-    if (datalen > 2048) {
+    //a single packet is defined as 1024 bytes, the last one shorter - but the payload may
+    //be hex, in which case the length counts hex characters and doubles. Anything past that
+    //is a malformed header, and waiting for that many bytes would only stall the connection.
+    if (datalen > 4096) {
         log_line(conn, "  image: implausible packet length %u, dropping buffer\n", (unsigned)datalen);
         conn->read_count = 0;
         image_discard(conn);
@@ -822,7 +863,7 @@ static size_t thinkrace_try_image_packet(connection * conn) {
     size_t needed = data_start + datalen + 1;   // + the closing '#'
 
     if (conn->read_count < needed) {
-        return 0;                                // wait for the rest of it
+        return IMAGE_INCOMPLETE;                 // wait for the rest of it, untouched
     }
 
     if (conn->recv_buffer[needed - 1] != '#') {
@@ -832,13 +873,38 @@ static size_t thinkrace_try_image_packet(connection * conn) {
         return needed;                           // still consume it, or it blocks the stream
     }
 
+    /*
+     * The manual describes the payload as the picture bytes themselves. This firmware sends
+     * it hex encoded instead - a 1024 byte chunk arrives as 2048 characters of "ffd8ffe0..."
+     * with the length field counting the characters, not the bytes. Decide from the data
+     * rather than from either assumption: an even run of nothing but hex digits is decoded,
+     * anything else is taken as the raw bytes the manual describes.
+     */
+    unsigned char decoded[2048];
+    const unsigned char * payload = conn->recv_buffer + data_start;
+    size_t paylen = datalen;
+    bool looks_hex = (datalen >= 2) && ((datalen % 2) == 0) && (datalen / 2 <= sizeof(decoded));
+
+    for (size_t i = 0; looks_hex && i < datalen; i++) {
+        looks_hex = isxdigit((unsigned char)payload[i]) != 0;
+    }
+
+    if (looks_hex) {
+        for (size_t i = 0; i < datalen; i += 2) {
+            decoded[i / 2] = (unsigned char)((hexval(payload[i]) << 4) | hexval(payload[i + 1]));
+        }
+
+        payload = decoded;
+        paylen = datalen / 2;
+    }
+
     if (packet == 1) {
         image_begin(conn, devtime, total);
     }
 
-    bool ok = image_append(conn, packet, conn->recv_buffer + data_start, datalen);
-    log_line(conn, "  image: packet %u/%u, %u bytes, %s\n", (unsigned)packet, (unsigned)total,
-             (unsigned)datalen, ok ? "accepted" : "rejected");
+    bool ok = image_append(conn, packet, payload, paylen);
+    log_line(conn, "  image: packet %u/%u, %u bytes%s, %s\n", (unsigned)packet, (unsigned)total,
+             (unsigned)paylen, looks_hex ? " (hex decoded)" : "", ok ? "accepted" : "rejected");
 
     //the device waits for this before sending the next packet, and repeats the current one
     //if it does not arrive or comes back as a failure
@@ -860,6 +926,11 @@ void thinkrace_process(void * vp) {
 
     //image packets are binary and must be handled before the text framing below mangles them
     size_t consumed = thinkrace_try_image_packet(conn);
+
+    if (consumed == IMAGE_INCOMPLETE) {
+        //leave the buffer exactly as it is; the text path below would mangle the bytes
+        return;
+    }
 
     if (consumed > 0) {
         memmove(conn->recv_buffer, conn->recv_buffer + consumed, conn->read_count - consumed);

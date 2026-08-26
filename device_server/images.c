@@ -52,7 +52,9 @@ bool image_begin(connection * conn, const char * device_time, size_t total_packe
 
     //the device says how many packets are coming and every packet but the last is a fixed
     //size, so the upper bound is known before the first byte arrives
-    size_t cap = total_packets * 1024 + 1024;
+    //a packet is 1024 bytes of picture, but some firmware sends it hex encoded and declares
+    //twice that; size for the larger of the two so neither layout runs out of room
+    size_t cap = total_packets * 2048 + 2048;
 
     if (cap > MAX_IMAGE_SIZE) {
         log_line(conn, "  image: %u packets is larger than the %u byte limit, ignoring\n",
