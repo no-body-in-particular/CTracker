@@ -12,6 +12,7 @@
 #include "../string.h"
 #include "../connection.h"
 #include "../logfiles.h"
+#include "../tracking.h"
 #include "../geofence.h"
 #include "../commands.h"
 #include "../wifi_lookup.h"
@@ -486,8 +487,77 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
         return;
     }
 
-    if (memcmp(first_message_part[3], "UD", 2) == 0) {
+    //WT carries the same position layout as UD - see the watch decoder in traccar, which
+    //treats UD, AL and WT through one path
+    if (memcmp(first_message_part[3], "UD", 2) == 0 || memcmp(first_message_part[3], "WT", 2) == 0) {
         myrope_r18_process_position(conn, str_count, data_buffers);
+        return;
+    }
+
+    if (strcmp(first_message_part[3], "INIT") == 0) {
+        snprintf(response, sizeof(response), "[3g*%s*0006*INIT,1]", imei);
+        send_string(conn, response);
+        return;
+    }
+
+    //a bare poll the watch expects echoed back
+    if (strcmp(first_message_part[3], "TKQ") == 0 || strcmp(first_message_part[3], "TKQ2") == 0) {
+        snprintf(response, sizeof(response), "[3g*%s*%04x*%s]", imei,
+                 (unsigned)strlen(first_message_part[3]), first_message_part[3]);
+        send_string(conn, response);
+        conn->timeout_time = time(0) + MYROPE_TIMEOUT;
+        return;
+    }
+
+    /*
+     * The health uploads. Field positions follow the watch decoder in traccar; data_buffers[0]
+     * holds the "[3G*imei*len*TYPE" header, so the first value of the message is at index 1.
+     * None of these were recognised, so a watch of this family could report a pulse, a blood
+     * pressure or a temperature and none of it was written anywhere.
+     */
+    if (strcmp(first_message_part[3], "BPHRT") == 0 || strcmp(first_message_part[3], "BLOOD") == 0) {
+        if (str_count > 3) {
+            write_stat(conn, "systole", parse_float(data_buffers[1]));
+            write_stat(conn, "diastole", parse_float(data_buffers[2]));
+            write_stat(conn, "heartrate", parse_float(data_buffers[3]));
+            note_health(conn);
+        }
+
+        return;
+    }
+
+    if (strcmp(first_message_part[3], "PULSE") == 0 || strcmp(first_message_part[3], "HEART") == 0) {
+        if (str_count > 1) {
+            write_stat(conn, "heartrate", parse_float(data_buffers[1]));
+            note_health(conn);
+        }
+
+        return;
+    }
+
+    if (strcmp(first_message_part[3], "TEMP") == 0) {
+        if (str_count > 1) {
+            write_stat(conn, "temperature", parse_float(data_buffers[1]));
+        }
+
+        return;
+    }
+
+    //btemp2 sends a validity flag first and the reading second
+    if (strcmp(first_message_part[3], "btemp2") == 0) {
+        if (str_count > 2 && parse_float(data_buffers[1]) > 0) {
+            write_stat(conn, "temperature", parse_float(data_buffers[2]));
+        }
+
+        return;
+    }
+
+    if (strcmp(first_message_part[3], "oxygen") == 0) {
+        if (str_count > 2) {
+            write_stat(conn, "SPO2", parse_float(data_buffers[2]));
+            note_health(conn);
+        }
+
         return;
     }
 

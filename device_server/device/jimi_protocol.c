@@ -737,9 +737,15 @@ void process_v1(connection * conn) {
             send_data_packet(conn, create_time_response(PACKET(conn).footer.serial_number));
             break;
 
-        case 0x17://address request by phone number
+        /*
+         * 0x2A is the address request. 0x17 carries one too on the devices seen here - the
+         * packet holds a phone number in ASCII - though other builds of this protocol reuse
+         * 0x17 for wifi or rfid data, so process_address_request only speaks up when it can
+         * actually find a number. 0x97 is deliberately absent: that is the type the *server*
+         * replies with, not one a device sends.
+         */
+        case 0x17:
         case 0x2A:
-        case 0x97:
             process_address_request(conn);
             send_data_packet(conn, create_response(PACKET(conn).header.protocol_number, PACKET(conn).footer.serial_number));
             break;
