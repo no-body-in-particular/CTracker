@@ -76,8 +76,21 @@
 //gone. Once no reading has arrived for this long the device is restarted. Only devices that
 //have answered at least once are ever considered - a tracker with no sensor is not broken for
 //failing to report a heart rate.
-#define HEALTH_RECOVERY_TIMEOUT 900     //seconds without any reading before restarting the device
-#define HEALTH_RECOVERY_COOLDOWN 1800   //seconds before a device may be restarted again
+/*
+ * How long a device may go without sending any health reading before it is restarted.
+ *
+ * This was 900 seconds, which against a three minute reporting period is five missed
+ * reports - close enough to normal jitter that a watch taken off for a quarter of an hour,
+ * or one that simply dropped a few uploads, was rebooted for it. Now that the device keeps
+ * its own schedule rather than being polled, a gap is also less informative than it was: no
+ * poll went unanswered, the watch just did not speak.
+ *
+ * Forty five minutes is fifteen reporting periods. That is long enough to be a device that
+ * has genuinely stopped rather than one having a quiet spell, and the cooldown is longer
+ * again so a watch that cannot be fixed by rebooting is not rebooted in a loop.
+ */
+#define HEALTH_RECOVERY_TIMEOUT 2700    //seconds without any reading before restarting the device
+#define HEALTH_RECOVERY_COOLDOWN 5400   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
 #define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again
 #define MOVING_SPEED_KMH 8              //above a brisk walk: running, cycling, driving
