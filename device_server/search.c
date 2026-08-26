@@ -5,7 +5,14 @@ void * binary_search(void * begin, void * end,  void * to_find, size_t entity_si
     uint8_t * entity_bytes = (uint8_t *)begin;
     size_t mid_entity = (end - begin) / (2 * entity_size);
     uint8_t * mid_bytes = entity_bytes + (mid_entity * entity_size);
-    int64_t compare_result = COMPARE_FUNCTION(mid_bytes, to_find);
+    /*
+     * Kept as the double the comparison function returns. Putting it in an int64_t threw away
+     * anything fractional - a comparison returning 0.5 became 0, which reads as "found" - and
+     * a comparison whose magnitude exceeded INT64_MAX converted with undefined results,
+     * usually to INT64_MIN, which reads as "less than" no matter which way round the two
+     * values actually were. Only the sign is wanted here and the double carries it correctly.
+     */
+    double compare_result = COMPARE_FUNCTION(mid_bytes, to_find);
 
     if (compare_result == 0) {
         return mid_bytes;

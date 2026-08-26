@@ -24,12 +24,38 @@ int8_t wifi_db_entry_bit(void * db_entry, size_t bit) {
 
 
 
+/*
+ * Three way, rather than the difference of the two hashes.
+ *
+ * The hash is a crc64, so it uses the whole 64 bit range, and subtracting one from another
+ * broke in two separate ways. A double cannot hold a 64 bit integer exactly past 2^53, so two
+ * hashes differing only in their low bits came out equal. And the difference itself does not
+ * fit in the int64_t that binary_search stored it in: any pair where one hash has the top bit
+ * set and the other does not differs by more than INT64_MAX, the conversion is undefined, and
+ * in practice it comes out as INT64_MIN - negative - whichever way round the two actually
+ * were. For random 64 bit hashes that is about half of all comparisons, so the search took
+ * the wrong branch about half the time and missed entries that were sitting in the table.
+ *
+ * A miss here is not a wrong answer - the caller checks the hashes exactly and then compares
+ * the networks themselves - but it does mean paying a positioning service for a lookup
+ * already in the cache, and writing a second copy of an entry already held.
+ *
+ * The sign convention matches compare_lbs: the arguments are the other way round from what
+ * the names suggest, because partition() and binary_search() both want it that way.
+ */
 double wifi_hash_compare(void * db_entry, void * db_entry_b) {
-    wifi_db_entry * valueA = (wifi_db_entry *)db_entry;
-    wifi_db_entry * valueB = (wifi_db_entry *)db_entry_b;
-    double hashA = wifi_db_entry_hash(valueA);
-    double hashB = wifi_db_entry_hash(valueB);
-    return (hashB - hashA);
+    uint64_t hashA = wifi_db_entry_hash((wifi_db_entry *)db_entry);
+    uint64_t hashB = wifi_db_entry_hash((wifi_db_entry *)db_entry_b);
+
+    if (hashB > hashA) {
+        return 1;
+    }
+
+    if (hashB < hashA) {
+        return -1;
+    }
+
+    return 0;
 }
 
 double wifi_network_compare(void * a, void * b) {
