@@ -196,6 +196,21 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
 }
 
 void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon) {
+    /*
+     * Every protocol arrives here, so this is the one place worth checking that a coordinate
+     * is a coordinate at all. The recorded history has two rows reading
+     * -17822271058268280592531456 degrees of latitude, written by a device in 2022 whose
+     * parser handed over whatever happened to be in the variable. Two rows out of 1.8 million
+     * is not a crisis, but a position file is read back by the map, by the distance
+     * calculations and by the fence checks, and one value like that skews all three.
+     *
+     * A nan fails both comparisons, so it is caught here as well without needing its own test.
+     */
+    if (!(lat >= -90.0 && lat <= 90.0) || !(lon >= -180.0 && lon <= 180.0)) {
+        log_line(conn, "position %f,%f is not on the planet, ignoring it\n", lat, lon);
+        return;
+    }
+
     time_t dt = fabs(device_time - conn->device_time);
 
     //a cell tower fix can sit kilometres from the device and hops as the serving tower
