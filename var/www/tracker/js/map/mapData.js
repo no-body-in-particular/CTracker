@@ -1277,7 +1277,55 @@ function refreshData() {
     }
 }
 
+/*
+ * Today, as the browser reckons it, in the format a date input wants.
+ *
+ * Deliberately not the server's idea of today: the page is rendered with
+ * PHP's date(), and if the two disagree about the day - a different timezone,
+ * or simply a page loaded either side of midnight - the comparison below
+ * would never match and the date would never roll.
+ */
+function todayString() {
+    const d = new Date();
+    return d.getFullYear() + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
+}
+
+/*
+ * Whether the start date should follow the calendar.
+ *
+ * The date input is filled in once, when the page is rendered. A page left
+ * open overnight therefore keeps asking for yesterday, and the graph stops
+ * where the old day ended - which looks exactly like the device having gone
+ * quiet. This follows the day over instead, but only while the shown date is
+ * today: someone who has deliberately gone back to look at last Tuesday
+ * should not have it snatched away at midnight.
+ */
+var followToday = true;
+
+function rollDateIfDayChanged() {
+    if (!followToday) { return; }
+    const input = document.getElementById('beginDate');
+    if (!input) { return; }
+    const today = todayString();
+    if (input.value === today) { return; }
+    input.value = today;
+    searchdateChange();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('beginDate');
+    followToday = !input || input.value === todayString();
+    // A minute is plenty: nothing here needs to notice midnight to the second,
+    // and the check is two string comparisons.
+    setInterval(rollDateIfDayChanged, 60000);
+});
+
 function searchdateChange() {
+    const dateInput = document.getElementById('beginDate');
+    followToday = !dateInput || dateInput.value === todayString();
+
     tripActive = false;
     eventList = [];
     statsList = [];
