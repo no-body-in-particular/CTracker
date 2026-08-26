@@ -252,10 +252,27 @@ void myrope_r18_process_position(connection * conn, size_t parse_count, unsigned
         position_type = 0;
     }
 
-    //the count of cell towers is a single device supplied digit, so this offset lands
-    //anywhere from 18 to 72 - well past the 40 pointers that exist. Reading data_buffers
-    //at that index handed a wild stack value to parse_int, which then dereferenced it.
-    size_t wifi_offs = 18 + (6 * parse_int(data_buffers[18], 1));
+    /*
+     * Where the wifi list starts, counted past the cell towers in front of it. Real traffic
+     * from an R18 lays out as:
+     *
+     *   [16] 00000000   status
+     *   [17] 1
+     *   [18] 1          number of cell towers
+     *   [19] 204  [20] 08  [21] 3270  [22] 1561888  [23] 100     one tower: mcc mnc lac cid rssi
+     *   [24] 3          number of wifi networks
+     *   [25] Armor_3W  [26] 16:83:25:7d:e0:79  ...
+     *
+     * so the towers are five fields each starting at 19. The old "18 + 6 * count" happens to
+     * give the same 24 for a single tower, which is all this device has ever reported here,
+     * and is wrong by one more field for every tower after that - it would have read the
+     * wifi count out of the middle of the last tower.
+     *
+     * The count is one device-supplied digit, so this still has to be treated as arbitrary:
+     * it lands anywhere up to 64, well past the 40 pointers that exist, and the bounds check
+     * below is what keeps that from being read.
+     */
+    size_t wifi_offs = 19 + (5 * (size_t)parse_int(data_buffers[18], 1));
 
     if (wifi_offs >= parse_count) {
         log_line(conn, "   wifi offset %u past the end of the message, ignoring wifi.\n", wifi_offs);

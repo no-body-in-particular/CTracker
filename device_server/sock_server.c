@@ -207,7 +207,7 @@ void * process_thread(void * int_ptr) {
                 fprintf(stdout, "client closed the connection\n");
             }
 
-            if (conn.log_disconnect) {
+            if (conn.log_disconnect && is_command_owner(&conn)) {
                 log_event(&conn, "device disconnected");
             }
 
@@ -277,7 +277,11 @@ void * process_thread(void * int_ptr) {
             }
 
             if ( time(0) > conn.timeout_time ) {
-                if (conn.log_disconnect) {
+                //A device commonly holds several sockets open at once and lets the older
+                //ones lapse; those closing say nothing about the device being reachable, and
+                //logging each one is what filled the event file. Only the connection that
+                //currently owns the device is allowed to report it gone.
+                if (conn.log_disconnect && is_command_owner(&conn)) {
                     log_event(&conn, "device disconnected");
                 }
 

@@ -239,10 +239,14 @@ void init_imei(connection * conn) {
     init_position(conn);
     read_disabled_alarms(conn);
     read_geofence(conn);
-    char message[1024] = {0};
-    snprintf(message, sizeof(message), "device reconnected after %lu seconds.", time(0) - conn->device_time);
+    //Only an absence worth noticing goes in the event log. This device re-opens its socket
+    //constantly, so an unconditional entry here produced hundreds of "reconnected after 3
+    //seconds" lines and pushed the real events off the end of the page.
+    time_t away = time(0) - conn->device_time;
 
-    if (conn->log_connect) {
+    if (conn->log_connect && away > EVENT_ABSENCE_MIN) {
+        char message[1024] = {0};
+        snprintf(message, sizeof(message), "device reconnected after %lu seconds.", (unsigned long)away);
         log_event(conn,  message);
     }
 }

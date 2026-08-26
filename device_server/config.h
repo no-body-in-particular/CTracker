@@ -78,6 +78,13 @@
 #define INTERVAL_CHANGE_COOLDOWN 300    //minimum gap between interval commands
 //how long to let a device confirm a new interval, in its own heartbeat, before assuming
 //the command was lost and reissuing. must exceed the idle reporting interval.
+//A device that drops and re-opens its socket every few seconds is doing something normal
+//for this hardware, and writing a "reconnected"/"disconnected" pair into the event log each
+//time buried the events that mean something. On one device 203 of 262 events were nothing
+//but connection churn, hiding six SOS presses among them. Only an absence longer than this
+//is worth telling the user about.
+#define EVENT_ABSENCE_MIN 300
+
 #define DEVICE_CONFIRM_GRACE 900
 
 /* Stats come from two clocks. Position derived values carry the position message's time,

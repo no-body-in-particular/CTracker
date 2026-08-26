@@ -178,6 +178,13 @@ bool image_store(connection * conn) {
     char message[128] = {0};
     snprintf(message, sizeof(message), "photo:%ld", (long)now);
     log_event(conn, message);
+    //A picture is nearly always the answer to a command the user sent, so it belongs in the
+    //command results next to the command that asked for it - otherwise the only sign it
+    //worked is a marker somewhere on the map. Same "photo:<ts>" form, so the web side needs
+    //one rule for both lists.
+    snprintf(message, sizeof(message), "picture received photo:%ld (%u bytes)",
+             (long)now, (unsigned)conn->image_len);
+    log_command_response(conn, message);
     image_discard(conn);
     return true;
 }

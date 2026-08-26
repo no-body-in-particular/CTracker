@@ -108,7 +108,20 @@ function computeHistoryRow(cols) {
 }
 
 function computeLogRow(cols) {
-    return "<tr><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td style='font-size:10px'>" + escapeHtml(cols[1]) + "</td></tr>";
+    //A command result that reports a picture gets the picture itself, so the answer to
+    //"take a photo" is visible where the command was sent rather than only on the map.
+    //The same "photo:<ts>" marker the event log uses, so there is one rule for both.
+    var text = String(cols[1] || '');
+    var m = /photo:(\d{1,20})/.exec(text);
+    var extra = '';
+
+    if (m) {
+        extra = "<br><img class='photoThumb' src='" + escapeHtml(photoUrl(m[1]))
+                + "' alt='Picture from the device' loading='lazy'"
+                + " onclick='showPhoto(" + escapeNumber(m[1]) + ")'>";
+    }
+
+    return "<tr><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td style='font-size:10px'>" + escapeHtml(text) + extra + "</td></tr>";
 }
 
 function computeFenceRow(cols) {

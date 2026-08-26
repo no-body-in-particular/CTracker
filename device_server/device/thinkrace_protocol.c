@@ -721,14 +721,38 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
             thinkrace_process_event(conn, str_count, data_buffers);
             break;
 
-        //responses to server commands
-        case 15:
-        case 16:
-        case 17:
-        case 18:
-        case 31:
-        case 33:
-        case 34:
+        /*
+         * Responses to commands the server sent. These must not be answered: the default
+         * branch below replies "IWBP<nn>#", and for a downlink id that is a command in its
+         * own right - so acknowledging the terminal's acknowledgement re-issues the order.
+         *
+         * 46 was missing, and it is the take-picture command. The device answered AP46 to
+         * say it was taking the photo, the server replied IWBP46# - a bare take-picture with
+         * no parameters - and the device threw away the upload it had started and took a new
+         * one. That is why every attempt announced a different number of packets (17, 24, 15)
+         * and never got past the first: it was being told to start over each time.
+         *
+         * The rest are the other downlink ids the protocol defines an AP reply for, listed so
+         * the same thing cannot happen again as commands are added.
+         */
+        case 12:    //SOS numbers
+        case 14:    //white list
+        case 15:    //location interval
+        case 16:    //locate now
+        case 17:    //factory reset
+        case 18:    //restart
+        case 31:    //shutdown
+        case 33:    //working mode
+        case 34:    //location working mode
+        case 40:    //shortcut command
+        case 42:    //picture upload, handled before the text path
+        case 46:    //take picture
+        case 50:    //detect heart rate
+        case 51:    //phone book
+        case 52:    //delete phone book
+        case 84:    //whitelist switch
+        case 86:    //health monitoring interval
+        case 88:    //find the terminal
             return;
     }
 
@@ -925,13 +949,14 @@ static size_t thinkrace_try_image_packet(connection * conn) {
     send_string(conn, response);
     log_line(conn, "  image: replied %s\n", response);
 
-    if (broken_id) {
-        char alt[96] = {0};
-        snprintf(alt, sizeof(alt), "IWnull,%s,%u,%u,%u#", devtime,
-                 (unsigned)total, (unsigned)packet, ok ? 1u : 0u);
-        send_string(conn, alt);
-        log_line(conn, "  image: also replied %s\n", alt);
-    }
+    /*
+     * The mirrored "IWnull" reply is deliberately not sent. It was added when the upload
+     * stalled after one packet, on the theory that the device wanted its own broken id back.
+     * It did not help, and it puts an id on the wire that no downlink defines - which the
+     * device may well treat as a bad command. Kept out of the way rather than deleted, since
+     * the stall is not yet explained and this is worth trying again in isolation.
+     */
+    (void)broken_id;
 
     if (ok && image_complete(conn)) {
         image_store(conn);
