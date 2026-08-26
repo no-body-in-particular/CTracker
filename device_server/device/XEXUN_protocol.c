@@ -35,8 +35,19 @@ size_t escape_packet(unsigned char * packet, size_t length) {
     static const uint8_t xex_a[] = {0xfa, 0xaf};
     static const uint8_t xex_b_dest[] = {0xfb, 0xbf, 0x02};
     static const uint8_t xex_b[] = {0xfb, 0xbf};
-    length = binary_replace(xex_a, 2, xex_a_dest, 3, packet, length, BUF_SIZE);
-    return binary_replace(xex_b, 2, xex_b_dest, 3, packet, length, BUF_SIZE);
+    //Order matters, and it was the wrong way round. Escaping 0xfa 0xaf first writes a
+    //0xfb 0xbf into the packet, which the second pass then treats as a literal needing
+    //escaping in its own right - so the manual's own example
+    //    30 fa af 08 fb bf 55
+    //came out as
+    //    30 fb bf 02 01 08 fb bf 02 55
+    //instead of
+    //    30 fb bf 01 08 fb bf 02 55.
+    //Escaping 0xfb 0xbf first is safe because the marker the other rule introduces is only
+    //written after that pass has finished. Unescaping below is order independent, since
+    //neither replacement can produce the other's needle.
+    length = binary_replace(xex_b, 2, xex_b_dest, 3, packet, length, BUF_SIZE);
+    return binary_replace(xex_a, 2, xex_a_dest, 3, packet, length, BUF_SIZE);
 }
 
 uint16_t xex_checksum(uint8_t * data, size_t len) {

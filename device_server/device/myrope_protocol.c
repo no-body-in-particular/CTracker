@@ -33,7 +33,12 @@ bool myrope_send_string( void * c,  char * cmd) {
 
     //cmd is itself a BUF_SIZE buffer at every call site, so sprintf of "cmd" plus the
     //checksum and terminator could not fit and wrote past the end of this one.
-    snprintf(buffer, sizeof(buffer), "%s,%x,\r\n", cmd, cx);
+    //
+    //The check code is defined as two characters - "XOR all characters from $ to # to get
+    //1 byte ... 2 individual ASCII output in character form". "%x" drops the leading zero,
+    //so every checksum below 0x10 went out one character short and the frame did not match
+    //the length the protocol specifies. That is one message in sixteen.
+    snprintf(buffer, sizeof(buffer), "%s,%02x,\r\n", cmd, cx);
     send_string(conn, buffer);
     //declared bool and fell off the end, which is undefined - callers were reading a
     //garbage return value
