@@ -180,26 +180,41 @@ void read_geofence(connection * conn) {
 }
 
 
+/*
+ * This does two separate things and they want different treatment.
+ *
+ * The alarm is raised every time. "Outside of inclusion zone" describes a state that is still
+ * true, and somebody who has left where they are meant to be should go on being told so until
+ * they are back - not once every ten minutes with silence in between. That is the whole point
+ * of a mandatory fence, and rate limiting it, as this briefly did, quietly turned a
+ * continuous alarm into an occasional reminder.
+ *
+ * The event log entry is held down. That is where the storm was: 25957 pairs of identical
+ * consecutive events ten seconds apart, one fence accounting for 22143 of them, in a log
+ * somebody is supposed to be able to read afterwards. Writing the same line every ten seconds
+ * does not make the alarm any louder, it only buries whatever else happened.
+ */
 void fence_alert(connection * conn, bool alarms, geofence fence, char * message, float lat, float lon, double speed) {
     char buffer[BUF_SIZE * 2] = {0};
     char what[96] = {0};
     //fence and message together, because two fences broken at once are two different things
     //to be told about, while the same one twice is not
     snprintf(what, sizeof(what), "%s: %s", fence.name, message);
+    bool already_logged = strcmp(what, conn->last_fence_event) == 0
+                          && (time(0) - conn->last_fence_event_time) < FENCE_REPEAT_INTERVAL;
 
-    if (strcmp(what, conn->last_fence_event) == 0
-            && (time(0) - conn->last_fence_event_time) < FENCE_REPEAT_INTERVAL) {
-        return;
-    }
-
-    snprintf(conn->last_fence_event, sizeof(conn->last_fence_event), "%s", what);
-    conn->last_fence_event_time = time(0);
-
+    //every time, for as long as it is true
     if (alarms && fence.warn_enable && !is_alarm_disabled(conn, message)) {
         snprintf(buffer, sizeof(buffer), "%s: %s", fence.name, message);
         conn->WARNING_FUNCTION(conn, buffer);
     }
 
+    if (already_logged) {
+        return;
+    }
+
+    snprintf(conn->last_fence_event, sizeof(conn->last_fence_event), "%s", what);
+    conn->last_fence_event_time = time(0);
     memset(buffer, 0, sizeof(buffer));
     strcpy(buffer, fence.name);
     strcat(buffer, ": ");

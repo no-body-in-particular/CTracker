@@ -152,12 +152,12 @@
 #define OWNER_TIMEOUT 150               //seconds before a silent owner's claim may be taken
 
 /*
- * How long the same geofence alert is held down for. Entering and leaving a fence are
- * detected against the previous position and so happen once each, but "inside exclusion zone"
- * and "outside of inclusion zone" describe a state rather than a change: they were raised on
- * every position report for as long as the state lasted. A device reporting every ten seconds
- * therefore produced an event every ten seconds, indefinitely - 25957 pairs of identical
- * consecutive events ten seconds apart are in the recorded history, and one fence accounts
- * for 22143 events on its own.
+ * How long the same geofence alert is kept out of the *event log* for. It does not hold back
+ * the alarm: a device outside a mandatory fence is warned on every position report, for as
+ * long as it is outside, because that is what a mandatory fence is for.
+ *
+ * Only the log entry waits. That is where the noise was - 25957 pairs of identical
+ * consecutive events ten seconds apart in the recorded history, one fence accounting for
+ * 22143 of them - and a log nobody can read is a log that hides the next real alarm.
  */
-#define FENCE_REPEAT_INTERVAL 600       //seconds before the same fence alert is raised again
+#define FENCE_REPEAT_INTERVAL 600       //seconds before the same fence alert is logged again
