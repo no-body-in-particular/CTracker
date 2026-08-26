@@ -32,12 +32,18 @@ connection new_connection(int socket) {
     memset(&result, 0, sizeof(connection));
     //monotonic, so a larger id is always the more recent connection
     /*
-     * The pid is in here because this server runs as more than one process against the same
-     * per-device state files, and the counter is static - so each process handed out 1, 2, 3
-     * independently and two entirely different connections could carry the same id. Command
-     * ownership is recorded by id, so a device could end up "owned" by a connection in the
-     * other process, or by a dead one, after which nothing polled it and no queued command
-     * ever went out.
+     * The pid is in here because the counter is static and does not outlive the process,
+     * while the state file it is recorded in does.
+     *
+     * main() forks a worker and waits on it, forking a fresh one if it dies - so only one
+     * process is ever serving, but a replacement starts counting from 1 again. The tracking
+     * file still holds an id handed out by the worker before it, and command ownership is
+     * recorded by id, so the new worker's connection 1 inherits whatever connection 1 of the
+     * dead worker was doing. A device could end up owned by a connection that no longer
+     * exists, after which nothing polled it and no queued command ever went out.
+     *
+     * A new worker has a new pid, so the ids cannot meet. Between that and ownership being
+     * takeable once its holder goes quiet, a claim can no longer outlive what made it.
      */
     result.connection_id = ((unsigned long)getpid() << 32)
                            | __sync_fetch_and_add(&next_connection_id, 1);
