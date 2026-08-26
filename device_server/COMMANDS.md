@@ -83,10 +83,28 @@ The full vocabulary, and where it came from, is in the `pt880-root` repository u
 
 | Protocol | Commands |
 |---|---|
-| XEXUN | `UPDATE=<seconds>` |
-| Megastek | `UPDATE=<seconds>` |
-| Myrope | `UPDATE=<seconds>` `MSG=<text>` `ALM=` |
-| JIMI | `STATUS#`, plus anything the device itself accepts, forwarded as typed |
+| XEXUN | `UPDATE=<seconds>`, plus anything else typed |
+| Megastek | `UPDATE=<seconds>`, plus anything else typed |
+| Myrope | `UPDATE=<seconds>` `MSG=<text>` `ALM=`, plus anything else typed |
+| Myrope R18 | the list above, plus anything else typed |
+| JIMI | `STATUS#`, plus anything else typed |
+
+### Commands these protocols do not name
+
+Every one of them will carry a command it has never heard of. What is written above is
+what the server translates or knows a shorthand for; the framing each protocol needs -
+XEXUN's 0x07 message, Megastek's `$GPRS,<imei>;...;!`, Myrope's checksum, R18's
+`[3G*<imei>*<length>*...]` - is put around it either way. So a command out of the device's
+own manual can be sent as it is written there:
+
+    MONITOR#              ->  [3G*<imei>*0007*MONITOR]
+    WORKTIME,8,0,20,0     ->  [3G*<imei>*0011*WORKTIME,8,0,20,0]
+    gps=1                 ->  XEXUN message 0x07 carrying "gps=1"
+
+A trailing `#` is dropped where the protocol does not want one. This is worth knowing
+because the vocabularies are large and mostly undocumented in public - the XEXUN one lives
+in a separate "Server command" document, and Megastek's GPRS codes are not in either of the
+manuals published for it.
 
 ## What the watch reports on its own
 

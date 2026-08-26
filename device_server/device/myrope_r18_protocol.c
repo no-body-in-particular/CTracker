@@ -187,7 +187,31 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, "]");
 
     } else {
-        send_string(conn, cmd);
+        /*
+         * Anything this function does not name explicitly. It used to go out exactly as
+         * typed, with none of the framing this protocol needs - no [3G*, no imei, no length -
+         * so a command that was not one of the dozen spelled out above reached the watch as
+         * gibberish, if it reached it at all. Since every command in this family is the same
+         * shape, framing it here means the whole vocabulary is reachable without a branch per
+         * command: MONITOR, POWEROFF, WORKTIME, PEDO and the rest all work by being typed.
+         *
+         * A trailing '#' is dropped because the rest of this server's commands carry one and
+         * this protocol does not want it.
+         */
+        char content[BUF_SIZE] = {0};
+        size_t w = 0;
+
+        for (const char * p = cmd; *p && *p != '\n' && w + 1 < sizeof(content); p++) {
+            content[w++] = *p;
+        }
+
+        if (w > 0 && content[w - 1] == '#') {
+            w--;
+        }
+
+        content[w] = 0;
+        snprintf(buffer, sizeof(buffer), "[3G*%s*%04X*%s]", imei, (unsigned)w, content);
+        send_string(conn, buffer);
     }
 
     log_line(conn, "sent command: ");
