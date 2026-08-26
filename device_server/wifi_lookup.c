@@ -96,12 +96,36 @@ void wifi_sort(wifi_db * db) {
 //create mutex and read from file
 void wifi_initialise_database(wifi_db * database) {
     memset(database, 0, sizeof(wifi_db));
+    /*
+     * sizeof(wifi_db_entry), not sizeof(wifi_network). Both buffers hold entries; a
+     * wifi_network is one of the sixteen access points inside an entry. Nine bytes against a
+     * hundred and seventy three, so asking for ten thousand entries bought room for five
+     * hundred and thirty two of them - and the growth check compares against the ten thousand
+     * it thinks it has, so it would not have resized until long after running off the end.
+     * Every entry past the 532nd went into the heap beyond the block.
+     *
+     * The database buffer is resized correctly the first time it is loaded or merged, which
+     * is what has kept this from being noticed; the cache is never resized at all, and it is
+     * the one that fills up with every new set of networks a device reports.
+     */
     database->network_count = 0;
-    database->network_buffer = malloc(sizeof(wifi_network) * 10240);
     database->network_buffer_size = 10240;
+    database->network_buffer = malloc(sizeof(wifi_db_entry) * database->network_buffer_size);
     database->cache_count = 0;
-    database->network_cache = malloc(sizeof(wifi_network) * 10240);
     database->network_cache_size = 10240;
+    database->network_cache = malloc(sizeof(wifi_db_entry) * database->network_cache_size);
+
+    //without a buffer there is nothing to cache into, and pretending otherwise writes to null
+    if (database->network_buffer == 0 || database->network_cache == 0) {
+        fprintf(stdout, "   could not allocate the WiFi database, continuing without it\n");
+        free(database->network_buffer);
+        free(database->network_cache);
+        database->network_buffer = 0;
+        database->network_cache = 0;
+        database->network_buffer_size = 0;
+        database->network_cache_size = 0;
+    }
+
     database->cache_age = time(0);
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -228,19 +252,42 @@ void test() {
 
 
 location_result wifi_to_cache( wifi_db_entry  networks) {
-    pthread_mutex_unlock(&wifi_database.mutex);
+    /*
+     * Locked, not unlocked. Every mutex call in this file was an unlock and there was not one
+     * lock anywhere, so the mutex was initialised and then never held by anybody - while the
+     * two functions below it grow the cache and the database with realloc, and the search in
+     * wifi_lookup() walks the buffer that grows. Two devices reporting wifi at the same moment
+     * is all it takes for one thread to be reading the buffer another has just moved.
+     *
+     * The equivalent code in lbs_lookup.c locks and unlocks correctly, which says this was
+     * meant to and simply came out the wrong way round.
+     */
+    pthread_mutex_lock(&wifi_database.mutex);
     //sort our networks first
     networks.network_count = quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), wifi_network_compare, wifi_network_compare);
 
     for (size_t network_idx = 0; network_idx < wifi_database.cache_count; network_idx++) {
         if (is_same(&wifi_database.network_cache[network_idx], &networks) == 0) {
-            return  wifi_database.network_cache[network_idx].result;
+            //this returned while still holding the lock, so the first cache hit after the
+            //locking is fixed would have been the last thing this server ever did
+            location_result found = wifi_database.network_cache[network_idx].result;
+            pthread_mutex_unlock(&wifi_database.mutex);
+            return found;
         }
     }
 
     if ((wifi_database.cache_count + 1) >= wifi_database.network_cache_size) {
-        wifi_database.network_cache_size *= 2;
-        wifi_database.network_cache = realloc(wifi_database.network_cache, sizeof(wifi_db_entry) *  wifi_database.network_cache_size);
+        size_t grown_size = wifi_database.network_cache_size ? wifi_database.network_cache_size * 2 : 1024;
+        wifi_db_entry * grown = realloc(wifi_database.network_cache, sizeof(wifi_db_entry) * grown_size);
+
+        if (grown == 0) {
+            //the reading is lost, which costs one lookup; writing anyway costs the process
+            pthread_mutex_unlock(&wifi_database.mutex);
+            return networks.result;
+        }
+
+        wifi_database.network_cache = grown;
+        wifi_database.network_cache_size = grown_size;
     }
 
     wifi_database.network_cache[wifi_database.cache_count] = networks;
@@ -258,7 +305,9 @@ location_result wifi_lookup(wifi_network * first, size_t network_count) {
     entry.network_count = network_count;
     quick_sort(entry.network_buffer, entry.network_count, sizeof(wifi_network), wifi_network_compare, 0);
     entry.result.valid = false;
-    pthread_mutex_unlock(&wifi_database.mutex);
+    //held across every read of the shared database below, and dropped again before the
+    //network lookup at the end - that one can take ten seconds and must not hold anybody up
+    pthread_mutex_lock(&wifi_database.mutex);
     wifi_db_entry * network_ptr = wifi_database.network_count == 0 ? 0 : (wifi_db_entry *) binary_search(wifi_database.network_buffer, (wifi_database.network_buffer + wifi_database.network_count), &entry,  sizeof(wifi_db_entry), wifi_hash_compare) ;
 
     for (; network_ptr != 0 && (network_ptr <= (wifi_database.network_buffer + wifi_database.network_count))
