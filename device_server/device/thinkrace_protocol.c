@@ -127,6 +127,93 @@ bool thinkrace_send_command( void * c, const char * cmd) {
      * the watch acknowledges IWAPXL and measures nothing, and there was then no other way to
      * ask. Each command is IWBPxx,IMEI,serial# and is answered with a bare IWAPxx.
      */
+    /*
+     * The rest of the command set the IW protocol defines. Each is IWBPxx,IMEI,serial then
+     * whatever the command takes, and each is answered with the matching IWAPxx.
+     */
+    } else if (strcmp(cmd, "FIND#") == 0) {
+        //the watch rings so it can be found
+        send_string(conn, "IWBP88,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835#");
+
+    } else if (strcmp(cmd, "PULSE#") == 0) {
+        //BP50, the other heart rate trigger. Worth having beside BPXL: the watch has been
+        //seen acknowledging an XL and measuring nothing at all.
+        send_string(conn, "IWBP50,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835#");
+
+    } else if (strlen(cmd) > 5 && memcmp(cmd, "CALL=", 5) == 0) {
+        send_string(conn, "IWBP32,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 5);
+
+    } else if (strlen(cmd) > 4 && memcmp(cmd, "SOS=", 4) == 0) {
+        //three numbers, comma separated. An empty one keeps its field: "SOS=111,,333"
+        send_string(conn, "IWBP12,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 4);
+
+    } else if (strlen(cmd) > 5 && memcmp(cmd, "LANG=", 5) == 0) {
+        //"<language>,<time zone>" - 1 is English, 0 Chinese
+        send_string(conn, "IWBP20,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 5);
+
+    } else if (strlen(cmd) > 11 && memcmp(cmd, "DELCONTACT=", 11) == 0) {
+        send_string(conn, "IWBP52,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 11);
+
+    } else if (strlen(cmd) > 8 && memcmp(cmd, "CONTACT=", 8) == 0) {
+        /*
+         * "<name>,<number>". The name goes up as hex, the same way MSG= sends its text - the
+         * sample in the protocol document is D3590D54, which is not a phone book entry
+         * anybody typed but two unicode characters written out.
+         */
+        const char * value = cmd + 8;
+        const char * comma = strchr(value, ',');
+
+        if (comma == 0) {
+            log_line(conn, "CONTACT= wants a name and a number\n");
+
+        } else {
+            send_string(conn, "IWBP51,");
+            send_string(conn, conn->imei);
+            send_string(conn, ",080835,");
+
+            for (const char * p = value; p < comma; p++) {
+                snprintf(buffer, sizeof(buffer), "%02X", (unsigned char) * p);
+                send_string(conn, buffer);
+            }
+
+            send_string(conn, ",");
+            send_value_terminated(conn, comma + 1);
+        }
+
+    } else if (strlen(cmd) > 10 && memcmp(cmd, "WHITELIST=", 10) == 0) {
+        send_string(conn, "IWBP84,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 10);
+
+    } else if (strlen(cmd) > 7 && memcmp(cmd, "SERVER=", 7) == 0) {
+        /*
+         * "<domain flag>,<host>,<port>". Points the watch at a different server, so a typo
+         * loses the device until somebody texts it back - though the same is already reachable
+         * through the SMS tunnel as #ip#=, so this adds a shorter spelling rather than a new
+         * way to go wrong.
+         */
+        send_string(conn, "IWBP19,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 7);
+
     } else if (strcmp(cmd, "BLOODPRESSURE#") == 0) {
         send_string(conn, "IWBPXY,");
         send_string(conn, conn->imei);

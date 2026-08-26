@@ -34,6 +34,15 @@ Everything here has been sent to a watch and answered.
 | `HOURS=12#` / `HOURS=24#` | clock format |
 | `BLOODPRESSURE#` | take a blood pressure reading |
 | `OXYGEN#` | take a blood oxygen reading |
+| `PULSE#` | take a pulse the other way - `BP50` rather than `BPXL`, useful when one is ignored |
+| `FIND#` | make the watch ring so it can be found |
+| `CALL=<number>` | make the watch dial that number |
+| `SOS=<n1>,<n2>,<n3>` | the three SOS numbers; leave a field empty to clear it, but keep the comma |
+| `LANG=<lang>,<tz>` | 1 for English, 0 for Chinese, and the time zone |
+| `CONTACT=<name>,<number>` | add a phone book entry - the name is sent as hex for you |
+| `DELCONTACT=<number>` | remove a phone book entry |
+| `WHITELIST=<0\|1>` | only accept calls from the white list |
+| `SERVER=<flag>,<host>,<port>` | point the watch at another server - a typo loses it until you text it back |
 | `PHONE=0#` / `PHONE=1#` | allow or block calls |
 | `MOTION=0#` / `MOTION=1#` | motion detection |
 | `MSG=<text>#` | show a message on the watch |
