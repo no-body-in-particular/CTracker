@@ -870,6 +870,23 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
         thinkrace_process_saturation(conn, str_count, data_buffers);
     }
 
+    /*
+     * IWAPWR,IMEI,<worn>,<timestamp># - 1 while the watch is on the body, 0 once it is taken
+     * off. Nothing read it before. It matters for more than the record: the health recovery
+     * in poll_health() restarts a watch that stops sending readings, and a watch on a table
+     * stops sending readings for an entirely good reason. Knowing which it is means the
+     * recovery can leave a removed watch alone instead of rebooting it in someone's drawer.
+     */
+    if (memcmp(string, "IWAPWR", 6) == 0 && str_count > 2) {
+        //[0] is empty, [1] is the imei, [2] is the flag
+        bool worn = parse_int(data_buffers[2], 1) != 0;
+        write_stat(conn, "worn", worn ? 1 : 0);
+        note_worn(conn, worn);
+        log_line(conn, "wearing status: %s\n", worn ? "on the body" : "removed");
+        log_event(conn, worn ? "watch put on" : "watch removed");
+        return;
+    }
+
     if (memcmp(string, "IWAPJK", 6) == 0 && str_count > 2) {
         thinkrace_process_stat(conn, str_count, data_buffers);
         //the protocol wants the type from the uploaded packet echoed back - "IWBPJK,2#"
@@ -904,6 +921,49 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
 
         case 3:
             thinkrace_process_heartbeat(conn, str_count, data_buffers);
+            break;
+
+        /*
+         * IWAP04,<battery level>#. The device's own low battery alarm - it sends this when it
+         * decides it is low, rather than the server working it out from a position packet.
+         * It was acknowledged and thrown away, so the one packet the watch sends specifically
+         * to say "I am nearly flat" did nothing at all.
+         */
+        case 4:
+            //the split starts at the comma, so field 0 is empty and the value is field 1
+            if (str_count > 1 && strlen(data_buffers[1])) {
+                int level = parse_int(data_buffers[1], 3);
+                write_stat(conn, "battery_level", level);
+                log_line(conn, "low battery alarm: %d%%\n", level);
+
+                /*
+                 * Logged whatever the timer says. That timer starts at time(0) when a
+                 * connection is made, so it suppresses the first ten minutes of every one -
+                 * which for a watch that reconnects every quarter of an hour means an alarm
+                 * could be swallowed indefinitely. The other protocols derive low battery
+                 * from a level in a position packet, where rate limiting is what you want;
+                 * this is the device saying so itself, deliberately and rarely, and it should
+                 * not be dropped. The timer is still stamped so the derived check does not
+                 * immediately log the same thing twice.
+                 */
+                conn->since_battalm = time(0);
+                log_event(conn, "low battery");
+            }
+
+            break;
+
+        //IWAP49,<heartrate>#. A pulse on its own, separate from the JK frame.
+        case 49:
+            if (str_count > 1 && strlen(data_buffers[1])) {
+                int bpm = parse_int(data_buffers[1], 3);
+
+                if (bpm > 0) {
+                    write_stat(conn, "heartrate", bpm);
+                    note_heartrate(conn, bpm);
+                    note_health(conn);
+                }
+            }
+
             break;
 
         case 10:

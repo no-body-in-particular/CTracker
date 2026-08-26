@@ -79,6 +79,23 @@ The full vocabulary, and where it came from, is in the `pt880-root` repository u
 | Myrope | `UPDATE=<seconds>` `MSG=<text>` `ALM=` |
 | JIMI | `STATUS#`, plus anything the device itself accepts, forwarded as typed |
 
+## What the watch reports on its own
+
+Besides positions, the watch sends these without being asked. All of them are recorded now;
+the first three used to be acknowledged and discarded.
+
+| Packet | What it carries |
+|---|---|
+| `IWAP04` | its own low battery alarm, with the level - raised as a `low battery` event |
+| `IWAP49` | a pulse on its own, separate from the `JK` health frame |
+| `IWAPWR` | whether it is on the body or has been taken off |
+| `IWAPJK` | the health frame: pulse, blood pressure, temperature, oxygen, sleep |
+| `IWAPHT` `IWAPTP` `IWAPSP` | pulse and pressure, temperature, oxygen |
+
+`IWAPWR` does more than fill in the record. The health recovery in `tracking.c` restarts a
+watch that stops sending readings, and a watch on a table stops sending readings for a
+perfectly good reason - so a device that has said it is off the body is left alone.
+
 ## Pictures and recordings
 
 A completed picture or recording is stored in `/var/gps/<imei>.images.db` or

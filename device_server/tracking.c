@@ -47,11 +47,13 @@ typedef struct {
     time_t last_health_reading; //when a reading was last received, drives the recovery timeout
     time_t last_interval_cfg;   //when the device was last told its own health reporting period
     time_t owner_seen;          //last time the owning connection was still here
+    int worn;                   //1 on the body, 0 taken off, -1 never reported
 } tracking_state;
 
 static void read_state(connection * conn, tracking_state * st)
 {
     memset(st, 0, sizeof(*st));
+    st->worn = -1;
 
     if (strlen(conn->tracking_file) < 16) {
         return;
@@ -68,12 +70,13 @@ static void read_state(connection * conn, tracking_state * st)
     int d = 0;
 
     unsigned long f = 0, g = 0, h = 0, i = 0, j = 0, k = 0, l = 0;
+    int m = -1;
 
     //still accepts a file written before the later fields existed - fscanf simply stops early
     //and they keep the zero memset put there. A missing last_health_reading reads as 0, which
     //the recovery check treats as "no reading time on record yet" and so never restarts on it
     //until the device sends a reading and stamps a real time.
-    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l) >= 5) {
+    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu %lu %d", &a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m) >= 5) {
         st->last_change = (time_t)a;
         st->interval = b;
         st->last_health_poll = (time_t)c;
@@ -89,6 +92,8 @@ static void read_state(connection * conn, tracking_state * st)
         //owner last seen at the epoch - stale, so the first connection along takes over. That
         //is the right answer for an upgrade: nothing is holding the claim.
         st->owner_seen = (time_t)l;
+        //-1 where the device has never said, which is not the same as "taken off"
+        st->worn = m;
     }
 
     fclose(fp);
@@ -106,7 +111,7 @@ static void write_state(connection * conn, tracking_state * st)
         return;
     }
 
-    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu %lu\n",
+    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu %lu %d\n",
             (unsigned long)st->last_change, st->interval,
             (unsigned long)st->last_health_poll, st->active,
             (unsigned long)st->last_activity, st->owner,
@@ -114,7 +119,8 @@ static void write_state(connection * conn, tracking_state * st)
             (unsigned long)st->last_recovery,
             (unsigned long)st->last_health_reading,
             (unsigned long)st->last_interval_cfg,
-            (unsigned long)st->owner_seen);
+            (unsigned long)st->owner_seen,
+            st->worn);
     fclose(fp);
 }
 
@@ -239,6 +245,23 @@ bool is_command_owner(connection * conn)
     return false;
 }
 
+void note_worn(connection * conn, bool worn)
+{
+    int lock = lock_state(conn);
+    tracking_state st;
+    read_state(conn, &st);
+    st.worn = worn ? 1 : 0;
+
+    //putting it back on is the moment readings can start again, so do not hold the previous
+    //silence against it
+    if (worn) {
+        st.last_health_reading = time(0);
+    }
+
+    write_state(conn, &st);
+    unlock_state(lock);
+}
+
 static void mark_activity(connection * conn)
 {
     int lock = lock_state(conn);
@@ -335,7 +358,14 @@ void poll_health(connection * conn)
     //back. Timed from the last reading actually received, not from a poll count: only for a
     //device that has answered before (last_health_reading > 0), and not again until the
     //cooldown has passed, so a watch that is simply not being worn is not restarted in a loop.
+    /*
+     * st.worn == 0 means the device told us it is off the body. A watch on a table is not
+     * broken and restarting it achieves nothing except a black screen for whoever picks it
+     * up next. Only devices that never report wear state (-1) or say they are being worn (1)
+     * are candidates.
+     */
     if (HEALTH_RECOVERY_TIMEOUT > 0
+            && st.worn != 0
             && st.last_health_reading > 0
             && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
             && (time(0) - st.last_recovery) > HEALTH_RECOVERY_COOLDOWN) {
