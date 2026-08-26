@@ -45,8 +45,24 @@ location_result do_geolocate( char * url, char * query) {
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cb);
         /* we pass our 'chunk' struct to the callback function */
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+        /*
+         * This runs inside the connection thread of the device whose position is being looked
+         * up, and it had no timeout of any kind. A slow or unresponsive positioning service
+         * therefore did not degrade a lookup, it stopped that device being processed at all -
+         * no parsing, no commands, no health poll - for as long as the call took, which
+         * without a timeout is however long the network cares to take.
+         */
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+        /*
+         * And check the certificate. These requests carry the wifi networks and cell towers
+         * around a person, and an api key, to a service reached over the internet - which is
+         * exactly the payload that wants a verified peer at the other end. Verification was
+         * off; there is a working ca bundle on this machine and the services answer fine with
+         * it on, so it was off for nothing.
+         */
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
         /* Perform the request, res will get the return code */
         res = curl_easy_perform(curl);
 
@@ -293,9 +309,10 @@ bool here_reverse_geocode(float lat, float lon, char * out, size_t out_size) {
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     //a device is waiting on this inside its own connection thread, so it must not hang
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     res = curl_easy_perform(curl);
 
