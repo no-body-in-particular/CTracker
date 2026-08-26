@@ -17,7 +17,9 @@ picture can be lifted out with dd once you have the offset this script prints.
 """
 import os, sys
 
-MAGICS = (b"CTIMG2 ", b"CTIMG1 ")
+# CTIMG2/CTIMG1 are pictures, CTAUD1 a monitor recording. Same container, different payload.
+MAGICS = (b"CTIMG2 ", b"CTIMG1 ", b"CTAUD1 ")
+RAW_MAGICS = (b"CTIMG1 ",)
 
 
 def _next_magic(blob, pos):
@@ -51,13 +53,13 @@ def records(blob):
             continue
 
         # length is the size of the picture; a hex payload occupies twice that
-        onwire = length * 2 if magic == b"CTIMG2 " else length
+        onwire = length if magic in RAW_MAGICS else length * 2
         raw = blob[eol + 1: eol + 1 + onwire]
         if len(raw) != onwire:
             sys.stderr.write(f"warning: record at {start} is truncated "
                              f"({len(raw)} of {onwire} bytes on disk)\n")
 
-        if magic == b"CTIMG2 ":
+        if magic not in RAW_MAGICS:
             try:
                 data = bytes.fromhex(raw.decode("ascii", "strict"))
             except (ValueError, UnicodeDecodeError):
@@ -84,12 +86,14 @@ def main():
         ts, devtime, length = parts[1].decode(), parts[2].decode(), parts[3].decode()
         lat = parts[4].decode() if len(parts) > 4 else "?"
         lon = parts[5].decode() if len(parts) > 5 else "?"
-        kind = "jpeg" if data[:2] == b"\xff\xd8" else "data"
+        kind = ("jpeg" if data[:2] == b"\xff\xd8"
+                else "amr" if data[:5] == b"#!AMR" else "data")
         print(f"{n:4d}  ts={ts}  taken={devtime}  {length:>8} bytes  "
               f"offset={offset}  {lat},{lon}  {kind}")
         if outdir:
             os.makedirs(outdir, exist_ok=True)
-            name = os.path.join(outdir, f"{ts}_{devtime}.jpg")
+            ext = "jpg" if kind == "jpeg" else "amr" if kind == "amr" else "bin"
+            name = os.path.join(outdir, f"{ts}_{devtime}.{ext}")
             with open(name, "wb") as fh:
                 fh.write(data)
             print(f"      -> {name}")
@@ -100,6 +104,7 @@ def main():
     if not outdir:
         print(f"\n{n} image(s). Pass an output directory to write them out, or by hand:")
         print(f"  grep -A1 '^CTIMG2 <ts>' {path} | tail -1 | xxd -r -p > out.jpg")
+        print(f"  (a recording is the same, with CTAUD1 and .amr)")
     return 0
 
 

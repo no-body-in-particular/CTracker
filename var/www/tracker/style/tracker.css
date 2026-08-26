@@ -1336,3 +1336,20 @@ nav {
     border-radius: 6px;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
+
+/* A monitor recording. AMR is not something browsers play, so it is offered as a download
+   rather than dressed up as a player that would not work. */
+.audioLink {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.05);
+    color: #e6e9f0;
+    text-decoration: none;
+    font-size: 11px;
+}
+
+.audioLink:hover {
+    border-color: var(--accent);
+}

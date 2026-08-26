@@ -17,8 +17,8 @@ bool image_append(connection * conn, size_t packet_no, const unsigned char * dat
 //True once every packet the header promised has arrived.
 bool image_complete(connection * conn);
 
-//Write the assembled image into <imei>.images.db and log an event for it. Frees the
-//assembly buffer either way.
+//Write the assembled media into <imei>.images.db or <imei>.audio.db - chosen from what the
+//bytes actually are - and log an event for it. Frees the assembly buffer either way.
 bool image_store(connection * conn);
 
 //Drop a partial image and free its buffer.

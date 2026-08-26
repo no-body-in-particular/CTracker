@@ -27,6 +27,7 @@
  */
 
 #define IMAGE_MAGIC       "CTIMG2"
+#define AUDIO_MAGIC       "CTAUD1"
 #define MAX_IMAGE_SIZE    (4 * 1024 * 1024)
 #define MAX_IMAGE_PACKETS 8192
 
@@ -120,22 +121,37 @@ bool image_complete(connection * conn) {
 }
 
 
+/*
+ * Both a picture and a monitor recording arrive down the same voice-packet path, and on this
+ * firmware both can announce themselves with the same broken "IWnull" id, so the id cannot
+ * be used to tell them apart. The bytes can: a JPEG opens FF D8 FF and an AMR file opens with
+ * the literal "#!AMR". Anything else is stored as a picture, which is what it was before.
+ */
+static bool payload_is_audio(const unsigned char * data, size_t len) {
+    return len >= 5 && memcmp(data, "#!AMR", 5) == 0;
+}
+
+
 bool image_store(connection * conn) {
     if (!conn->image_buffer || conn->image_len == 0) {
         image_discard(conn);
         return false;
     }
 
-    FILE * fp = fopen(conn->images_file, "ab");
+    bool audio = payload_is_audio(conn->image_buffer, conn->image_len);
+    const char * path = audio ? (const char *)conn->audio_file : (const char *)conn->images_file;
+    const char * magic = audio ? AUDIO_MAGIC : IMAGE_MAGIC;
+    const char * what = audio ? "audio" : "image";
+    FILE * fp = fopen(path, "ab");
 
     if (!fp) {
-        log_line(conn, "  image: could not open %s for append\n", conn->images_file);
+        log_line(conn, "  %s: could not open %s for append\n", what, path);
         image_discard(conn);
         return false;
     }
 
     time_t now = time(0);
-    fprintf(fp, "%s %ld %s %u %f %f\n", IMAGE_MAGIC, (long)now,
+    fprintf(fp, "%s %ld %s %u %f %f\n", magic, (long)now,
             conn->image_time[0] ? conn->image_time : "-",
             (unsigned)conn->image_len, conn->current_lat, conn->current_lon);
 
@@ -170,19 +186,20 @@ bool image_store(connection * conn) {
         return false;
     }
 
-    log_line(conn, "  image: stored %u bytes in %s\n", (unsigned)conn->image_len, conn->images_file);
+    log_line(conn, "  %s: stored %u bytes in %s\n", what, (unsigned)conn->image_len, path);
 
     //The event carries the same unix timestamp that heads the record, which is what the web
     //side matches on to offer the picture - it needs no offset into the file and so cannot
     //be invalidated by the file being truncated or rotated underneath it.
     char message[128] = {0};
-    snprintf(message, sizeof(message), "photo:%ld", (long)now);
+    snprintf(message, sizeof(message), "%s:%ld", audio ? "audio" : "photo", (long)now);
     log_event(conn, message);
     //A picture is nearly always the answer to a command the user sent, so it belongs in the
     //command results next to the command that asked for it - otherwise the only sign it
     //worked is a marker somewhere on the map. Same "photo:<ts>" form, so the web side needs
     //one rule for both lists.
-    snprintf(message, sizeof(message), "picture received photo:%ld (%u bytes)",
+    snprintf(message, sizeof(message), "%s received %s:%ld (%u bytes)",
+             audio ? "recording" : "picture", audio ? "audio" : "photo",
              (long)now, (unsigned)conn->image_len);
     log_command_response(conn, message);
     image_discard(conn);

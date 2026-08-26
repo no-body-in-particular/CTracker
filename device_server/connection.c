@@ -217,6 +217,7 @@ void init_imei(connection * conn) {
     memcpy(conn->stats_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->tracking_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->images_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
+    memcpy(conn->audio_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     //but extensions are not
     strcat(conn->gps_outfile, ".gps.txt");
     strcat(conn->log_outfile, ".log.txt");
@@ -229,6 +230,7 @@ void init_imei(connection * conn) {
     strcat(conn->stats_file, ".stats.txt");
     strcat(conn->tracking_file, ".tracking.txt");
     strcat(conn->images_file, ".images.db");
+    strcat(conn->audio_file, ".audio.db");
     //now that we've got a path/imei we can log things
     conn->can_log = true;
     //take over as the connection that sends to this device. a device often leaves an older

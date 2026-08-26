@@ -80,6 +80,21 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, escaped);
         send_string(conn, "#");
 
+    } else if (strcmp(cmd, "RECORD#") == 0) {
+        /*
+         * Remote monitor: record from the microphone and upload it. There is no BP command
+         * for this in the IW protocol - the trigger lives in the watch's SMS handler, where
+         * "#monitor#" runs StartMonitor, which is what drives AudioService.startRecord() and
+         * then "Monitor Record to send". So it goes through the BPSM tunnel, with '#' written
+         * as '@' because '#' would end the packet.
+         *
+         * The recording comes back up the same voice-packet path a picture uses, and is told
+         * apart from one by its leading bytes rather than by its id.
+         */
+        send_string(conn, "IWBPSM,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,@monitor@#");
+
     } else if (strcmp(cmd, "PHOTO#") == 0) {
         //BP46 with content "1" means take one now; the terminal answers AP46 and then
         //uploads the picture over AP42. The manual also documents a BP40 shortcut
@@ -852,7 +867,11 @@ static size_t thinkrace_try_image_packet(connection * conn) {
      * through a %s. Both are accepted here, because the rest of the packet is exactly the
      * AP42 layout and refusing it on the strength of a firmware typo helps nobody.
      */
-    static const char * const prefixes[] = { "IWAP42,", "IWnull," };
+    //AP42 is the picture id, AP07 the voice one, and "IWnull" is what this firmware emits
+    //when its id lookup comes back empty - which it does for at least the picture. All three
+    //carry the identical five-field header, and what the payload actually is gets decided
+    //from its own leading bytes when the transfer completes.
+    static const char * const prefixes[] = { "IWAP42,", "IWnull,", "IWAP07," };
     size_t plen = 0;
     bool broken_id = false;
 

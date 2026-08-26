@@ -24,11 +24,16 @@ if (!isset($_GET['imei']) || !check_imei($_GET['imei'])) {
 $IMEI = $_GET['imei'];
 validateIMEI($IMEI);
 
-$path = DEVPATH.$IMEI.'.images.db';
+// A recording lives in its own store next to the pictures, and the caller says which it
+// wants. Both containers have the same shape, only the magic and the media type differ.
+$isAudio = isset($_GET['kind']) && 'audio' === $_GET['kind'];
+$path = DEVPATH.$IMEI.($isAudio ? '.audio.db' : '.images.db');
+$wantMagic = $isAudio ? 'CTAUD1' : 'CTIMG2';
+$mediaType = $isAudio ? 'audio/amr' : 'image/jpeg';
 
 if (!is_readable($path)) {
     http_response_code(404);
-    exit('no pictures for this device');
+    exit($isAudio ? 'no recordings for this device' : 'no pictures for this device');
 }
 
 $fp = fopen($path, 'rb');
@@ -46,7 +51,7 @@ $wantTs = isset($_GET['ts']) ? $_GET['ts'] : '';
 if (!$wantList && !preg_match('/^\d{1,20}$/', $wantTs)) {
     fclose($fp);
     http_response_code(400);
-    exit('bad picture id');
+    exit('bad media id');
 }
 
 $index = [];
@@ -69,12 +74,12 @@ while (!feof($fp)) {
     // Anything that is not a header means the file has been damaged or truncated mid record.
     // There is no length to trust at that point, so stop rather than guess.
     if (count($parts) < 4 || !ctype_digit($parts[3])
-        || ('CTIMG2' !== $parts[0] && 'CTIMG1' !== $parts[0])) {
+        || ($wantMagic !== $parts[0] && 'CTIMG1' !== $parts[0])) {
         break;
     }
 
-    // the picture size is what the header states; a hex payload takes twice that on disk
-    $hex = ('CTIMG2' === $parts[0]);
+    // the media size is what the header states; a hex payload takes twice that on disk
+    $hex = ('CTIMG1' !== $parts[0]);
 
     $ts = $parts[1];
     $devtime = $parts[2];
@@ -85,7 +90,7 @@ while (!feof($fp)) {
     $offset = ftell($fp);
 
     if (!$wantList && $ts === $wantTs) {
-        header('Content-Type: image/jpeg');
+        header('Content-Type: '.$mediaType);
         header('Content-Length: '.$len);
         // the pictures are immutable once written, so let the browser keep them
         header('Cache-Control: private, max-age=86400');
@@ -145,6 +150,6 @@ if ($wantList) {
 }
 
 http_response_code(404);
-echo 'no such picture';
+echo 'no such recording or picture';
 
 ?>

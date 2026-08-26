@@ -39,6 +39,7 @@ typedef struct {
     unsigned char stats_file[FILENAME_MAX];
     unsigned char tracking_file[FILENAME_MAX];
     unsigned char images_file[FILENAME_MAX];
+    unsigned char audio_file[FILENAME_MAX];
     //identifies this connection among the several a device may hold open at once. only the
     //newest one is allowed to send, so commands cannot go out on a socket the device has
     //already abandoned

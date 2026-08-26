@@ -55,6 +55,24 @@ function photoTsOf(text) {
     return m ? m[1] : null;
 }
 
+/* A monitor recording is logged the same way a picture is, as "audio:<unix ts>". */
+function audioTsOf(text) {
+    var m = /audio:(\d{1,20})/.exec(String(text || ''));
+    return m ? m[1] : null;
+}
+
+function audioUrl(ts) {
+    return 'image.php?kind=audio&imei=' + encodeURIComponent(imei) + '&ts=' + encodeURIComponent(ts);
+}
+
+/* AMR is what the watch records, and browsers do not decode it, so this is a download
+   rather than a player - a link that hands over a file the user can open in anything. */
+function audioMarkup(ts) {
+    return "<a class='audioLink' href='" + escapeHtml(audioUrl(ts)) + "'"
+           + " download='recording-" + escapeNumber(ts) + ".amr'"
+           + " onclick='event.stopPropagation();'>&#9654; recording (.amr)</a>";
+}
+
 function photoUrl(ts) {
     return 'image.php?imei=' + encodeURIComponent(imei) + '&ts=' + encodeURIComponent(ts);
 }
@@ -94,11 +112,13 @@ function hidePhoto() {
 
 function computeEventRow(cols) {
     var ts = photoTsOf(cols[4]);
+    var ats = audioTsOf(cols[4]);
     //a picture says more than the word "photo" does, so the row carries the thumbnail
     //itself. Clicking the image opens it full size; clicking the rest of the row still
     //moves the map, which is what every other event row does.
     var last = ts
         ? "<td><img class='photoThumb' src='" + escapeHtml(photoUrl(ts)) + "' alt='Picture from the device' loading='lazy' onclick='event.stopPropagation();showPhoto(" + escapeNumber(ts) + ")'></td>"
+        : ats ? "<td>" + audioMarkup(ats) + "</td>"
         : "<td>" + escapeHtml(cols[4]) + "</td>";
     return "<tr onclick='animateTo(" + escapeNumber(cols[2]) + "," + escapeNumber(cols[1]) + ")'><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td>" + escapeHtml(speedText(cols[3])) + "</td>" + last + "</tr>";
 }
@@ -112,6 +132,13 @@ function computeLogRow(cols) {
     //"take a photo" is visible where the command was sent rather than only on the map.
     //The same "photo:<ts>" marker the event log uses, so there is one rule for both.
     var text = String(cols[1] || '');
+    var am = /audio:(\d{1,20})/.exec(text);
+
+    if (am) {
+        return "<tr><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td style='font-size:10px'>"
+               + escapeHtml(text) + "<br>" + audioMarkup(am[1]) + "</td></tr>";
+    }
+
     var m = /photo:(\d{1,20})/.exec(text);
     var extra = '';
 
@@ -246,6 +273,12 @@ function fetchEvents() {
                     caption = 'Picture taken ' + escapeHtml(readableDate(rv[0]))
                               + "<br><img class='photoPopup' src='" + escapeHtml(photoUrl(pts))
                               + "' alt='Picture from the device' onclick='showPhoto(" + escapeNumber(pts) + ")'>";
+                }
+
+                var apts = audioTsOf(rv[4]);
+
+                if (apts) {
+                    caption = 'Recording made ' + escapeHtml(readableDate(rv[0])) + '<br>' + audioMarkup(apts);
                 }
 
                 lastCaption = caption;
