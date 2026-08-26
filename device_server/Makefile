@@ -15,7 +15,7 @@ CFLAGS+= -MMD -MP
 
 all: $(TARGETS)
 
-jimitrack: tracking.o main.o util.o multilaterate.o wifi_lookup.c search.c sort.c lbs_lookup.c web_geolocate.o crc16.o sock_server.o connection.o device/jimi_protocol.o device/jimi_packet.o string.o device/jimi_util.o commands.o events.o geofence.o logfiles.o device/megastek_protocol.o device/XEXUN_protocol.o device/thinkrace_protocol.o crc64.o device/myrope_protocol.o device/myrope_r18_protocol.c device/basic_protocol.o
+jimitrack: tracking.o main.o util.o multilaterate.o wifi_lookup.c search.c sort.c lbs_lookup.c web_geolocate.o crc16.o sock_server.o connection.o device/jimi_protocol.o device/jimi_packet.o string.o device/jimi_util.o commands.o events.o geofence.o logfiles.o device/megastek_protocol.o device/XEXUN_protocol.o device/thinkrace_protocol.o crc64.o images.o device/myrope_protocol.o device/myrope_r18_protocol.c device/basic_protocol.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 install: clean jimitrack

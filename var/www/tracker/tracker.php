@@ -179,6 +179,7 @@ validateSession();
                            <th><input type="text" name="command" id="command" aria-label="Command to send" class="input_small" /><button onclick="sendCommand(document.getElementById('command').value)" class="button">Send</button>
                               <button class="button" onclick="sendCommand('WARNAUDIO#');"><i style="font-size:14pt;" class="icon bullhorn"></i></button>
                               <button class="button" onclick="sendCommand('WARNMOTOR#');"><i  style="font-size:14pt;" class="icon exclamation-circle"></i></button>
+                              <button class="button" onclick="sendCommand('PHOTO#');" title="Ask the device to take a picture" aria-label="Take a picture"><i style="font-size:14pt;" class="icon camera"></i></button>
                            </th>
                         </tr>
                      </thead>

@@ -18,6 +18,7 @@
 #include "../lbs_lookup.h"
 #include "../multilaterate.h"
 #include "thinkrace_protocol.h"
+#include "../images.h"
 #include "../tracking.h"
 
 #define THINKRACE_TIMEOUT 1200
@@ -40,9 +41,18 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         localtime_r(&now, &lt);
         int tz = lt.tm_gmtoff / 3600 ;
         strftime(response, BUF_SIZE - 1, "IWBP00,%Y%m%d%H%M%S,", t);
-        sprintf(buffer, "%i#", tz);
+        snprintf(buffer, sizeof(buffer), "%i#", tz);
         strcat(response, buffer);
         send_string(conn, response);
+
+    } else if (strcmp(cmd, "PHOTO#") == 0) {
+        //BP46 with content "1" means take one now; the terminal answers AP46 and then
+        //uploads the picture over AP42. The manual also documents a BP40 shortcut
+        //(">*photo@1*<" in hex) which the PT880 accepts, but BP46 is the dedicated command
+        //and reports its own success flag, so prefer it.
+        send_string(conn, "IWBP46,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,1#");
 
     } else  if (strcmp(cmd, "SHUTDOWN#") == 0) {
         send_string(conn, "IWBP31,");
@@ -734,16 +744,128 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
             break;
 
         default:
-            sprintf(response, "IWBP%02d#", message_type);
+            snprintf(response, sizeof(response), "IWBP%02d#", message_type);
             send_string(conn, response);
     }
 }
 
 
 
+/*
+ * AP42 carries the image bytes raw, and the ordinary text path would destroy them: it
+ * replaces every NUL with a space (a JPEG is full of them), then cuts the message at the
+ * first '#' (0x23 occurs in image data constantly), then splits the result on commas
+ * (0x2C likewise). So this packet is taken apart by length instead of by delimiter, before
+ * any of that runs.
+ *
+ *   IWAP42,<yyyymmddhhmmss>,<total packets>,<packet no>,<length>,<length bytes>#
+ *
+ * Returns the number of bytes consumed from the front of recv_buffer, or 0 to mean "not an
+ * AP42 packet, or not all of it has arrived yet" - in which case the caller leaves the
+ * buffer alone and tries again when more data turns up.
+ */
+static size_t thinkrace_try_image_packet(connection * conn) {
+    const char prefix[] = "IWAP42,";
+    const size_t plen = sizeof(prefix) - 1;
+
+    if (conn->read_count < plen || memcmp(conn->recv_buffer, prefix, plen) != 0) {
+        return 0;
+    }
+
+    //the four header fields are ASCII digits; scanning past a sane header length would mean
+    //walking into the image itself, so give up rather than search the whole buffer
+    const size_t max_header = 80;
+    size_t scan_to = min(conn->read_count, max_header);
+    size_t field_start[5] = {0};
+    size_t fields = 0;
+    field_start[fields++] = plen;
+
+    size_t data_start = 0;
+
+    for (size_t i = plen; i < scan_to && fields <= 4; i++) {
+        if (conn->recv_buffer[i] == ',') {
+            if (fields == 4) {
+                data_start = i + 1;
+                break;
+            }
+
+            field_start[fields++] = i + 1;
+        }
+    }
+
+    if (data_start == 0) {
+        //header never completed inside a plausible length: this is not a packet we can use
+        if (conn->read_count >= max_header) {
+            log_line(conn, "  image: AP42 header did not complete, dropping buffer\n");
+            conn->read_count = 0;
+        }
+
+        return 0;
+    }
+
+    char devtime[16] = {0};
+    size_t tlen = min(sizeof(devtime) - 1, field_start[1] - field_start[0] - 1);
+    memcpy(devtime, conn->recv_buffer + field_start[0], tlen);
+    size_t total   = (size_t)parse_int(conn->recv_buffer + field_start[1], 8);
+    size_t packet  = (size_t)parse_int(conn->recv_buffer + field_start[2], 8);
+    size_t datalen = (size_t)parse_int(conn->recv_buffer + field_start[3], 8);
+
+    //a single packet is defined as 1024 bytes, the last one shorter. Anything else is a
+    //malformed header and waiting for that many bytes would only stall the connection.
+    if (datalen > 2048) {
+        log_line(conn, "  image: implausible packet length %u, dropping buffer\n", (unsigned)datalen);
+        conn->read_count = 0;
+        image_discard(conn);
+        return 0;
+    }
+
+    size_t needed = data_start + datalen + 1;   // + the closing '#'
+
+    if (conn->read_count < needed) {
+        return 0;                                // wait for the rest of it
+    }
+
+    if (conn->recv_buffer[needed - 1] != '#') {
+        log_line(conn, "  image: AP42 packet %u not terminated where its length said, discarding\n",
+                 (unsigned)packet);
+        image_discard(conn);
+        return needed;                           // still consume it, or it blocks the stream
+    }
+
+    if (packet == 1) {
+        image_begin(conn, devtime, total);
+    }
+
+    bool ok = image_append(conn, packet, conn->recv_buffer + data_start, datalen);
+    log_line(conn, "  image: packet %u/%u, %u bytes, %s\n", (unsigned)packet, (unsigned)total,
+             (unsigned)datalen, ok ? "accepted" : "rejected");
+
+    //the device waits for this before sending the next packet, and repeats the current one
+    //if it does not arrive or comes back as a failure
+    char response[96] = {0};
+    snprintf(response, sizeof(response), "IWBP42,%s,%u,%u,%u#", devtime,
+             (unsigned)total, (unsigned)packet, ok ? 1u : 0u);
+    send_string(conn, response);
+
+    if (ok && image_complete(conn)) {
+        image_store(conn);
+    }
+
+    return needed;
+}
+
 void thinkrace_process(void * vp) {
     connection * conn = (connection *)vp;
     conn->current_packet_valid = false;
+
+    //image packets are binary and must be handled before the text framing below mangles them
+    size_t consumed = thinkrace_try_image_packet(conn);
+
+    if (consumed > 0) {
+        memmove(conn->recv_buffer, conn->recv_buffer + consumed, conn->read_count - consumed);
+        conn->read_count -= consumed;
+        return;
+    }
 
     //if we've at least got a header
     if (conn->read_count > 5) {

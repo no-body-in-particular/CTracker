@@ -47,8 +47,60 @@ function speedText(spd) {
     return isFinite(v) ? v + ' km/h' : 'not measured';
 }
 
+/* The device server writes a picture upload to the event log as "photo:<unix ts>", which is
+   the same timestamp that heads the record inside <imei>.images.db. That is all image.php
+   needs to find it, so nothing here has to know where the file lives or how it is laid out. */
+function photoTsOf(text) {
+    var m = /^photo:(\d{1,20})$/.exec(String(text || '').trim());
+    return m ? m[1] : null;
+}
+
+function photoUrl(ts) {
+    return 'image.php?imei=' + encodeURIComponent(imei) + '&ts=' + encodeURIComponent(ts);
+}
+
+/* Opens the picture full size. The viewer is built once and reused; clicking anywhere on it
+   or pressing escape puts it away again. */
+function showPhoto(ts) {
+    var box = document.getElementById('photoViewer');
+
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'photoViewer';
+        box.className = 'photoViewer';
+        box.innerHTML = '<img alt="Picture from the device">';
+        box.addEventListener('click', hidePhoto);
+        document.body.appendChild(box);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                hidePhoto();
+            }
+        });
+    }
+
+    box.querySelector('img').src = photoUrl(ts);
+    box.style.display = 'flex';
+}
+
+function hidePhoto() {
+    var box = document.getElementById('photoViewer');
+
+    if (box) {
+        box.style.display = 'none';
+        //drop the bytes rather than hold every picture that has been looked at
+        box.querySelector('img').removeAttribute('src');
+    }
+}
+
 function computeEventRow(cols) {
-    return "<tr onclick='animateTo(" + escapeNumber(cols[2]) + "," + escapeNumber(cols[1]) + ")'><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td>" + escapeHtml(speedText(cols[3])) + "</td><td>" + escapeHtml(cols[4]) + "</td></tr>";
+    var ts = photoTsOf(cols[4]);
+    //a picture says more than the word "photo" does, so the row carries the thumbnail
+    //itself. Clicking the image opens it full size; clicking the rest of the row still
+    //moves the map, which is what every other event row does.
+    var last = ts
+        ? "<td><img class='photoThumb' src='" + escapeHtml(photoUrl(ts)) + "' alt='Picture from the device' loading='lazy' onclick='event.stopPropagation();showPhoto(" + escapeNumber(ts) + ")'></td>"
+        : "<td>" + escapeHtml(cols[4]) + "</td>";
+    return "<tr onclick='animateTo(" + escapeNumber(cols[2]) + "," + escapeNumber(cols[1]) + ")'><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td>" + escapeHtml(speedText(cols[3])) + "</td>" + last + "</tr>";
 }
 
 function computeHistoryRow(cols) {
@@ -169,7 +221,20 @@ function fetchEvents() {
             var lastCaption;
             var features = [];
             eventList.forEach(rv => {
-                var caption = (rv[4] + ' on ' + readableDate(rv[0]) + ' while moving at speed: ' + speedText(rv[3]));
+                //The caption is dropped into innerHTML further down and rv[4] is whatever
+                //the device sent, so it is escaped here rather than trusted. A picture event
+                //additionally gets the image itself, built only from digits that matched the
+                //photo pattern.
+                var pts = photoTsOf(rv[4]);
+                var caption = escapeHtml(rv[4]) + ' on ' + escapeHtml(readableDate(rv[0]))
+                              + ' while moving at speed: ' + escapeHtml(speedText(rv[3]));
+
+                if (pts) {
+                    caption = 'Picture taken ' + escapeHtml(readableDate(rv[0]))
+                              + "<br><img class='photoPopup' src='" + escapeHtml(photoUrl(pts))
+                              + "' alt='Picture from the device' onclick='showPhoto(" + escapeNumber(pts) + ")'>";
+                }
+
                 lastCaption = caption;
 
                 //an event logged before the device had a fix carries 0,0, and a few older

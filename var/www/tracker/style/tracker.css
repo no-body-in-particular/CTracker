@@ -479,6 +479,10 @@ section:target h1 {
     background-image: url('../icons/exclamation-circle.svg');
 }
 
+.camera {
+    background-image: url('../icons/camera.svg');
+}
+
 .globe {
     background-image: url('../icons/globe.svg');
 }
@@ -1287,4 +1291,48 @@ nav {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
+}
+
+/* ---- pictures from the device ------------------------------------------ */
+
+/* A picture event shows its thumbnail in the event table rather than the raw "photo:..."
+   text. Kept small so a run of them does not stretch the rows out of step with the others. */
+.photoThumb {
+    display: block;
+    max-width: 96px;
+    max-height: 72px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: zoom-in;
+    object-fit: cover;
+}
+
+/* the same picture inside the map popup, where there is a little more room */
+.photoPopup {
+    display: block;
+    margin-top: 6px;
+    max-width: 220px;
+    max-height: 165px;
+    border-radius: 4px;
+    cursor: zoom-in;
+}
+
+/* Full size viewer. display is toggled between none and flex, so the centring only has to
+   be written once. It sits above the map controls and the popup overlay. */
+.photoViewer {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    cursor: zoom-out;
+}
+
+.photoViewer img {
+    max-width: 94vw;
+    max-height: 94vh;
+    border-radius: 6px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
