@@ -46,6 +46,40 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         strcat(response, buffer);
         send_string(conn, response);
 
+    } else if (strlen(cmd) > 4 && memcmp(cmd, "SMS=", 4) == 0) {
+        /*
+         * BPSM tunnels one of the watch's SMS commands over the data connection, so the
+         * whole "#...#" vocabulary is reachable without sending an actual text message.
+         *
+         * From the firmware (protocol_beehome.handleBPSM): the packet is split on ',' and
+         * must be exactly four fields, the last of which is the command. That command then
+         * has '@' rewritten to '#' and '-' rewritten to ',' before being handed to the SMS
+         * handler - the substitution exists because '#' terminates a packet and ',' separates
+         * its fields, so neither can appear raw. The same rewriting is done here, so a caller
+         * writes the command as it would be texted and this puts it on the wire safely.
+         *
+         *   SMS=#status#          -> @status@
+         *   SMS=#USB#=adb         -> @USB@=adb        (adb over USB; there is no network adb)
+         *   SMS=#listen#12345678  -> @listen@12345678 (the watch dials that number)
+         *   SMS=#capture#         -> @capture@        (take a picture)
+         *
+         * Untested against hardware at the time of writing: it is built from the firmware's
+         * own parser rather than from a document, and a command the watch does not recognise
+         * is simply ignored by it.
+         */
+        char escaped[BUF_SIZE] = {0};
+        size_t w = 0;
+
+        for (const char * r = cmd + 4; *r && w + 1 < sizeof(escaped); r++) {
+            escaped[w++] = (*r == '#') ? '@' : (*r == ',') ? '-' : *r;
+        }
+
+        send_string(conn, "IWBPSM,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_string(conn, escaped);
+        send_string(conn, "#");
+
     } else if (strcmp(cmd, "PHOTO#") == 0) {
         //BP46 with content "1" means take one now; the terminal answers AP46 and then
         //uploads the picture over AP42. The manual also documents a BP40 shortcut
