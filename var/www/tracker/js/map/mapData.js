@@ -156,7 +156,12 @@ function computeEventRow(cols) {
 }
 
 function computeHistoryRow(cols) {
-    return "<tr onclick='animateTo(" + cols[2] + "," + cols[1] + ")'><td>" + readableDate(new Date(cols[0])) + "</td><td>" + cols[1] + "</td><td>" + cols[2] + "</td><td>" + speedText(cols[3]) + "</td></tr>";
+    //escaped like every other row builder here. This one was missed: the two coordinates went
+    //straight into an onclick attribute and into the cells, while computeEventRow directly
+    //above does the same job through escapeNumber and escapeHtml. They hold whatever is in the
+    //position file, which this server writes as numbers - but so does the row above, and that
+    //one does not rely on it.
+    return "<tr onclick='animateTo(" + escapeNumber(cols[2]) + "," + escapeNumber(cols[1]) + ")'><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td>" + escapeHtml(cols[1]) + "</td><td>" + escapeHtml(cols[2]) + "</td><td>" + escapeHtml(speedText(cols[3])) + "</td></tr>";
 }
 
 function computeLogRow(cols) {
