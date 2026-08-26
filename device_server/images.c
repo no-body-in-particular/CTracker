@@ -10,21 +10,23 @@
 
 /*
  * Images are appended to <imei>.images.db in a container deliberately kept trivial to take
- * apart by hand. Each record is one plain ASCII header line followed by the image bytes
- * exactly as the device sent them, then a newline:
+ * apart by hand. Each record is one plain ASCII header line, then one line of the image as
+ * hex, so the whole file is printable:
  *
- *     CTIMG1 <unix_ts> <device_time> <bytes> <lat> <lon>\n
- *     <bytes of JPEG>
- *     \n
+ *     CTIMG2 <unix_ts> <device_time> <bytes> <lat> <lon>\n
+ *     <2 * bytes hex characters>\n
  *
- * So `strings file.images.db | grep CTIMG1` prints the index with offsets implied by the
- * sizes, and pulling one out is a seek and a read of <bytes> - no library and no schema.
- * The payload is stored verbatim rather than base64'd or compressed, so the JPEG start and
- * end markers survive; if the headers were ever damaged the images are still recoverable
- * with any carver that looks for FFD8..FFD9.
+ * <bytes> is the size of the picture itself, so the hex line is twice that long. Being all
+ * text means the file can be paged, grepped and diffed like anything else, and one picture
+ * comes out with nothing but shell:
+ *
+ *     grep -A1 '^CTIMG2 1787738793' f.images.db | tail -1 | xxd -r -p > out.jpg
+ *
+ * CTIMG1 was the same layout with the payload written as raw bytes. Readers still accept it;
+ * only the writer has moved on.
  */
 
-#define IMAGE_MAGIC       "CTIMG1"
+#define IMAGE_MAGIC       "CTIMG2"
 #define MAX_IMAGE_SIZE    (4 * 1024 * 1024)
 #define MAX_IMAGE_PACKETS 8192
 
@@ -136,7 +138,29 @@ bool image_store(connection * conn) {
     fprintf(fp, "%s %ld %s %u %f %f\n", IMAGE_MAGIC, (long)now,
             conn->image_time[0] ? conn->image_time : "-",
             (unsigned)conn->image_len, conn->current_lat, conn->current_lon);
-    size_t written = fwrite(conn->image_buffer, 1, conn->image_len, fp);
+
+    static const char hexdigits[] = "0123456789abcdef";
+    size_t written = 0;
+
+    //written a chunk at a time rather than two fputc calls per byte: a 40KB picture is
+    //80000 characters and going through stdio for each one is needless
+    for (size_t i = 0; i < conn->image_len;) {
+        char line[1024];
+        size_t n = 0;
+
+        while (i < conn->image_len && n + 2 <= sizeof(line)) {
+            unsigned char b = conn->image_buffer[i++];
+            line[n++] = hexdigits[b >> 4];
+            line[n++] = hexdigits[b & 0x0f];
+        }
+
+        if (fwrite(line, 1, n, fp) != n) {
+            break;
+        }
+
+        written += n / 2;
+    }
+
     fputc('\n', fp);
     fclose(fp);
 

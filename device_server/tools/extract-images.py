@@ -17,14 +17,24 @@ picture can be lifted out with dd once you have the offset this script prints.
 """
 import os, sys
 
-MAGIC = b"CTIMG1 "
+MAGICS = (b"CTIMG2 ", b"CTIMG1 ")
+
+
+def _next_magic(blob, pos):
+    """Offset of the earliest record header at or after pos, and which magic it was."""
+    best, best_magic = -1, None
+    for m in MAGICS:
+        i = blob.find(m, pos)
+        if i >= 0 and (best < 0 or i < best):
+            best, best_magic = i, m
+    return best, best_magic
 
 
 def records(blob):
     """Yield (offset, header_fields, data) for every record found."""
     pos = 0
     while True:
-        start = blob.find(MAGIC, pos)
+        start, magic = _next_magic(blob, pos)
         if start < 0:
             return
         eol = blob.find(b"\n", start)
@@ -39,12 +49,26 @@ def records(blob):
         except ValueError:
             pos = eol + 1
             continue
-        data = blob[eol + 1: eol + 1 + length]
-        if len(data) != length:
+
+        # length is the size of the picture; a hex payload occupies twice that
+        onwire = length * 2 if magic == b"CTIMG2 " else length
+        raw = blob[eol + 1: eol + 1 + onwire]
+        if len(raw) != onwire:
             sys.stderr.write(f"warning: record at {start} is truncated "
-                             f"({len(data)} of {length} bytes)\n")
+                             f"({len(raw)} of {onwire} bytes on disk)\n")
+
+        if magic == b"CTIMG2 ":
+            try:
+                data = bytes.fromhex(raw.decode("ascii", "strict"))
+            except (ValueError, UnicodeDecodeError):
+                sys.stderr.write(f"warning: record at {start} is not valid hex, skipping\n")
+                pos = eol + 1 + onwire
+                continue
+        else:
+            data = raw
+
         yield eol + 1, parts, data
-        pos = eol + 1 + length
+        pos = eol + 1 + onwire
 
 
 def main():
@@ -74,8 +98,8 @@ def main():
         print("no records found", file=sys.stderr)
         return 1
     if not outdir:
-        print(f"\n{n} image(s). Pass an output directory to write them out, or lift one by hand:")
-        print(f"  dd if={path} bs=1 skip=<offset> count=<bytes> of=out.jpg")
+        print(f"\n{n} image(s). Pass an output directory to write them out, or by hand:")
+        print(f"  grep -A1 '^CTIMG2 <ts>' {path} | tail -1 | xxd -r -p > out.jpg")
     return 0
 
 
