@@ -267,7 +267,18 @@ void * process_thread(void * int_ptr) {
                 read_disabled_alarms(&conn);
             }
 
-            if (conn.iteration % 1000 == 0) {
+            /*
+             * Iteration 1000 is a little over a hundred seconds in, at a hundred milliseconds
+             * a pass, and the counter starts again with every connection. So a device whose
+             * connections are shorter than that never reached this at all and its files grew
+             * without limit - which is how a four megabyte log came to be eighty two.
+             *
+             * Checking once early as well means every connection that lives five seconds
+             * trims its files once. The check itself is an ftell against a limit, so the
+             * common case of being under it costs nothing, and the expensive case happens
+             * once and then the file is under the limit again.
+             */
+            if (conn.iteration == 50 || conn.iteration % 1000 == 0) {
                 conn.command_response_filehandle =  log_truncate(conn.command_response_filehandle, conn.command_response_outfile, MAX_LOG_SIZE);
                 conn.gps_filehandle =  log_truncate(conn.gps_filehandle, conn.gps_outfile, MAX_DATA_SIZE);
                 conn.log_filehandle =  log_truncate(conn.log_filehandle, conn.log_outfile, MAX_LOG_SIZE);
