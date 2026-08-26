@@ -92,6 +92,9 @@ const char * decode_alarm_code(uint8_t code) {
         case 0x25:
             return "Light detected";
 
+        case 0x26:
+            return "Left the bluetooth zone";
+
         case 0x27:
             return "Wire cut";
 
@@ -110,11 +113,19 @@ const char * decode_alarm_code(uint8_t code) {
         case 0x2C:
             return "Collision";
 
+        case 0x2D:
+            return "Rollover";
+
         case 0x30:
             return "Harsh braking";
 
         case 0x31:
             return "Left the herd";
+
+        //the JM-LL301 list calls this a rollover triggered by the power being disconnected,
+        //and then maps it onto its tamper alert
+        case 0x32:
+            return "Tamper";
 
         case 0x33:
             return "Locked";
