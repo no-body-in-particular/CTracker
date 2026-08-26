@@ -132,10 +132,50 @@ void wifi_database_from_file(wifi_db * database, char * file) {
         return;
     }
 
-    fread(&database->network_count, sizeof(database->network_count), 1, fp);
-    database->network_buffer = realloc(database->network_buffer, database->network_count * sizeof(wifi_db_entry));
+    if (fread(&database->network_count, sizeof(database->network_count), 1, fp) != 1) {
+        fprintf(stdout, "   cache file has no count in it, starting empty.\n");
+        database->network_count = 0;
+        fclose(fp);
+        return;
+    }
+
+    //same reasoning as the LBS cache above - bound the count by what the file can hold, and
+    //do not hand an unchecked allocation to fread()
+    long here = ftell(fp);
+
+    if (fseek(fp, 0, SEEK_END) == 0) {
+        long size = ftell(fp);
+        fseek(fp, here, SEEK_SET);
+
+        if (size > here) {
+            size_t fits = ((size_t)(size - here)) / sizeof(wifi_db_entry);
+
+            if (database->network_count > fits) {
+                database->network_count = fits;
+            }
+        }
+    }
+
+    wifi_db_entry * grown = realloc(database->network_buffer, database->network_count * sizeof(wifi_db_entry));
+
+    if (grown == NULL) {
+        fprintf(stdout, "   could not allocate %lu bytes for the WiFi cache, continuing without it\n",
+                (unsigned long)(database->network_count * sizeof(wifi_db_entry)));
+        database->network_count = 0;
+        database->network_buffer_size = 0;
+        fclose(fp);
+        return;
+    }
+
+    database->network_buffer = grown;
     database->network_buffer_size = database->network_count;
-    fread(database->network_buffer, database->network_count * sizeof(wifi_db_entry), 1, fp);
+
+    if (database->network_count &&
+            fread(database->network_buffer, database->network_count * sizeof(wifi_db_entry), 1, fp) != 1) {
+        fprintf(stdout, "   cache file is shorter than it claims, starting empty.\n");
+        database->network_count = 0;
+    }
+
     fclose(fp);
     wifi_sort(database);
     fprintf(stdout, "   done.\n");

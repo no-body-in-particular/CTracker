@@ -156,14 +156,65 @@ void lbs_database_from_file(cell_db * database, char * file) {
     fprintf(stdout, "Loading LBS cache.\n");
     FILE * fp = fopen(file, "rb");
 
-    if (fp <= 0) {
+    if (fp == NULL) {
         fprintf(stdout, "   failed to open cache file.\n");
         return;
     }
 
-    fread(&database->tower_count, sizeof(database->tower_count), 1, fp);
-    database->tower_buffer = realloc(database->tower_buffer, database->tower_count * sizeof(cell_tower));
-    fread(database->tower_buffer, database->tower_count * sizeof(cell_tower), 1, fp);
+    if (fread(&database->tower_count, sizeof(database->tower_count), 1, fp) != 1) {
+        fprintf(stdout, "   cache file has no count in it, starting empty.\n");
+        database->tower_count = 0;
+        fclose(fp);
+        return;
+    }
+
+    /*
+     * The count comes out of the file, so believe it only as far as the file can back it up.
+     * A truncated or half written cache otherwise asks for an allocation of whatever the
+     * first few bytes happened to be.
+     */
+    long here = ftell(fp);
+
+    if (fseek(fp, 0, SEEK_END) == 0) {
+        long size = ftell(fp);
+        fseek(fp, here, SEEK_SET);
+
+        if (size > here) {
+            size_t fits = ((size_t)(size - here)) / sizeof(cell_tower);
+
+            if (database->tower_count > fits) {
+                fprintf(stdout, "   cache claims %lu towers but only holds %lu, using the smaller\n",
+                        (unsigned long)database->tower_count, (unsigned long)fits);
+                database->tower_count = fits;
+            }
+        }
+    }
+
+    /*
+     * And check the allocation. This cache runs to well over a gigabyte, the machine is set
+     * to vm.overcommit_memory=2 so a large request is refused outright rather than handed
+     * back lazily, and the result went straight into fread() - so on a machine short of
+     * memory the server did not report a problem, it segfaulted here on startup. Losing the
+     * cache costs a lookup; crashing costs every device on the server.
+     */
+    cell_tower * grown = realloc(database->tower_buffer, database->tower_count * sizeof(cell_tower));
+
+    if (grown == NULL) {
+        fprintf(stdout, "   could not allocate %lu bytes for the LBS cache, continuing without it\n",
+                (unsigned long)(database->tower_count * sizeof(cell_tower)));
+        database->tower_count = 0;
+        fclose(fp);
+        return;
+    }
+
+    database->tower_buffer = grown;
+
+    if (database->tower_count &&
+            fread(database->tower_buffer, database->tower_count * sizeof(cell_tower), 1, fp) != 1) {
+        fprintf(stdout, "   cache file is shorter than it claims, starting empty.\n");
+        database->tower_count = 0;
+    }
+
     fclose(fp);
     fprintf(stdout, "   done.\n");
 }
