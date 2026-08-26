@@ -58,6 +58,15 @@
 #define ADAPTIVE_INTERVAL_ENABLED 1
 
 #define HEALTH_POLL_INTERVAL 180        //how often to ask the device for a reading, seconds
+
+//Some devices keep their own health reporting schedule and will push readings without being
+//asked, which is cheaper for both sides than a poll every few minutes: one command instead
+//of twenty an hour, and the watch's radio stays down in between. Set to 0 to go back to
+//polling. The period is in minutes because that is the unit the device's own command takes.
+#define DEVICE_HEALTH_INTERVAL_MIN 3
+//how often the period is re-sent, so a watch that was reset or lost the setting picks it
+//back up without waiting for anything to notice
+#define DEVICE_HEALTH_INTERVAL_REFRESH (6 * 60 * 60)
 //A watch that has been answering health polls and then stops has been seen to keep the
 //connection up, keep reporting positions, and simply never answer again until it is restarted.
 //Recovery is timed from the last reading actually received rather than counted in polls: a

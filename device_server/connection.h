@@ -79,6 +79,9 @@ typedef struct {
     //adaptive tracking - see tracking.c
     bool supports_interval;         //protocol implements an interval command
     bool supports_health_poll;      //protocol can ask for a health reading on demand
+    //protocol can tell the device its own reporting period, so the server does not have to
+    //ask repeatedly - see poll_health()
+    bool supports_health_interval;
     unsigned int current_interval;  //interval the device is on, seconds. 0 while unknown
     time_t last_interval_change;
     time_t since_last_health_poll;

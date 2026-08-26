@@ -340,7 +340,7 @@ function fetchEvents() {
             }
 
             const tableBody = document.getElementById("alarmBody");
-            tableBody.innerHTML = eventList.reverse().map(rv => computeEventRow(rv)).join('');
+            tableBody.innerHTML = eventList.slice().reverse().map(rv => computeEventRow(rv)).join('');
         }
     });
 }
@@ -417,7 +417,7 @@ function fetchLogging() {
             serverLogging = serverLogging.concat(parsed);
 
             const tableBody = document.getElementById("serverLoggingBody");
-            tableBody.innerHTML = serverLogging.reverse().map(rv => computeLogRow(rv)).join('');
+            tableBody.innerHTML = serverLogging.slice().reverse().map(rv => computeLogRow(rv)).join('');
 
         }
     });
@@ -448,7 +448,7 @@ function fetchCommandResults() {
             commandResults = concatNewRows(commandResults, parsed);
 
             const tableBody = document.getElementById("commandBody");
-            tableBody.innerHTML = commandResults.reverse().map(rv => computeLogRow(rv)).join('');
+            tableBody.innerHTML = commandResults.slice().reverse().map(rv => computeLogRow(rv)).join('');
         }
     });
 }

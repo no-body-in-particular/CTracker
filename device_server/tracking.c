@@ -45,6 +45,7 @@ typedef struct {
     unsigned long health_seen;  //this device has answered a health poll at least once
     time_t last_recovery;       //when the device was last restarted to recover health
     time_t last_health_reading; //when a reading was last received, drives the recovery timeout
+    time_t last_interval_cfg;   //when the device was last told its own health reporting period
 } tracking_state;
 
 static void read_state(connection * conn, tracking_state * st)
@@ -65,13 +66,13 @@ static void read_state(connection * conn, tracking_state * st)
     unsigned int b = 0;
     int d = 0;
 
-    unsigned long f = 0, g = 0, h = 0, i = 0, j = 0;
+    unsigned long f = 0, g = 0, h = 0, i = 0, j = 0, k = 0;
 
     //still accepts a file written before the later fields existed - fscanf simply stops early
     //and they keep the zero memset put there. A missing last_health_reading reads as 0, which
     //the recovery check treats as "no reading time on record yet" and so never restarts on it
     //until the device sends a reading and stamps a real time.
-    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i, &j) >= 5) {
+    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k) >= 5) {
         st->last_change = (time_t)a;
         st->interval = b;
         st->last_health_poll = (time_t)c;
@@ -82,6 +83,7 @@ static void read_state(connection * conn, tracking_state * st)
         st->health_seen = h;
         st->last_recovery = (time_t)i;
         st->last_health_reading = (time_t)j;
+        st->last_interval_cfg = (time_t)k;
     }
 
     fclose(fp);
@@ -99,13 +101,14 @@ static void write_state(connection * conn, tracking_state * st)
         return;
     }
 
-    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu\n",
+    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu\n",
             (unsigned long)st->last_change, st->interval,
             (unsigned long)st->last_health_poll, st->active,
             (unsigned long)st->last_activity, st->owner,
             st->polls_missed, st->health_seen,
             (unsigned long)st->last_recovery,
-            (unsigned long)st->last_health_reading);
+            (unsigned long)st->last_health_reading,
+            (unsigned long)st->last_interval_cfg);
     fclose(fp);
 }
 
@@ -302,6 +305,34 @@ void poll_health(connection * conn)
         unlock_state(lock);
         log_line(conn, "no health reading in %lu s - restarting the device\n", gone);
         conn->COMMAND_FUNCTION(conn, "RESTART#");
+        return;
+    }
+
+    /*
+     * Where the device can keep its own schedule, tell it once and then leave it alone. It
+     * pushes readings on that period without being asked, which is one command every few
+     * hours in place of twenty an hour, and lets its radio stay down in between. Polling
+     * remains for protocols that cannot be told.
+     *
+     * The period is re-sent occasionally rather than once ever, so a watch that was reset,
+     * factory defaulted or simply did not take the command picks it up again on its own.
+     */
+    if (DEVICE_HEALTH_INTERVAL_MIN > 0 && conn->supports_health_interval) {
+        if ((time(0) - st.last_interval_cfg) < DEVICE_HEALTH_INTERVAL_REFRESH) {
+            unlock_state(lock);
+            return;
+        }
+
+        st.last_interval_cfg = time(0);
+        st.last_health_poll = time(0);
+        write_state(conn, &st);
+        unlock_state(lock);
+
+        char cmd[64] = {0};
+        snprintf(cmd, sizeof(cmd), "HEALTHINT=%d,%d",
+                 DEVICE_HEALTH_INTERVAL_MIN, DEVICE_HEALTH_INTERVAL_MIN);
+        log_line(conn, "setting the device health period to %d minutes\n", DEVICE_HEALTH_INTERVAL_MIN);
+        conn->COMMAND_FUNCTION(conn, cmd);
         return;
     }
 

@@ -1174,6 +1174,9 @@ void thinkrace_identify(void * vp) {
         //BP15 sets the location interval and BPXL asks for a health reading, so this
         //protocol can take part in adaptive tracking
         conn->supports_interval = true;
+        //BP86 sets the watch's own heart rate and blood pressure periods; confirmed against
+        //hardware, which answers IWAP86
+        conn->supports_health_interval = true;
         conn->supports_health_poll = true;
         conn->WARNING_FUNCTION = thinkrace_warn;
         conn->AUDIO_WARNING_FUNCTION = thinkrace_warn_audio;
