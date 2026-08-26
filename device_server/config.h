@@ -150,3 +150,14 @@
  */
 #define OWNER_REFRESH 30                //seconds between refreshes of a live ownership claim
 #define OWNER_TIMEOUT 150               //seconds before a silent owner's claim may be taken
+
+/*
+ * How long the same geofence alert is held down for. Entering and leaving a fence are
+ * detected against the previous position and so happen once each, but "inside exclusion zone"
+ * and "outside of inclusion zone" describe a state rather than a change: they were raised on
+ * every position report for as long as the state lasted. A device reporting every ten seconds
+ * therefore produced an event every ten seconds, indefinitely - 25957 pairs of identical
+ * consecutive events ten seconds apart are in the recorded history, and one fence accounts
+ * for 22143 events on its own.
+ */
+#define FENCE_REPEAT_INTERVAL 600       //seconds before the same fence alert is raised again

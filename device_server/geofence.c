@@ -182,6 +182,18 @@ void read_geofence(connection * conn) {
 
 void fence_alert(connection * conn, bool alarms, geofence fence, char * message, float lat, float lon, double speed) {
     char buffer[BUF_SIZE * 2] = {0};
+    char what[96] = {0};
+    //fence and message together, because two fences broken at once are two different things
+    //to be told about, while the same one twice is not
+    snprintf(what, sizeof(what), "%s: %s", fence.name, message);
+
+    if (strcmp(what, conn->last_fence_event) == 0
+            && (time(0) - conn->last_fence_event_time) < FENCE_REPEAT_INTERVAL) {
+        return;
+    }
+
+    snprintf(conn->last_fence_event, sizeof(conn->last_fence_event), "%s", what);
+    conn->last_fence_event_time = time(0);
 
     if (alarms && fence.warn_enable && !is_alarm_disabled(conn, message)) {
         snprintf(buffer, sizeof(buffer), "%s: %s", fence.name, message);

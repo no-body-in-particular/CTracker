@@ -103,6 +103,10 @@ typedef struct {
     size_t image_expected_packets;
     size_t image_next_packet;
     char image_time[16];
+    //the last geofence alert raised and when, so a fence that stays broken is not shouted
+    //about on every position - see fence_alert()
+    char last_fence_event[96];
+    time_t last_fence_event_time;
     const char * SINGLE_WARNING;
     unsigned int device_extra;
     void (*PROCESS_FUNCTION)(void *) ;
