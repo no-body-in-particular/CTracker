@@ -31,7 +31,16 @@ connection new_connection(int socket) {
     connection result;
     memset(&result, 0, sizeof(connection));
     //monotonic, so a larger id is always the more recent connection
-    result.connection_id = __sync_fetch_and_add(&next_connection_id, 1);
+    /*
+     * The pid is in here because this server runs as more than one process against the same
+     * per-device state files, and the counter is static - so each process handed out 1, 2, 3
+     * independently and two entirely different connections could carry the same id. Command
+     * ownership is recorded by id, so a device could end up "owned" by a connection in the
+     * other process, or by a dead one, after which nothing polled it and no queued command
+     * ever went out.
+     */
+    result.connection_id = ((unsigned long)getpid() << 32)
+                           | __sync_fetch_and_add(&next_connection_id, 1);
     result.can_log = false;
     result.imei[0] = 0;
     result.device_extra = 0;

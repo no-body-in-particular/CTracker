@@ -132,3 +132,11 @@
 #define WIFI_LOOKUP_MIN 2
 //most access points we will carry from one scan
 #define WIFI_LOOKUP_MAX 16
+
+/*
+ * A device commonly leaves an older connection half open, and only one connection may send to
+ * it - see is_command_owner(). The owner refreshes its claim every OWNER_REFRESH seconds, and
+ * another connection may take the claim once the owner has been quiet for OWNER_TIMEOUT.
+ */
+#define OWNER_REFRESH 30                //seconds between refreshes of a live ownership claim
+#define OWNER_TIMEOUT 150               //seconds before a silent owner's claim may be taken

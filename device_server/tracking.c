@@ -46,6 +46,7 @@ typedef struct {
     time_t last_recovery;       //when the device was last restarted to recover health
     time_t last_health_reading; //when a reading was last received, drives the recovery timeout
     time_t last_interval_cfg;   //when the device was last told its own health reporting period
+    time_t owner_seen;          //last time the owning connection was still here
 } tracking_state;
 
 static void read_state(connection * conn, tracking_state * st)
@@ -66,13 +67,13 @@ static void read_state(connection * conn, tracking_state * st)
     unsigned int b = 0;
     int d = 0;
 
-    unsigned long f = 0, g = 0, h = 0, i = 0, j = 0, k = 0;
+    unsigned long f = 0, g = 0, h = 0, i = 0, j = 0, k = 0, l = 0;
 
     //still accepts a file written before the later fields existed - fscanf simply stops early
     //and they keep the zero memset put there. A missing last_health_reading reads as 0, which
     //the recovery check treats as "no reading time on record yet" and so never restarts on it
     //until the device sends a reading and stamps a real time.
-    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k) >= 5) {
+    if (fscanf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu %lu", &a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l) >= 5) {
         st->last_change = (time_t)a;
         st->interval = b;
         st->last_health_poll = (time_t)c;
@@ -84,6 +85,10 @@ static void read_state(connection * conn, tracking_state * st)
         st->last_recovery = (time_t)i;
         st->last_health_reading = (time_t)j;
         st->last_interval_cfg = (time_t)k;
+        //a state file written before this field existed leaves it zero, which reads as an
+        //owner last seen at the epoch - stale, so the first connection along takes over. That
+        //is the right answer for an upgrade: nothing is holding the claim.
+        st->owner_seen = (time_t)l;
     }
 
     fclose(fp);
@@ -101,14 +106,15 @@ static void write_state(connection * conn, tracking_state * st)
         return;
     }
 
-    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu\n",
+    fprintf(fp, "%lu %u %lu %d %lu %lu %lu %lu %lu %lu %lu %lu\n",
             (unsigned long)st->last_change, st->interval,
             (unsigned long)st->last_health_poll, st->active,
             (unsigned long)st->last_activity, st->owner,
             st->polls_missed, st->health_seen,
             (unsigned long)st->last_recovery,
             (unsigned long)st->last_health_reading,
-            (unsigned long)st->last_interval_cfg);
+            (unsigned long)st->last_interval_cfg,
+            (unsigned long)st->owner_seen);
     fclose(fp);
 }
 
@@ -182,6 +188,7 @@ void claim_command_ownership(connection * conn)
     }
 
     st.owner = conn->connection_id;
+    st.owner_seen = time(0);
     write_state(conn, &st);
     unlock_state(lock);
     log_line(conn, "command ownership taken by connection %lu\n", conn->connection_id);
@@ -193,7 +200,43 @@ bool is_command_owner(connection * conn)
     read_state(conn, &st);
 
     //nothing has claimed it yet - let this connection through rather than go silent
-    return st.owner == 0 || st.owner == conn->connection_id;
+    if (st.owner == 0) {
+        return true;
+    }
+
+    if (st.owner == conn->connection_id) {
+        //keep the claim warm, so another connection can tell an owner that is still here
+        //from one that has gone. Rate limited: this is called several times a second.
+        if ((time(0) - st.owner_seen) > OWNER_REFRESH) {
+            int lock = lock_state(conn);
+            read_state(conn, &st);
+
+            if (st.owner == conn->connection_id) {
+                st.owner_seen = time(0);
+                write_state(conn, &st);
+            }
+
+            unlock_state(lock);
+        }
+
+        return true;
+    }
+
+    /*
+     * Somebody else holds the claim. If it has not been heard from in a while it is not
+     * coming back - a connection that died without releasing anything, or one belonging to
+     * the other server process - so take it over rather than leave the device with nothing
+     * able to send to it. Before this, such a device stopped being polled and its queued
+     * commands sat in the file indefinitely, with nothing in the log to say why.
+     */
+    if ((time(0) - st.owner_seen) > OWNER_TIMEOUT) {
+        log_line(conn, "command owner %lu last seen %lu s ago, taking over\n",
+                 st.owner, (unsigned long)(time(0) - st.owner_seen));
+        claim_command_ownership(conn);
+        return true;
+    }
+
+    return false;
 }
 
 static void mark_activity(connection * conn)
