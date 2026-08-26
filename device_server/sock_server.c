@@ -57,7 +57,8 @@ void set_nonblock(int fd) {
         fprintf(stderr, "Failed to set keepalive\n");
     }
 
-    fprintf(stdout, "SO_KEEPALIVE set on socket\n");
+    //nothing acts on this and it is printed for every connection accepted, the vast
+    //majority of which are internet background noise on an open port
 }
 
 int create_server_sock(char * addr, int port) {
@@ -103,7 +104,8 @@ int create_server_sock(char * addr, int port) {
 int wait_for_client(int s) {
     struct sockaddr_in peer;
     socklen_t len = sizeof(struct sockaddr);
-    fprintf(stdout, "Accepting connections with file descriptor: %d\n", s);
+    //likewise: the listening descriptor does not change, so printing it per accept says
+    //nothing and buries the lines that do
     int newsock = accept(s, (struct sockaddr *) &peer, &len);
 
     if (newsock < 0) {
@@ -119,7 +121,11 @@ int wait_for_client(int s) {
     //byte s_addr, so this read twelve bytes past it. It is also a blocking reverse lookup
     //run inside the accept loop, which stalls every new connection behind a DNS round trip,
     //and gethostbyaddr is not thread safe. The peer address alone is what the log needs.
-    fprintf(stdout, "Incoming connection accepted from [%s]\n", inet_ntoa(peer.sin_addr));
+    //Only interesting once the peer turns out to be a device. Roughly nine in ten
+    //connections on this port never send a recognisable byte - they are scanners - and
+    //logging each one drowns the real traffic. The address is printed by determine_device
+    //instead, once something has identified itself.
+    (void)peer;
     set_nonblock(newsock);
     return (newsock);
 }
@@ -197,7 +203,9 @@ void * process_thread(void * int_ptr) {
         //branch used to match it, so a device that hung up politely left its thread and
         //socket sitting here until the inactivity timeout eventually noticed.
         if (rdCount == 0 && conn.read_count < BUF_SIZE) {
-            fprintf(stdout, "client closed the connection\n");
+            if (conn.PROCESS_FUNCTION != 0) {
+                fprintf(stdout, "client closed the connection\n");
+            }
 
             if (conn.log_disconnect) {
                 log_event(&conn, "device disconnected");
@@ -273,7 +281,7 @@ void * process_thread(void * int_ptr) {
                     log_event(&conn, "device disconnected");
                 }
 
-                fprintf(stdout, "client disconnected\n");
+                fprintf(stdout, "device %s disconnected\n", conn.imei[0] ? (char *)conn.imei : "(unidentified)");
                 close(conn.socket);
                 close_connection(&conn);
                 pthread_exit(0);
@@ -288,7 +296,11 @@ void * process_thread(void * int_ptr) {
 
             //test for disconnected client every 5 minutes then end the process
             if (time(0) - since_packet > 20) {
-                fprintf(stdout, "client timed out\n");
+                //a connection that never identified is a scanner nine times out of ten;
+                //saying so once per scan is what made the log unreadable
+                if (conn.PROCESS_FUNCTION != 0) {
+                    fprintf(stdout, "client timed out\n");
+                }
                 close(conn.socket);
                 close_connection(&conn);
                 pthread_exit(0);

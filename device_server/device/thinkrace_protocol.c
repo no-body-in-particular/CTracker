@@ -796,12 +796,14 @@ static size_t thinkrace_try_image_packet(connection * conn) {
      */
     static const char * const prefixes[] = { "IWAP42,", "IWnull," };
     size_t plen = 0;
+    bool broken_id = false;
 
     for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); i++) {
         size_t l = strlen(prefixes[i]);
 
         if (conn->read_count >= l && memcmp(conn->recv_buffer, prefixes[i], l) == 0) {
             plen = l;
+            broken_id = (i == 1);
             break;
         }
     }
@@ -908,10 +910,28 @@ static size_t thinkrace_try_image_packet(connection * conn) {
 
     //the device waits for this before sending the next packet, and repeats the current one
     //if it does not arrive or comes back as a failure
+    /*
+     * The manual's response is BP42. This firmware announced itself as "IWnull" - its packet
+     * type came out of a %s as an empty string - and it sent one packet and then waited, so
+     * it did not take BP42 as the acknowledgement it was waiting for. Its response matcher
+     * is very likely broken in the same way its sender is, so when the upload arrived under
+     * the broken name the acknowledgement is sent under both names. A device that wants only
+     * one of them ignores the other: these packets are '#' delimited and an unrecognised id
+     * is discarded, which is exactly what this firmware did to BP42.
+     */
     char response[96] = {0};
     snprintf(response, sizeof(response), "IWBP42,%s,%u,%u,%u#", devtime,
              (unsigned)total, (unsigned)packet, ok ? 1u : 0u);
     send_string(conn, response);
+    log_line(conn, "  image: replied %s\n", response);
+
+    if (broken_id) {
+        char alt[96] = {0};
+        snprintf(alt, sizeof(alt), "IWnull,%s,%u,%u,%u#", devtime,
+                 (unsigned)total, (unsigned)packet, ok ? 1u : 0u);
+        send_string(conn, alt);
+        log_line(conn, "  image: also replied %s\n", alt);
+    }
 
     if (ok && image_complete(conn)) {
         image_store(conn);
