@@ -412,11 +412,30 @@ static void process_information_transfer(connection * conn, size_t length) {
         }
 
         case 0x0A: {
-            //ICCID, ascii
-            char iccid[64] = {0};
-            snprintf(iccid, sizeof(iccid), "%.*s", (int)min(length, sizeof(iccid) - 1), payload);
-            strip_unprintable(iccid);
-            log_line(conn, "iccid: %s\n", iccid);
+            /*
+             * Not ascii. The payload is binary coded decimal - a real one from a device reads
+             * 03 59 85 70 82 36 67 58 ... 89 66 05 19 12 40 80 52 45 2f, which printed as
+             * characters is the line noise this used to log. Written out as hex it is the
+             * identifiers themselves, the iccid being the 8966... at the end.
+             */
+            char iccid[160] = {0};
+            size_t w = 0;
+
+            for (size_t i = 0; i < length && w + 3 < sizeof(iccid); i++) {
+                w += snprintf(iccid + w, sizeof(iccid) - w, "%02X", payload[i]);
+            }
+
+            log_line(conn, "iccid packet: %s\n", iccid);
+            break;
+        }
+
+        case 0x1B: {
+            //an rfid card, sent as ascii - "RFID:008FB2BEBA39"
+            char card[96] = {0};
+            snprintf(card, sizeof(card), "%.*s", (int)min(length, sizeof(card) - 1), payload);
+            strip_unprintable(card);
+            log_line(conn, "rfid: %s\n", card);
+            log_command_response(conn, (unsigned char *)card);
             break;
         }
 
@@ -453,88 +472,6 @@ static const char * preview_ascii(const uint8_t * data, size_t length, char * ou
 
     out[w] = 0;
     return out;
-}
-
-/*
- * Some devices send a 0x79 packet whose payload is plain text and which carries no protocol
- * or information field at all - the two bytes the header format puts there are simply the
- * first two characters of the message. A parameter dump beginning "ALM1=C5;ALM2=D5;.."
- * therefore arrives as protocol number 0x41 ('A') with information 0x4c ('L'), and the
- * switch below, reading 0x41 as a protocol number, threw the whole thing away. Others put a
- * short binary marker in front, as the 0xFF passthrough does with ff ff ff 01 before
- * "<id>:MODE,1,60#".
- *
- * These are replies to commands - alarm, SOS, centre number and geofence settings, or an
- * echo of what the device was told - so they belong in the command log. Only attempted for
- * protocol numbers the switch does not already claim, because a real binary packet can
- * easily begin with a byte that happens to be printable.
- */
-static bool jimi_v2_text(connection * conn, data_packet_v2_header header, size_t length) {
-    uint8_t raw[BUF_SIZE];
-    char text[BUF_SIZE];
-    size_t n = 0;
-
-    switch (header.protocol_number) {
-        //the ones process_v2 handles itself, whatever their bytes look like
-        case 0x01:
-        case 0x21:
-        case 0x70:
-        case 0x94:
-            return false;
-    }
-
-    raw[n++] = header.protocol_number;
-    raw[n++] = header.information;
-
-    for (size_t i = 0; i < length && n < sizeof(raw); i++) {
-        raw[n++] = PACKET(conn).data[i];
-    }
-
-    //step over a binary marker sitting in front of the text
-    size_t start = 0;
-
-    while (start < n && (raw[start] < 32 || raw[start] > 126)) {
-        start++;
-    }
-
-    if (n - start < 4) {
-        return false;
-    }
-
-    //and only believe it is text if what remains really is text
-    size_t printable = 0;
-
-    for (size_t i = start; i < n; i++) {
-        if (raw[i] == 0 || (raw[i] >= 32 && raw[i] <= 126)) {
-            printable++;
-        }
-    }
-
-    if (printable * 10 < (n - start) * 9) {
-        return false;
-    }
-
-    size_t w = 0;
-
-    for (size_t i = start; i < n && w + 1 < sizeof(text); i++) {
-        if (raw[i] == 0) {
-            break;
-        }
-
-        if (raw[i] >= 32 && raw[i] <= 126) {
-            text[w++] = (char)raw[i];
-        }
-    }
-
-    text[w] = 0;
-
-    if (w == 0) {
-        return false;
-    }
-
-    log_line(conn, "text packet (protocol byte 0x%02X): %s\n", header.protocol_number, text);
-    log_command_response(conn, (unsigned char *)text);
-    return true;
 }
 
 /*
@@ -684,10 +621,16 @@ void process_v2(connection * conn) {
     size_t information_size = header.information;
     size_t data_offs = 4 + information_size;
 
-    //before the length checks below, which are meaningless for a packet whose "information"
-    //byte is really a letter
-    if (jimi_v2_text(conn, header, length)) {
+    /*
+     * 0x94 first, because for it the information byte is a sub-type and not an offset into
+     * the payload - and the length checks below read it as an offset. An rfid packet carries
+     * sub-type 0x1b, so those checks worked out that its nineteen bytes of payload begin at
+     * byte thirty one and threw it away. Every 0x94 whose sub-type happens to be a larger
+     * number than its payload is long went the same way: rfid, and anything else above 0x13.
+     */
+    if (header.protocol_number == 0x94) {
         conn->timeout_time = time(0) + JIMI_TIMEOUT;
+        process_information_transfer(conn, length);
         return;
     }
 
@@ -730,10 +673,6 @@ void process_v2(connection * conn) {
         case 0x70:
             conn->device_extra = 1;
             process_location_modular(conn, response, length);
-            break;
-
-        case 0x94:
-            process_information_transfer(conn, data_length(PACKET(conn)));
             break;
 
         default: {
@@ -943,9 +882,29 @@ bool validate_startbits(data_packet p) {
     return memcmp(p.header.start_bit, v1_start, 2) == 0 || memcmp(p.header.start_bit, v2_start, 2) == 0 ;
 }
 
+/*
+ * The bytes as they arrived, which for a long packet this did not manage.
+ *
+ * data_packet_header is four bytes - two start, a one byte length, a protocol number - so
+ * printing it covers wire bytes 0 to 3. That is right for a 0x78 packet. A 0x79 packet has a
+ * two byte length, so its protocol number and information byte are wire bytes 4 and 5, and
+ * both were skipped: the dump jumped from the length straight to the payload at byte 6.
+ *
+ * Which makes the fifth byte printed look exactly like a protocol number without being one.
+ * I read four different payload bytes out of these logs as protocol numbers and went looking
+ * for message types that do not exist. The packets were ordinary 0x94 information transfers
+ * whose payload happens to start with "ALM1=", an IMEI, or an ff ff marker.
+ */
 void log_current_packet(connection * conn) {
     log_line(conn, "current packet: ");
-    log_array(conn, ((uint8_t *)&PACKET(conn).header), sizeof(data_packet_header));
+
+    if (is_v2(PACKET(conn))) {
+        log_array(conn, ((uint8_t *)&PACKET(conn).v2_header), sizeof(data_packet_v2_header));
+
+    } else {
+        log_array(conn, ((uint8_t *)&PACKET(conn).header), sizeof(data_packet_header));
+    }
+
     log_array(conn, PACKET(conn).data, data_length(PACKET(conn)));
     log_array(conn, ((uint8_t *)&PACKET(conn).footer), sizeof(data_packet_footer));
     logprintf(conn, "\n");
