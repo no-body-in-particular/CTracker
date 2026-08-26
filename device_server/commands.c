@@ -92,8 +92,22 @@ void process_command_file(connection * conn) {
                         fprintf(stdout, "sent command:%s\n", buffer);
 
                     } else {
+                        /*
+                         * Put back for next time. Bounded the same way the branch at the
+                         * bottom of this loop is - that one checks before appending and this
+                         * one did not, though both write into the same buffer and this is the
+                         * one a device reaches by refusing commands. XEXUN returns false from
+                         * its send function as a matter of course, so every command to one of
+                         * those devices comes through here.
+                         */
                         strcat(buffer, "\n");
-                        strcat(remaining_commands, buffer);
+
+                        if (strlen(remaining_commands) + strlen(buffer) < BUF_SIZE) {
+                            strcat(remaining_commands, buffer);
+
+                        } else {
+                            fprintf(stdout, "command file is fuller than the buffer, dropping: %s", buffer);
+                        }
                     }
                 }
 
