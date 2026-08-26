@@ -382,6 +382,62 @@ void process_location_modular(connection * conn, uint8_t * data, size_t data_len
     send_data_packet(conn, create_response(0x70, *((uint16_t *) data)));
 }
 
+/*
+ * 0x94, information transfer: everything that is not a location. The sub-type is the byte
+ * straight after the protocol number - v2_header.information - and the payload follows it,
+ * which is data[0] onwards. That is not the "information as a length" arrangement the other
+ * v2 packets use, so this is parsed from the packet rather than from the de-chunked
+ * "response" buffer the caller builds.
+ *
+ * The manual documents a server reply for this packet but the copy here does not render its
+ * layout, so nothing is sent back - which is also what happened before, since 0x94 fell
+ * through to the default. Parsing it is the improvement; answering it needs a spec.
+ */
+static void process_information_transfer(connection * conn, size_t length) {
+    uint8_t info_type = PACKET(conn).v2_header.information;
+    const uint8_t * payload = PACKET(conn).data;
+
+    switch (info_type) {
+        case 0x00: {
+            //two bytes of hex, hundredths of a volt
+            if (length < 2) {
+                break;
+            }
+
+            float volts = ((payload[0] << 8) | payload[1]) / 100.0f;
+            log_line(conn, "external battery: %.2fV\n", volts);
+            write_stat(conn, "external_battery", volts);
+            break;
+        }
+
+        case 0x0A: {
+            //ICCID, ascii
+            char iccid[64] = {0};
+            snprintf(iccid, sizeof(iccid), "%.*s", (int)min(length, sizeof(iccid) - 1), payload);
+            strip_unprintable(iccid);
+            log_line(conn, "iccid: %s\n", iccid);
+            break;
+        }
+
+        case 0x04: {
+            //terminal status synchronisation: ascii "ID=value;ID=value;..."
+            char status[BUF_SIZE] = {0};
+            snprintf(status, sizeof(status), "%.*s", (int)min(length, sizeof(status) - 1), payload);
+            strip_unprintable(status);
+            log_line(conn, "terminal status: %s\n", status);
+            break;
+        }
+
+        case 0x09:
+            log_line(conn, "satellite status packet, %u bytes\n", (unsigned)length);
+            break;
+
+        default:
+            log_line(conn, "information transfer type 0x%02X, %u bytes\n", info_type, (unsigned)length);
+            break;
+    }
+}
+
 void process_v2(connection * conn) {
     uint8_t response[BUF_SIZE];
     size_t length = data_length(PACKET(conn));
@@ -421,6 +477,10 @@ void process_v2(connection * conn) {
         case 0x70:
             conn->device_extra = 1;
             process_location_modular(conn, response, length);
+            break;
+
+        case 0x94:
+            process_information_transfer(conn, data_length(PACKET(conn)));
             break;
     }
 }
@@ -552,8 +612,29 @@ void JIMI_process(void * c) {
 
         } else {
             size_t dataLength = data_length(PACKET(conn));
+            size_t declared = declared_data_length(PACKET(conn));
             size_t header_size = (is_v2(PACKET(conn)) ? sizeof(data_packet_v2_header) : sizeof(data_packet_header));
-            size_t totalSize = header_size +  dataLength +  sizeof(data_packet_footer);
+            size_t totalSize = header_size +  declared +  sizeof(data_packet_footer);
+
+            /*
+             * A packet larger than data[] can hold has to be stepped over whole. totalSize
+             * used to be computed from the clamped length, so an oversized packet had only
+             * its first part consumed and the remainder was left at the front of the buffer
+             * to be read as if it were the next packet - which it is not. That desynced the
+             * stream, and recovery was the one-byte-at-a-time resync in the branch above.
+             * Skip it in one piece instead, and say so.
+             */
+            if (declared > dataLength) {
+                log_line(conn, "packet declares %u bytes of payload, more than the %u that fit - skipping it\n",
+                         (unsigned)declared, (unsigned)dataLength);
+
+                if (conn->read_count >= totalSize) {
+                    memmove(conn->recv_buffer, conn->recv_buffer + totalSize, conn->read_count - totalSize);
+                    conn->read_count -= totalSize;
+                }
+
+                return;
+            }
 
             //and maybe enough data to reconstruct our entire packet
             if (conn->read_count >= totalSize) {

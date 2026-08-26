@@ -24,7 +24,10 @@ void connFilePrintf(connection * conn, const char * fn, FILE ** handle, const ch
     }
 
     if (!openf(handle, fn)) {
-        printf("Failed to open %s\n", conn->command_response_outfile);
+        //this reported command_response_outfile whichever file had actually failed, so a
+        //permission problem on the event log looked like one on the command log and sent
+        //the search off in the wrong direction
+        printf("Failed to open %s\n", fn);
         return;
     }
 

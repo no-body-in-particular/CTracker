@@ -35,10 +35,16 @@ typedef struct __attribute__((packed)) {
 
 data_packet_footer;
 
+//This overlays connection.current_packet, which is BUF_SIZE bytes, so the payload can be
+//everything that buffer holds once the two header forms and the footer have taken their
+//share. It used to be a flat 1024, which is smaller than a 0x79 packet is allowed to be.
+#define JIMI_MAX_DATA (BUF_SIZE - sizeof(data_packet_header) - sizeof(data_packet_v2_header) \
+                       - sizeof(data_packet_footer))
+
 typedef struct __attribute__((packed)) {
     data_packet_header header;
     data_packet_v2_header v2_header;
-    uint8_t  data[1024];
+    uint8_t  data[BUF_SIZE - 4 - 6 - 6];
     data_packet_footer footer;
 }
 

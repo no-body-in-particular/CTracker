@@ -15,6 +15,7 @@
 
 bool is_v2(data_packet packet);
 size_t data_length(data_packet packet) ;
+size_t declared_data_length(data_packet packet) ;
 uint16_t crc16(data_packet packet) ;
 data_packet get_basic_packet() ;
 data_packet create_response(uint8_t protocol_number, uint16_t count) ;

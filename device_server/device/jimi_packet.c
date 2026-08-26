@@ -9,8 +9,18 @@ bool is_v2(data_packet packet) {
     return packet.header.start_bit[0] == 0x79;
 }
 
+//The length the packet declares, before any clamping - what the sender says is on the wire.
+size_t declared_data_length(data_packet packet) {
+    return is_v2(packet)  ? (size_t)max(0, (int)SWAP_UINT16(packet.v2_header.length) - 6)
+           : (size_t)max(0, (int)packet.header.length - 5);
+}
+
 size_t data_length(data_packet packet) {
-    return is_v2(packet)  ? min(BUF_SIZE / 4, max(0, (int)SWAP_UINT16(packet.v2_header.length) - 6)) : min(BUF_SIZE / 4, max(0, (int)packet.header.length - 5));
+    //Clamped to what data[] can actually hold. The clamp used to be BUF_SIZE/4 - a quarter
+    //of the buffer - while a 0x79 packet carries a two byte length and is allowed to be far
+    //larger. Callers that need the unclamped figure use declared_data_length().
+    size_t declared = declared_data_length(packet);
+    return min(sizeof(packet.data), declared);
 }
 
 
