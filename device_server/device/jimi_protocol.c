@@ -747,6 +747,26 @@ void process_v2(connection * conn) {
     }
 }
 
+/*
+ * The answer to a 0x1F synchronisation package: four bytes of UTC seconds and two reserved,
+ * as the JI09 document gives it. A terminal sends one every twenty four hours after it
+ * registers and goes unanswered without this. Big endian, like the protocol's other multi
+ * byte fields.
+ */
+data_packet create_sync_response(uint16_t serial_number) {
+    data_packet response = create_response(0x1F, serial_number);
+    uint32_t now = (uint32_t)time(NULL);
+    response.data[0] = (uint8_t)(now >> 24);
+    response.data[1] = (uint8_t)(now >> 16);
+    response.data[2] = (uint8_t)(now >> 8);
+    response.data[3] = (uint8_t)(now);
+    response.data[4] = 0;
+    response.data[5] = 0;
+    response.header.length += 6;
+    response.footer.crc = crc16(response);
+    return response;
+}
+
 data_packet create_time_response(uint16_t serial_number) {
     time_t t = time(NULL);
     struct tm tm = *gmtime(&t);
@@ -812,6 +832,32 @@ void process_v1(connection * conn) {
         case 0x8a://time request
             send_data_packet(conn, create_time_response(PACKET(conn).footer.serial_number));
             break;
+
+        /*
+         * 0x1F, the daily synchronisation. The terminal sends the time it believes it is and
+         * the server answers with the time it actually is. Worth logging the difference: the
+         * archive holds readings stamped years in the past by devices whose clock was wrong
+         * before they synchronised, and a device that is far out says so here first.
+         */
+        case 0x1F: {
+            size_t len = data_length(PACKET(conn));
+
+            if (len >= 6) {
+                const uint8_t * d = PACKET(conn).data;
+                time_t claimed = date_to_time(d[0], d[1], d[2], d[3], d[4], d[5]);
+                long skew = (long)(time(0) - claimed);
+
+                if (skew > 300 || skew < -300) {
+                    log_line(conn, "device clock is %ld seconds out, sending the time\n", skew);
+
+                } else {
+                    log_line(conn, "device asked for the time, clock is %ld seconds out\n", skew);
+                }
+            }
+
+            send_data_packet(conn, create_sync_response(PACKET(conn).footer.serial_number));
+            break;
+        }
 
         /*
          * 0x2A is the address request. 0x17 carries one too on the devices seen here - the
