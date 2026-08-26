@@ -950,12 +950,31 @@ static size_t thinkrace_try_image_packet(connection * conn) {
     log_line(conn, "  image: replied %s\n", response);
 
     /*
-     * The mirrored "IWnull" reply is deliberately not sent. It was added when the upload
-     * stalled after one packet, on the theory that the device wanted its own broken id back.
-     * It did not help, and it puts an id on the wire that no downlink defines - which the
-     * device may well treat as a bad command. Kept out of the way rather than deleted, since
-     * the stall is not yet explained and this is worth trying again in isolation.
+     * BP42 is not what moves the upload along, whatever the manual says.
+     *
+     * From the watch's own firmware (L009_Protocol.odex, com.ic.protocols.protocol_beehome,
+     * deodexed against the device framework): the picture is pushed through the voice-packet
+     * sender, whose position is held in voicePacket.currentIndexToSent. Across the whole
+     * beehome protocol that field is written from exactly one place - handleBP07. handleBP42
+     * parses our reply, logs it, and never touches the index, which is why the device sat
+     * after packet one having cheerfully acknowledged us at the TCP level.
+     *
+     * handleBP07 splits on ',', insists on exactly five fields, and advances only when
+     *
+     *     "1".equals(field[4]) && field[3] != field[2]
+     *
+     * with field[2] the total packet count, field[3] the packet just received - which it
+     * then stores as the new index. So the acknowledgement it is actually waiting for is
+     * the same five fields under BP07.
+     *
+     * BP42 is still sent first, because the manual documents it, the device does parse it,
+     * and it costs one short message.
      */
+    char advance[96] = {0};
+    snprintf(advance, sizeof(advance), "IWBP07,%s,%u,%u,1#", devtime,
+             (unsigned)total, (unsigned)packet);
+    send_string(conn, advance);
+    log_line(conn, "  image: advanced with %s\n", advance);
     (void)broken_id;
 
     if (ok && image_complete(conn)) {
