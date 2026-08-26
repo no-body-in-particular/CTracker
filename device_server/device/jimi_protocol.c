@@ -555,6 +555,33 @@ void process_address_request(connection * conn) {
     size_t length = data_length(PACKET(conn));
     size_t w = 0;
 
+    /*
+     * The documented layout for 0x1A is: 6 bytes of date and time, 1 byte of satellite count
+     * and GPS information length, 4 of latitude, 4 of longitude, 1 of speed, 2 of course and
+     * status - 18 bytes - and then the phone number as 21 bytes of ascii, followed by a 2
+     * byte language flag. Read it from there when the packet is long enough to hold it, and
+     * fall back to hunting for the longest digit run otherwise, which is what the variants
+     * that put the number somewhere else need.
+     */
+    const size_t phone_offset = 18;
+    const size_t phone_field = 21;
+
+    if (length >= phone_offset + phone_field) {
+        for (size_t i = 0; i < phone_field && w + 1 < sizeof(number); i++) {
+            uint8_t c = PACKET(conn).data[phone_offset + i];
+
+            if (c == 0) {
+                break;
+            }
+
+            if (c >= '0' && c <= '9') {
+                number[w++] = (char)c;
+            }
+        }
+
+        number[w] = 0;
+    }
+
     //the longest run of digits in the payload is the phone number
     size_t best_start = 0, best_len = 0, run_start = 0, run = 0;
 
@@ -578,11 +605,13 @@ void process_address_request(connection * conn) {
         }
     }
 
-    for (size_t i = 0; i < best_len && w + 1 < sizeof(number); i++) {
-        number[w++] = (char)PACKET(conn).data[best_start + i];
-    }
+    if (w == 0) {
+        for (size_t i = 0; i < best_len && w + 1 < sizeof(number); i++) {
+            number[w++] = (char)PACKET(conn).data[best_start + i];
+        }
 
-    number[w] = 0;
+        number[w] = 0;
+    }
 
     if (conn->current_lat == 0 && conn->current_lon == 0) {
         snprintf(line, sizeof(line), "address request for %s, but no position is known yet",
@@ -744,7 +773,19 @@ void process_v1(connection * conn) {
          * actually find a number. 0x97 is deliberately absent: that is the type the *server*
          * replies with, not one a device sends.
          */
-        case 0x17:
+        /*
+         * 0x1A is the address request: the GT06 spec calls it "GPS, Phone Number Querying
+         * Address Information Package", and its layout is a location packet with a 21 byte
+         * phone number and a 2 byte language flag appended. 0x2A is the same request in the
+         * variant traccar implements.
+         *
+         * 0x17 used to be handled here as if a device sent it. It does not: the spec has
+         * 0x17 as the server's *Chinese* address response and 0x97 as the English one, both
+         * server to terminal. A device that sends 0x17 is speaking one of the dialects that
+         * reuse it for wifi or rfid data, which is not an address request at all, so it now
+         * falls through to the unhandled-protocol logging where it can be identified.
+         */
+        case 0x1A:
         case 0x2A:
             process_address_request(conn);
             send_data_packet(conn, create_response(PACKET(conn).header.protocol_number, PACKET(conn).footer.serial_number));

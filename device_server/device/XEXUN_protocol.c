@@ -164,81 +164,51 @@ void XEXUN_send_response( void * c, uint16_t packet_index) {
     xex_send_packet(conn, d);
 }
 
+/*
+ * Every alarm the word raises, most urgent first.
+ *
+ * This used to return the first match from a list that ran roughly alphabetically and had
+ * SOS at the very bottom - below "charging", "movement", "touch" and "turn on". The alarm
+ * field is a bitmask and those bits describe ordinary states, so a device pressing SOS while
+ * charging, moving or being touched reported the charging. The one alarm that must never be
+ * missed was the easiest to mask.
+ *
+ * Reporting them all also means a dismantle during an SOS is not lost behind the SOS.
+ */
+static const struct {
+    size_t offset_bit;
+    const char * name;
+} xex_alarm_names[] = {
+    //the ones that mean somebody needs to know, in that order
+    {0,  "SOS"},
+    {1,  "dismantle/removal"},
+    {15, "fall"},
+    {21, "coordinates out of bounds"},
+    {20, "tag out of range"},
+    {19, "tag offline"},
+    {11, "gravity"},
+    {17, "not touched"},
+    //and the rest, which are states rather than emergencies
+    {12, "movement"},
+    {13, "static"},
+    {18, "touch"},
+    {16, "optical switch"},
+    {7,  "heart rate"},
+    {4,  "charging"},
+    {6,  "turn on"},
+    {8,  "check switch"},
+    {9,  "disconnect"},
+    {10, "connection"},
+    {22, "car turned off"},
+};
+
 const char * xex_translate_alarm(alarm_data * d) {
-    if (d->ankle_bracelet_tag_distance) {
-        return "tag out of range";
-    }
+    uint32_t bits = *((uint32_t *)d);
 
-    if (d->ankle_bracelet_tag_offline) {
-        return "tag offline";
-    }
-
-    if (d->car_power_down) {
-        return "car turned off";
-    }
-
-    if (d->charging) {
-        return "charging";
-    }
-
-    if ( d->check_switch) {
-        return  "check switch";
-    }
-
-    if (d->connection) {
-        return "connection";
-    }
-
-    if ( d->coordinates_out_of_bounds) {
-        return "coordinates out of bounds";
-    }
-
-    if (d->disconnect) {
-        return "disconnect";
-    }
-
-    if ( d->dismantle) {
-        return "dismantle/removal";
-    }
-
-    if ( d->fall_down) {
-        return "fall";
-    }
-
-    if (  d->gravity_alarm) {
-        return "gravity";
-    }
-
-    if (  d->heart_rate) {
-        return "heart rate";
-    }
-
-    if (   d->movement) {
-        return "movement";
-    }
-
-    if (   d->not_touched) {
-        return "not touched";
-    }
-
-    if (    d->optical_switch) {
-        return "optical switch";
-    }
-
-    if (d->static_alm) {
-        return "static";
-    }
-
-    if (  d->touch) {
-        return "touch";
-    }
-
-    if (d->turn_on) {
-        return "turn on";
-    }
-
-    if (d->sos) {
-        return "SOS";
+    for (size_t i = 0; i < sizeof(xex_alarm_names) / sizeof(xex_alarm_names[0]); i++) {
+        if (bits & (1u << xex_alarm_names[i].offset_bit)) {
+            return xex_alarm_names[i].name;
+        }
     }
 
     return "unknown";
@@ -247,8 +217,21 @@ const char * xex_translate_alarm(alarm_data * d) {
 size_t xex_process_alarm(connection * c, alarm_data * d) {
     *((uint32_t *)d) = SWAP_UINT32(*((uint32_t *)d));
     log_line(c, "got alarm bytes: %x\n", *((uint32_t *)d));
-    char * msg = xex_translate_alarm(d);
-    log_event(c,   msg);
+    uint32_t bits = *((uint32_t *)d);
+    size_t raised = 0;
+
+    //one event per alarm actually raised, rather than only the first one a chain of ifs hit
+    for (size_t i = 0; i < sizeof(xex_alarm_names) / sizeof(xex_alarm_names[0]); i++) {
+        if (bits & (1u << xex_alarm_names[i].offset_bit)) {
+            log_event(c, xex_alarm_names[i].name);
+            raised++;
+        }
+    }
+
+    if (raised == 0) {
+        log_line(c, "alarm word carried no bit this server knows\n");
+    }
+
     return sizeof(alarm_data);
 }
 

@@ -89,6 +89,8 @@ the first three used to be acknowledged and discarded.
 | `IWAP04` | its own low battery alarm, with the level - raised as a `low battery` event |
 | `IWAP49` | a pulse on its own, separate from the `JK` health frame |
 | `IWAPWR` | whether it is on the body or has been taken off |
+| `IWAPBL` | a scan of the bluetooth beacons around it - recorded, not yet positioned from |
+| `IWAPTQ` | a request for local weather - recorded, deliberately unanswered |
 | `IWAPJK` | the health frame: pulse, blood pressure, temperature, oxygen, sleep |
 | `IWAPHT` `IWAPTP` `IWAPSP` | pulse and pressure, temperature, oxygen |
 

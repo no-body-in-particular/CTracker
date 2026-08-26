@@ -1,6 +1,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <memory.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -65,6 +66,51 @@ float parseLat(char * str) {
 
 float parseLong(char * str) {
     return parse_int(str, 3) + parse_float(str + 3) / 60.0f;
+}
+
+/*
+ * The alarm word this protocol sends, mapped onto the names the rest of the system uses.
+ * Straight from the Megastek Communication Protocol V-A 1.1 alarm table, plus the ones this
+ * server has actually seen from belt trackers, which the table does not list.
+ *
+ * The raw string used to be written into the event log as it arrived, so an SOS appeared as
+ * "Help" and a flat battery as "LowBattery" - neither of which matches the "low battery" and
+ * "SOS" the other protocols raise, so a rule written against one did not cover the other.
+ */
+static const struct {
+    const char * device;
+    const char * event;
+} megastek_alarm_names[] = {
+    {"Help",        "SOS"},
+    {"SOS",         "SOS"},
+    {"LowBattery",  "low battery"},
+    {"Low Battery", "low battery"},
+    {"OverSpeed",   "overspeed"},
+    {"LowSpeed",    "low speed"},
+    {"VIB",         "vibration"},
+    {"Move in",     "moved into the fence"},
+    {"Move out",    "moved out of the fence"},
+    {"Geo in",      "moved into the fence"},
+    {"Geo out",     "moved out of the fence"},
+    {"BeltOn",      "belt closed"},
+    {"BeltOff",     "belt opened"},
+    {"PowerOff",    "powered off"},
+    {"Restart",     "restarted"},
+};
+
+static const char * megastek_event_name(const char * raw) {
+    if (!raw) {
+        return "unknown";
+    }
+
+    for (size_t i = 0; i < sizeof(megastek_alarm_names) / sizeof(megastek_alarm_names[0]); i++) {
+        if (strcasecmp(raw, megastek_alarm_names[i].device) == 0) {
+            return megastek_alarm_names[i].event;
+        }
+    }
+
+    //anything the table does not cover still reaches the log under the device's own name
+    return raw;
 }
 
 void process_message(connection * conn, char * string, size_t length) {
@@ -218,7 +264,7 @@ void process_message(connection * conn, char * string, size_t length) {
 
     } else {
         move_to(conn, dt, position_type, lat, lon);
-        log_event(conn, data_buffers[34]);
+        log_event(conn, megastek_event_name(data_buffers[34]));
     }
 
     int rssi = parse_int(data_buffers[23], 2) * 3.33f;

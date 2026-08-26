@@ -829,7 +829,8 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
     string = strip_whitespace(string);
     log_line(conn, "got message: %s\n", string);
 
-    if (memcmp(string, "IWAPTQ", 6) == 0 || memcmp(string, "IWAPVR", 6) == 0 || memcmp(string, "IWAPXL", 6) == 0) {
+    //TQ is handled further down now, where it at least leaves a record of having been asked
+    if (memcmp(string, "IWAPVR", 6) == 0 || memcmp(string, "IWAPXL", 6) == 0) {
         return;
     }
 
@@ -877,6 +878,41 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
      * stops sending readings for an entirely good reason. Knowing which it is means the
      * recovery can leave a removed watch alone instead of rebooting it in someone's drawer.
      */
+    /*
+     * IWAPBL,IMEI,<beacons>,<own MAC>,<timestamp># where the beacon list is
+     * name|MAC|rssi separated by '&'. A scan of the bluetooth beacons around the watch.
+     *
+     * Recorded rather than positioned from: turning beacons into a location needs a table of
+     * where the beacons are, which this server does not have. What it can do is say how many
+     * were seen and which they were, which is what an indoor fix would be built from later.
+     */
+    if (memcmp(string, "IWAPBL", 6) == 0 && str_count > 2) {
+        unsigned char * beacons[24] = {0};
+        size_t count = split_to('&', data_buffers[2], strlen(data_buffers[2]) + 1, beacons, 24);
+        log_line(conn, "bluetooth scan: %u beacon(s) around\n", (unsigned)count);
+
+        for (size_t i = 0; i < count; i++) {
+            log_line(conn, "   beacon: %s\n", beacons[i]);
+        }
+
+        write_stat(conn, "ble_beacons", count);
+        send_string(conn, "IWBPBL#");
+        return;
+    }
+
+    /*
+     * IWAPTQ - the watch asking the server for local weather. Answering means integrating a
+     * weather service and matching a response format the protocol document does not specify:
+     * it says only that the terminal firmware has to be customised to display it. There is no
+     * BPTQ parser in the firmware here to read the format off either, and the weather app it
+     * would feed is not installed on this watch. So the request is recorded and left
+     * unanswered, which the spec explicitly allows, rather than answered with a guess.
+     */
+    if (memcmp(string, "IWAPTQ", 6) == 0) {
+        log_line(conn, "asked for weather - not answered, no weather source configured\n");
+        return;
+    }
+
     if (memcmp(string, "IWAPWR", 6) == 0 && str_count > 2) {
         //[0] is empty, [1] is the imei, [2] is the flag
         bool worn = parse_int(data_buffers[2], 1) != 0;
