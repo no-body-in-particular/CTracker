@@ -438,6 +438,22 @@ static void process_information_transfer(connection * conn, size_t length) {
     }
 }
 
+/*
+ * A short printable rendering of a payload, for the diagnostics below. Several of these
+ * packets carry ASCII (parameter dumps, command echoes) and a hex blob in the log tells you
+ * far less than the first few readable characters do.
+ */
+static const char * preview_ascii(const uint8_t * data, size_t length, char * out, size_t out_size) {
+    size_t w = 0;
+
+    for (size_t i = 0; i < length && w + 1 < out_size; i++) {
+        out[w++] = (data[i] >= 32 && data[i] < 127) ? (char)data[i] : '.';
+    }
+
+    out[w] = 0;
+    return out;
+}
+
 void process_v2(connection * conn) {
     uint8_t response[BUF_SIZE];
     size_t length = data_length(PACKET(conn));
@@ -446,6 +462,13 @@ void process_v2(connection * conn) {
     size_t data_offs = 4 + information_size;
 
     if (length <= data_offs) {
+        //Not necessarily malformed - some devices send a long packet whose payload begins
+        //straight after the length, with no information field, so the byte read as
+        //"information" is really the first byte of an IMEI. Either way the packet is dropped,
+        //and it used to be dropped in silence.
+        log_line(conn, "v2 packet 0x%02X discarded: %u bytes of data, but its information "
+                 "field claims the payload starts at %u\n",
+                 header.protocol_number, (unsigned)length, (unsigned)data_offs);
         return;
     }
 
@@ -482,6 +505,15 @@ void process_v2(connection * conn) {
         case 0x94:
             process_information_transfer(conn, data_length(PACKET(conn)));
             break;
+
+        default: {
+            //This switch had no default at all, so anything unrecognised left no trace.
+            char text[128];
+            log_line(conn, "unhandled v2 protocol number 0x%02X, %u bytes: %s\n",
+                     header.protocol_number, (unsigned)length,
+                     preview_ascii(response, min(length, sizeof(text) - 1), text, sizeof(text)));
+            break;
+        }
     }
 }
 
@@ -551,8 +583,16 @@ void process_v1(connection * conn) {
             send_data_packet(conn, create_time_response(PACKET(conn).footer.serial_number));
             break;
 
-        default:
+        default: {
+            //Same blind spot as the v2 switch above: an unknown protocol number looked
+            //exactly like no packet at all, which is what kept 0x17 out of sight.
+            char text[128];
+            size_t len = data_length(PACKET(conn));
+            log_line(conn, "unhandled v1 protocol number 0x%02X, %u bytes: %s\n",
+                     PACKET(conn).header.protocol_number, (unsigned)len,
+                     preview_ascii(PACKET(conn).data, min(len, sizeof(text) - 1), text, sizeof(text)));
             break;
+        }
     }
 }
 
