@@ -317,23 +317,11 @@ void poll_health(connection * conn)
      * The period is re-sent occasionally rather than once ever, so a watch that was reset,
      * factory defaulted or simply did not take the command picks it up again on its own.
      */
-    if (DEVICE_HEALTH_INTERVAL_MIN > 0 && conn->supports_health_interval) {
-        if ((time(0) - st.last_interval_cfg) < DEVICE_HEALTH_INTERVAL_REFRESH) {
-            unlock_state(lock);
-            return;
-        }
+    bool tell_interval = DEVICE_HEALTH_INTERVAL_MIN > 0 && conn->supports_health_interval
+                         && (time(0) - st.last_interval_cfg) >= DEVICE_HEALTH_INTERVAL_REFRESH;
 
+    if (tell_interval) {
         st.last_interval_cfg = time(0);
-        st.last_health_poll = time(0);
-        write_state(conn, &st);
-        unlock_state(lock);
-
-        char cmd[64] = {0};
-        snprintf(cmd, sizeof(cmd), "HEALTHINT=%d,%d",
-                 DEVICE_HEALTH_INTERVAL_MIN, DEVICE_HEALTH_INTERVAL_MIN);
-        log_line(conn, "setting the device health period to %d minutes\n", DEVICE_HEALTH_INTERVAL_MIN);
-        conn->COMMAND_FUNCTION(conn, cmd);
-        return;
     }
 
     //claim the slot before sending, so a second connection reaching here at the same
@@ -344,6 +332,23 @@ void poll_health(connection * conn)
     st.polls_missed++;
     write_state(conn, &st);
     unlock_state(lock);
+
+    /*
+     * Telling the device its own period is worth doing, but it is not a replacement for
+     * asking. Handing the schedule over entirely lost most of the readings: over comparable
+     * windows the watch pushed temperature 154 times and a heart rate three times, against 92
+     * heart rates, 93 SPO2 and 90 blood pressures when the poll was doing the asking, and
+     * sleep readings stopped altogether. What the device volunteers on its own schedule is
+     * temperature; HEARTRATE# is what actually fetches the set. So configure the period, and
+     * then poll anyway.
+     */
+    if (tell_interval) {
+        char cmd[64] = {0};
+        snprintf(cmd, sizeof(cmd), "HEALTHINT=%d,%d",
+                 DEVICE_HEALTH_INTERVAL_MIN, DEVICE_HEALTH_INTERVAL_MIN);
+        log_line(conn, "setting the device health period to %d minutes\n", DEVICE_HEALTH_INTERVAL_MIN);
+        conn->COMMAND_FUNCTION(conn, cmd);
+    }
 
     conn->COMMAND_FUNCTION(conn, "HEARTRATE#");
 }

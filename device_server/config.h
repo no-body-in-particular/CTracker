@@ -59,11 +59,20 @@
 
 #define HEALTH_POLL_INTERVAL 180        //how often to ask the device for a reading, seconds
 
-//Some devices keep their own health reporting schedule and will push readings without being
-//asked, which is cheaper for both sides than a poll every few minutes: one command instead
-//of twenty an hour, and the watch's radio stays down in between. Set to 0 to go back to
-//polling. The period is in minutes because that is the unit the device's own command takes.
-#define DEVICE_HEALTH_INTERVAL_MIN 3
+/*
+ * Off. The idea was that a device which keeps its own health schedule is cheaper than a poll
+ * every few minutes, and the watch does accept the command - it answers IWAP86. What it then
+ * does with it is the problem: measured against the archive, heart rate, blood pressure and
+ * SPO2 arrived every three minutes under the poll, tracking HEALTH_POLL_INTERVAL exactly, and
+ * fell to roughly one set an hour once the watch was given the period. Temperature went the
+ * other way and flooded. So whatever IWBP86's two parameters mean, "3" is not three minutes
+ * for the readings that matter, and the poll is the thing that actually fetches a set.
+ *
+ * Left in place rather than deleted because the command itself is understood and confirmed
+ * against hardware - see COMMANDS.md - and it may be right for a device that genuinely
+ * volunteers a full set. It is not right for this one. Set above 0 to re-enable.
+ */
+#define DEVICE_HEALTH_INTERVAL_MIN 0
 //how often the period is re-sent, so a watch that was reset or lost the setting picks it
 //back up without waiting for anything to notice
 #define DEVICE_HEALTH_INTERVAL_REFRESH (6 * 60 * 60)
@@ -81,16 +90,17 @@
  *
  * This was 900 seconds, which against a three minute reporting period is five missed
  * reports - close enough to normal jitter that a watch taken off for a quarter of an hour,
- * or one that simply dropped a few uploads, was rebooted for it. Now that the device keeps
- * its own schedule rather than being polled, a gap is also less informative than it was: no
- * poll went unanswered, the watch just did not speak.
+ * or one that simply dropped a few uploads, was rebooted for it.
  *
- * Forty five minutes is fifteen reporting periods. That is long enough to be a device that
- * has genuinely stopped rather than one having a quiet spell, and the cooldown is longer
- * again so a watch that cannot be fixed by rebooting is not rebooted in a loop.
+ * It was then widened to 2700 on the reasoning that a device keeping its own schedule makes
+ * a gap less informative - no poll went unanswered, the watch just did not speak. That
+ * reasoning went away with the schedule: the poll is back, every poll draws a full set, and
+ * an unanswered one means something again. Half an hour is ten reporting periods, which is
+ * long enough not to fire on a watch that was taken off for a while, and the cooldown stays
+ * well clear of it so a device that rebooting will not fix is not rebooted in a loop.
  */
-#define HEALTH_RECOVERY_TIMEOUT 2700    //seconds without any reading before restarting the device
-#define HEALTH_RECOVERY_COOLDOWN 5400   //seconds before a device may be restarted again
+#define HEALTH_RECOVERY_TIMEOUT 1800    //seconds without any reading before restarting the device
+#define HEALTH_RECOVERY_COOLDOWN 3600   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
 #define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again
 #define MOVING_SPEED_KMH 8              //above a brisk walk: running, cycling, driving
