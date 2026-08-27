@@ -243,10 +243,15 @@ bool thinkrace_send_command( void * c, const char * cmd) {
          * Kept as a default of DEVICE_TEMP_CYCLE_MIN rather than 1. Use TEMP= to say what you
          * mean.
          */
+        //No trailing comma here, unlike IWBPSQ. handleBPTE wants exactly four fields and
+        //throws the command away at five, where BPSQ wants at least five and tolerates a
+        //sixth. The comma was copied across from BPSQ as a defence against the frame's
+        //terminator landing inside the integer - a defence that is not needed at all: the
+        //firmware strips the '#' before it splits, which the watch proves by answering
+        //IWAP15 to a IWBP15 whose last field would otherwise read "600#".
         char t[64] = {0};
-        snprintf(t, sizeof(t), "IWBPTE,%s,080835,%d,", conn->imei, DEVICE_TEMP_CYCLE_MIN);
+        snprintf(t, sizeof(t), "IWBPTE,%s,080835,%d#", conn->imei, DEVICE_TEMP_CYCLE_MIN);
         send_string(conn, t);
-        send_string(conn, "#");
 
     } else if (strlen(cmd) > 5 && memcmp(cmd, "TEMP=", 5) == 0) {
         //minutes between temperature measurements. Trailing comma for the same reason as
