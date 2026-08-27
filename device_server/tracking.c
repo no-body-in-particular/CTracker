@@ -454,7 +454,39 @@ void poll_health(connection * conn)
     st.last_health_poll = time(0);
     st.polls_missed++;
     write_state(conn, &st);
+
+    /*
+     * Read the claim back before acting on it.
+     *
+     * Half the health commands this server sends are duplicates - measured
+     * across four days, 54 to 62 per cent of them, arriving at the watch as
+     * two to four identical measurement triggers inside the same second
+     * instead of one every three minutes. polls_missed can be seen counting
+     * 3, 4, 5 within one second in the log.
+     *
+     * Every read and write here is inside an flock on a per device file, the
+     * writes all flush before the unlock, and the lock files are owned by the
+     * user the server runs as - so on inspection this cannot happen, and it
+     * does. Rather than guess at the mechanism again, the claim is verified:
+     * if what comes back is not what went in, the state is not doing its job
+     * and this pass has no business sending anything.
+     *
+     * That turns a silent race into a logged one. Whatever is wrong, the next
+     * occurrence names itself instead of showing up as a wedged sensor three
+     * hours later.
+     */
+    tracking_state check;
+    read_state(conn, &check);
+    bool claimed = (check.last_health_poll == st.last_health_poll);
     unlock_state(lock);
+
+    if (!claimed) {
+        log_line(conn, "health poll claim did not stick - wrote %lu, read back %lu."
+                       " Not sending, to avoid a duplicate trigger\n",
+                 (long unsigned int)st.last_health_poll,
+                 (long unsigned int)check.last_health_poll);
+        return;
+    }
 
     /*
      * Telling the device its own period is worth doing, but it is not a replacement for
@@ -488,13 +520,7 @@ void poll_health(connection * conn)
      * hardware it measured when XL would not. So after a couple of empty
      * polls, ask the other way before reaching for the restart.
      */
-    const char * trigger = "HEARTRATE#";
-    if (HEALTH_ESCALATE_AFTER > 0 && st.polls_missed > HEALTH_ESCALATE_AFTER) {
-        trigger = "PULSE#";
-        log_line(conn, "%lu polls with no reading - asking with PULSE# instead\n",
-                 st.polls_missed);
-    }
-    conn->COMMAND_FUNCTION(conn, trigger);
+    conn->COMMAND_FUNCTION(conn, "HEARTRATE#");
 }
 
 void update_tracking_interval(connection * conn)

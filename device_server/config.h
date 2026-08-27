@@ -129,23 +129,15 @@
  * have ended - which means a threshold above the longest pause seen without one.
  */
 /*
- * How many polls may go unanswered before the other trigger is tried.
- *
- * The IW protocol has two ways to ask for a pulse and they fail differently.
- * IWBPXL - HEARTRATE# - acknowledges with a bare IWAPXL and then may or may
- * not actually measure; when the sensor is in this mood it answers every poll
- * politely and returns nothing, for hours. IWBP50 - PULSE# - does not
- * acknowledge at all and answers with the reading itself, and against this
- * hardware it measured when XL would not: a pulse of 61, twenty two seconds
- * after being asked.
- *
- * So a run of empty acknowledgements is worth escalating rather than waiting
- * out. Two is enough to tell a wedged sensor from a watch that was simply off
- * the wrist for one poll, and at a three minute period it costs six minutes
- * before trying the thing that works - against the half hour it otherwise
- * takes to reach the restart, which reboots a watch somebody is wearing.
+ * There is a second way to ask for a pulse - IWBP50, PULSE# - and it was tried here,
+ * because IWBPXL acknowledges and then may or may not measure while BP50 answers with the
+ * reading itself. Against this watch it does not help: of thirty nine escalations, two were
+ * followed by a reading inside five minutes without a restart intervening, and that one came
+ * straight after a restart. Only the reboot revives the sensor. The send path for PULSE#
+ * stays - it is a valid command and command.php can still issue it - but the poll does not
+ * reach for it.
  */
-#define HEALTH_ESCALATE_AFTER 2         //unanswered polls before trying PULSE# instead
+
 
 #define HEALTH_RECOVERY_TIMEOUT 0       //seconds without any reading before restarting; 0 disables
 #define HEALTH_RECOVERY_COOLDOWN 3600   //seconds before a device may be restarted again
