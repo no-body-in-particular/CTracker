@@ -230,9 +230,31 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, ",080835,1#");
 
     } else if (strcmp(cmd, "TEMP#") == 0) {
+        /*
+         * IWBPTE,IMEI,serial,<minutes># - the last field is a period, not a switch.
+         *
+         * This sent a bare 1 for years, meaning "on". The firmware reads it as the number of
+         * minutes between measurements - its own log says so, "收到服务器指令：测量体温 N 分钟
+         * 一次" - so one command sent by hand on 26 August put the watch on a sixty second
+         * temperature cycle and left it there. It survives reboots, because CoreService
+         * re-applies the stored value at startup, so it had been running that way ever since:
+         * 257 temperature readings in a day against 159 heart rates.
+         *
+         * Kept as a default of DEVICE_TEMP_CYCLE_MIN rather than 1. Use TEMP= to say what you
+         * mean.
+         */
+        char t[64] = {0};
+        snprintf(t, sizeof(t), "IWBPTE,%s,080835,%d,", conn->imei, DEVICE_TEMP_CYCLE_MIN);
+        send_string(conn, t);
+        send_string(conn, "#");
+
+    } else if (strlen(cmd) > 5 && memcmp(cmd, "TEMP=", 5) == 0) {
+        //minutes between temperature measurements. Trailing comma for the same reason as
+        //IWBPSQ: the terminator must not land inside the integer field.
         send_string(conn, "IWBPTE,");
         send_string(conn, conn->imei);
-        send_string(conn, ",080835,1#");
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 5);
 
     } else if (strlen(cmd) > 6 && memcmp(cmd, "HOURS=", 6) == 0) {
         //the watch wants a flag, not the number of hours: 1 means the 24 hour clock

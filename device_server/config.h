@@ -111,6 +111,16 @@
  * did stop the readings that matter. Configuring the schedule from the server is a place to
  * change one thing and watch, not to change several.
  */
+/*
+ * Minutes between temperature measurements.
+ *
+ * Ten, because wrist temperature does not move faster than that and every reading costs a
+ * radio slot and a row. The watch was on one minute - not by anyone's decision, but because
+ * TEMP# used to send a literal 1 meaning "switch it on" and the firmware reads that field as
+ * a period.
+ */
+#define DEVICE_TEMP_CYCLE_MIN 10        //minutes between temperature measurements
+
 #define DEVICE_SENSOR_CYCLE_MIN 3       //minutes between the watch's own pulse measurements; 0 disables
 #define SENSOR_HEART_RATE 1             //IWBPSQ sensor numbering - NOT the IWAPJK upload numbering
 //how often the period is re-sent, so a watch that was reset or lost the setting picks it
@@ -180,7 +190,19 @@
 
 
 #define HEALTH_RECOVERY_TIMEOUT 1800       //seconds without any reading before restarting; 0 disables
-#define HEALTH_RECOVERY_COOLDOWN 3600   //seconds before a device may be restarted again
+/*
+ * Seconds before a device may be restarted again.
+ *
+ * Matched to the timeout above rather than set to twice it. The timeout is already the rate
+ * limiter: a restart stamps last_health_reading, so the earliest a second one can be due is a
+ * full timeout later whatever this says. At an hour it did nothing but block recoveries that
+ * were genuinely due - the watch stalls every thirty to forty minutes and could only be
+ * rebooted once an hour, so every other stall ran unrecovered until the next window opened.
+ *
+ * This is a backstop against a restart loop if the timeout logic ever misfires, not a policy
+ * on how often the watch may be rebooted. That policy is the timeout.
+ */
+#define HEALTH_RECOVERY_COOLDOWN 1800   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
 #define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again
 #define MOVING_SPEED_KMH 8              //above a brisk walk: running, cycling, driving
