@@ -364,8 +364,33 @@ void poll_health(connection * conn)
      * up next. Only devices that never report wear state (-1) or say they are being worn (1)
      * are candidates.
      */
+    /*
+     * A watch that is not moving is a watch nobody is wearing.
+     *
+     * st.worn is the device's own answer and this one has never given it: the
+     * field reads -1, "never said", which the test below treats as a candidate
+     * because -1 is not 0. That was the right call when the alternative was
+     * never restarting a device that cannot report wear - and it means a watch
+     * on a bedside table, which has no pulse to report because there is no
+     * wrist, looks exactly like a watch whose sensor has wedged.
+     *
+     * It was restarting all night for it. Twenty seven restarts in a day, one
+     * an hour whenever the readings stopped, on a device that was simply lying
+     * still.
+     *
+     * Movement is the signal the device does give. last_activity is stamped by
+     * steps, by speed over the ground and by a raised pulse, so a watch being
+     * worn stamps it many times an hour and a watch on a table does not stamp
+     * it at all. Requiring it to have moved inside the same window as the
+     * reading timeout costs nothing where the sensor really has wedged - a
+     * wearer moves - and stops the watch being rebooted for the crime of being
+     * taken off.
+     */
+    bool moving_recently = (time(0) - st.last_activity) <= HEALTH_RECOVERY_TIMEOUT;
+
     if (HEALTH_RECOVERY_TIMEOUT > 0
             && st.worn != 0
+            && moving_recently
             && st.last_health_reading > 0
             && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
             && (time(0) - st.last_recovery) > HEALTH_RECOVERY_COOLDOWN) {
@@ -389,6 +414,21 @@ void poll_health(connection * conn)
         log_event(conn, note);
         conn->COMMAND_FUNCTION(conn, "RESTART#");
         return;
+    }
+
+    /*
+     * Said once per poll while it applies, so a night with no readings and no
+     * restarts is explainable from the log rather than looking like the
+     * recovery silently failing.
+     */
+    if (HEALTH_RECOVERY_TIMEOUT > 0
+            && st.last_health_reading > 0
+            && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
+            && !moving_recently) {
+        log_line(conn, "no health reading in %lu s, but it has not moved in %lu s"
+                       " - not restarting a watch nobody is wearing\n",
+                 (long unsigned int)(time(0) - st.last_health_reading),
+                 (long unsigned int)(time(0) - st.last_activity));
     }
 
     /*
