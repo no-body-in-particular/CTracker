@@ -139,7 +139,7 @@
  */
 
 
-#define HEALTH_RECOVERY_TIMEOUT 0       //seconds without any reading before restarting; 0 disables
+#define HEALTH_RECOVERY_TIMEOUT 1800       //seconds without any reading before restarting; 0 disables
 #define HEALTH_RECOVERY_COOLDOWN 3600   //seconds before a device may be restarted again
 #define HEARTRATE_ACTIVE_BPM 90         //at or above this counts as active
 #define HEARTRATE_CALM_BPM 80           //must fall below this before going idle again

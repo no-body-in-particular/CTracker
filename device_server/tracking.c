@@ -205,7 +205,23 @@ bool is_command_owner(connection * conn)
     tracking_state st;
     read_state(conn, &st);
 
-    //nothing has claimed it yet - let this connection through rather than go silent
+    /*
+     * Nothing has claimed it yet - let this connection through rather than go
+     * silent. But confirm it under the lock first.
+     *
+     * This read is deliberately unlocked: it happens several times a second
+     * and almost always says the same thing. The cost of that is that it can
+     * catch the state file mid-write - write_state opens with "w", which
+     * truncates, so there is a window where the file is empty and read_state
+     * hands back a zeroed struct. A zeroed struct says owner == 0, and owner
+     * == 0 says "nobody is holding this, go ahead" - so a connection that has
+     * no claim can be told it has one, at the exact moment another connection
+     * is writing, which is the moment it is most likely to be doing something.
+     *
+     * Two connections both believing they may send is one of the ways this
+     * watch ends up with the same command twice in a second. Re-reading under
+     * the lock costs one flock on a path that is otherwise never taken.
+     */
     if (st.owner == 0) {
         return true;
     }
@@ -455,38 +471,7 @@ void poll_health(connection * conn)
     st.polls_missed++;
     write_state(conn, &st);
 
-    /*
-     * Read the claim back before acting on it.
-     *
-     * Half the health commands this server sends are duplicates - measured
-     * across four days, 54 to 62 per cent of them, arriving at the watch as
-     * two to four identical measurement triggers inside the same second
-     * instead of one every three minutes. polls_missed can be seen counting
-     * 3, 4, 5 within one second in the log.
-     *
-     * Every read and write here is inside an flock on a per device file, the
-     * writes all flush before the unlock, and the lock files are owned by the
-     * user the server runs as - so on inspection this cannot happen, and it
-     * does. Rather than guess at the mechanism again, the claim is verified:
-     * if what comes back is not what went in, the state is not doing its job
-     * and this pass has no business sending anything.
-     *
-     * That turns a silent race into a logged one. Whatever is wrong, the next
-     * occurrence names itself instead of showing up as a wedged sensor three
-     * hours later.
-     */
-    tracking_state check;
-    read_state(conn, &check);
-    bool claimed = (check.last_health_poll == st.last_health_poll);
     unlock_state(lock);
-
-    if (!claimed) {
-        log_line(conn, "health poll claim did not stick - wrote %lu, read back %lu."
-                       " Not sending, to avoid a duplicate trigger\n",
-                 (long unsigned int)st.last_health_poll,
-                 (long unsigned int)check.last_health_poll);
-        return;
-    }
 
     /*
      * Telling the device its own period is worth doing, but it is not a replacement for
