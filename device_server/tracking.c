@@ -381,6 +381,27 @@ void poll_health(connection * conn)
      * are candidates.
      */
     /*
+     * What this is actually recovering from, since it is a reboot and reboots deserve a
+     * reason.
+     *
+     * com.ic.work on the watch runs one work queue for both its sensors. A measurement
+     * becomes an item, a single worker takes them one at a time, and each item carries a
+     * creation timestamp that nothing ever reads - there is no timeout anywhere in the
+     * service. So a measurement whose sensor callback never arrives holds the queue forever,
+     * and because heart rate and temperature share it, all four reading types stop within a
+     * minute of each other and stay stopped. The watch stays connected and answers every poll
+     * throughout, which is why this looks like nothing from here.
+     *
+     * Only restarting that process clears it, and rebooting the watch is the only way this
+     * server can. That is what the timeout below buys.
+     *
+     * It is a firmware fault and not something we introduced. On 2026-08-24, before the
+     * launcher on this watch existed at all, the same stall happened six times in a day with
+     * gaps of 67, 28, 55, 76, 146 and 23 minutes. With this recovery running they are capped
+     * near thirty three - the timeout plus the reboot. Worth knowing before anyone reaches
+     * for it as the cause of a gap.
+     */
+    /*
      * Not restarting a watch that has not moved was tried here and is gone again.
      *
      * The reasoning was that st.worn reads -1 on this device, "never said", so a
