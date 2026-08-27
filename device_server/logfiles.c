@@ -221,23 +221,103 @@ void log_command_response(connection * conn, const unsigned char * response) {
 
 /* va_list, va_start, va_arg, va_end */
 
+/*
+ * One line, one write.
+ *
+ * connFilePrintf hands the kernel a single write() per call, which is atomic
+ * against the other connections on the same file - but a line was never one
+ * call. log_line wrote the timestamp and then the text, log_array wrote one
+ * call per byte, and thinkrace_send_command wrote one call per character of
+ * the command. Twenty-odd writes from one thread with nothing stopping another
+ * thread writing between any two of them, which is how entries ended up inside
+ * each other:
+ *
+ *   2026-08-27T00:41:29Z,sent command: I2026-08-25T21:35:47Z,imei recieved: ...
+ *
+ * That is roughly one line in two thousand mangled, which is survivable, but
+ * the same shape has a second cost that is not. connFilePrintf fsyncs every
+ * call, and this log lives on the root ext2 where an fsync measures 4.3 ms. A
+ * 22 byte command logged a character at a time is 94 ms of blocking fsync, and
+ * it is spent inside the send path - between deciding to ask for a heart rate
+ * and the bytes reaching the socket. A receive-buffer dump is longer still.
+ *
+ * So the text is built in a buffer and written once. It fixes the splicing and
+ * takes a command's logging cost from 94 ms to 4.3 ms.
+ */
 void log_time(connection * conn) {
     struct tm tm = *gmtime(&conn->device_time);
     logprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
+//the timestamp every line starts with, into a caller supplied buffer
+static int log_stamp(connection * conn, char * out, size_t size) {
+    struct tm tm = *gmtime(&conn->device_time);
+    return snprintf(out, size, "%d-%02d-%02dT%02d:%02d:%02dZ,",
+                    tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                    tm.tm_hour, tm.tm_min, tm.tm_sec);
+}
+
 void log_line( connection * conn, const char * format, ... ) {
-    log_time(conn);
+    char line[BUF_SIZE * 2];
+    int n = log_stamp(conn, line, sizeof(line));
+
+    if (n < 0 || n >= (int)sizeof(line)) {
+        return;
+    }
+
     va_list arglist;
     va_start( arglist, format );
-    logvfprintf(conn, format, arglist);
+    vsnprintf(line + n, sizeof(line) - (size_t)n, format, arglist);
     va_end( arglist );
+
+    logprintf(conn, "%s", line);
 }
 
 void log_array(connection * conn, uint8_t * array, size_t len) {
-    for (int n = 0; n < len; n++) {
-        logprintf(conn, "%x ", array[n]);
+    char hex[BUF_SIZE * 2];
+    size_t at = 0;
+
+    for (size_t n = 0; n < len && at + 4 < sizeof(hex); n++) {
+        at += (size_t)snprintf(hex + at, sizeof(hex) - at, "%x ", array[n]);
     }
+
+    logprintf(conn, "%s", hex);
+}
+
+/*
+ * A whole "sent command: <bytes>" line in one write. Every protocol had its own
+ * copy of this loop, each one a write and an fsync per character.
+ *
+ * printable_only is for the binary protocols, which logged unprintable bytes as
+ * an escape rather than putting a control character in the log.
+ */
+void log_command_bytes(connection * conn, const unsigned char * buf, int start, int end, bool printable_only) {
+    char line[BUF_SIZE * 2];
+    int at = log_stamp(conn, line, sizeof(line));
+
+    if (at < 0 || at >= (int)sizeof(line)) {
+        return;
+    }
+
+    at += snprintf(line + at, sizeof(line) - (size_t)at, "sent command: ");
+
+    for (int i = start; i < end && at < (int)sizeof(line) - 6; i++) {
+        unsigned char c = buf[i];
+
+        if (!printable_only || isprint(c)) {
+            line[at++] = (char)c;
+
+        } else {
+            at += snprintf(line + at, sizeof(line) - (size_t)at, "<%02x>", c);
+        }
+    }
+
+    if (at < (int)sizeof(line) - 1) {
+        line[at++] = '\n';
+    }
+
+    line[at] = 0;
+    logprintf(conn, "%s", line);
 }
 
 void log_buffer(connection * conn) {

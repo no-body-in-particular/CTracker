@@ -206,21 +206,21 @@ bool is_command_owner(connection * conn)
     read_state(conn, &st);
 
     /*
-     * Nothing has claimed it yet - let this connection through rather than go
-     * silent. But confirm it under the lock first.
+     * Nothing has claimed it yet - let this connection through rather than go silent.
      *
-     * This read is deliberately unlocked: it happens several times a second
-     * and almost always says the same thing. The cost of that is that it can
-     * catch the state file mid-write - write_state opens with "w", which
-     * truncates, so there is a window where the file is empty and read_state
-     * hands back a zeroed struct. A zeroed struct says owner == 0, and owner
-     * == 0 says "nobody is holding this, go ahead" - so a connection that has
-     * no claim can be told it has one, at the exact moment another connection
-     * is writing, which is the moment it is most likely to be doing something.
+     * Known race, left in deliberately. This read is unlocked: it happens several
+     * times a second and almost always says the same thing. The cost is that it
+     * can catch the state file mid-write - write_state opens with "w", which
+     * truncates, so there is a window where the file is empty and read_state hands
+     * back a zeroed struct. A zeroed struct says owner == 0, and owner == 0 says
+     * "nobody is holding this, go ahead" - so a connection with no claim can be
+     * told it has one, at the moment another connection is writing.
      *
-     * Two connections both believing they may send is one of the ways this
-     * watch ends up with the same command twice in a second. Re-reading under
-     * the lock costs one flock on a path that is otherwise never taken.
+     * Re-reading under the lock here is the obvious fix and it has been tried. It
+     * stopped health polling outright on the live server and had to be reverted:
+     * the claim never resolved and the poller never sent. Do not put it back
+     * without reproducing that first. The race costs an occasional duplicated
+     * command; the fix cost every reading.
      */
     if (st.owner == 0) {
         return true;
@@ -381,32 +381,28 @@ void poll_health(connection * conn)
      * are candidates.
      */
     /*
-     * A watch that is not moving is a watch nobody is wearing.
+     * Not restarting a watch that has not moved was tried here and is gone again.
      *
-     * st.worn is the device's own answer and this one has never given it: the
-     * field reads -1, "never said", which the test below treats as a candidate
-     * because -1 is not 0. That was the right call when the alternative was
-     * never restarting a device that cannot report wear - and it means a watch
-     * on a bedside table, which has no pulse to report because there is no
-     * wrist, looks exactly like a watch whose sensor has wedged.
+     * The reasoning was that st.worn reads -1 on this device, "never said", so a
+     * watch on a bedside table with no wrist under it looks exactly like a watch
+     * whose sensor has wedged - and it was being restarted all night for it.
+     * Movement is the signal the device does give, so movement inside the reading
+     * window became a condition of restarting.
      *
-     * It was restarting all night for it. Twenty seven restarts in a day, one
-     * an hour whenever the readings stopped, on a device that was simply lying
-     * still.
+     * It is wrong, and the way it is wrong is the expensive way. The owner reads
+     * a watch that has not moved in over an hour, at two in the morning, as a
+     * watch nobody is wearing. It is a watch on a sleeping wrist - which is
+     * exactly when the readings matter and exactly when there is no movement to
+     * prove anything. The condition suppresses the recovery in the case it was
+     * built for. Verified against this device: 77 minutes without activity while
+     * being worn, with the sensor wedged behind it.
      *
-     * Movement is the signal the device does give. last_activity is stamped by
-     * steps, by speed over the ground and by a raised pulse, so a watch being
-     * worn stamps it many times an hour and a watch on a table does not stamp
-     * it at all. Requiring it to have moved inside the same window as the
-     * reading timeout costs nothing where the sensor really has wedged - a
-     * wearer moves - and stops the watch being rebooted for the crime of being
-     * taken off.
+     * A needless restart costs a few dark minutes. A suppressed one costs the
+     * night's readings. Restart on the reading timeout alone.
      */
-    bool moving_recently = (time(0) - st.last_activity) <= HEALTH_RECOVERY_TIMEOUT;
 
     if (HEALTH_RECOVERY_TIMEOUT > 0
             && st.worn != 0
-            && moving_recently
             && st.last_health_reading > 0
             && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
             && (time(0) - st.last_recovery) > HEALTH_RECOVERY_COOLDOWN) {
@@ -430,21 +426,6 @@ void poll_health(connection * conn)
         log_event(conn, note);
         conn->COMMAND_FUNCTION(conn, "RESTART#");
         return;
-    }
-
-    /*
-     * Said once per poll while it applies, so a night with no readings and no
-     * restarts is explainable from the log rather than looking like the
-     * recovery silently failing.
-     */
-    if (HEALTH_RECOVERY_TIMEOUT > 0
-            && st.last_health_reading > 0
-            && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
-            && !moving_recently) {
-        log_line(conn, "no health reading in %lu s, but it has not moved in %lu s"
-                       " - not restarting a watch nobody is wearing\n",
-                 (long unsigned int)(time(0) - st.last_health_reading),
-                 (long unsigned int)(time(0) - st.last_activity));
     }
 
     /*

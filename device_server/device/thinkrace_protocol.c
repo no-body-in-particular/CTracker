@@ -389,13 +389,7 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, cmd);
     }
 
-    log_line(conn, "sent command: ");
-
-    for (int i = start; i < conn->send_count; i++) {
-        logprintf(conn, "%c", ((unsigned char *)conn->send_buffer)[i]);
-    }
-
-    logprintf(conn, "\n");
+    log_command_bytes(conn, (const unsigned char *)conn->send_buffer, start, conn->send_count, false);
     return true;
 }
 

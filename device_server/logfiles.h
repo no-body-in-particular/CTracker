@@ -15,6 +15,7 @@ void log_command_response(connection * conn, const unsigned char * response) ;
 void log_time(connection * conn);
 void log_line( connection * conn, const char * format, ... );
 void log_array(connection * conn, uint8_t * array, size_t len);
+void log_command_bytes(connection * conn, const unsigned char * buf, int start, int end, bool printable_only);
 void log_buffer(connection * conn);
 void log_event(connection * conn, const unsigned char * response) ;
 void write_stat(connection * conn, char * value_name, float value);

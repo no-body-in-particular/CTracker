@@ -215,13 +215,7 @@ bool myrope_r18_send_command( void * c,  const char * command) {
         send_string(conn, buffer);
     }
 
-    log_line(conn, "sent command: ");
-
-    for (int i = start; i < conn->send_count; i++) {
-        logprintf(conn, "%c", ((unsigned char *)conn->send_buffer)[i]);
-    }
-
-    logprintf(conn, "\n");
+    log_command_bytes(conn, (const unsigned char *)conn->send_buffer, start, conn->send_count, false);
     return true;
 }
 

@@ -107,20 +107,7 @@ bool myrope_send_command( void * c,  const char * command ) {
         myrope_send_string(c, cmd);
     }
 
-    log_line(conn, "sent command: ");
-
-    for (int i = start; i < conn->send_count; i++) {
-        unsigned char c = ((unsigned char *)conn->send_buffer)[i];
-
-        if (isprint(c)) {
-            logprintf(conn, "%c", c);
-
-        } else {
-            logprintf(conn, "\\0x%x", c);
-        }
-    }
-
-    logprintf(conn, "\n");
+    log_command_bytes(conn, (const unsigned char *)conn->send_buffer, start, conn->send_count, true);
     return true;
 }
 

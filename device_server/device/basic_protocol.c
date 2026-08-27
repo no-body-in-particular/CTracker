@@ -24,11 +24,7 @@ bool basic_send_command( void * c, const char * cmd) {
     size_t start = conn->send_count;
     send_string(conn, cmd);
     send_string(conn, "\n");
-    log_line(conn, "sent command: ");
-
-    for (int i = start; i < conn->send_count; i++) {
-        logprintf(conn, "%c", ((unsigned char *)conn->send_buffer)[i]);
-    }
+    log_command_bytes(conn, (const unsigned char *)conn->send_buffer, start, conn->send_count, false);
 
     return true;
 }
