@@ -78,16 +78,38 @@
  * How often the watch should measure a pulse itself, in minutes. 0 leaves its own schedule
  * alone.
  *
- * This is IWBPSQ, "set the vital-sign sensor test cycle" - a period, not a window. The
- * firmware turns it into a self-rescheduling alarm and stores it under its PPGTestCycle
- * preference, which CoreService re-applies when it starts, so it is set once rather than
- * re-sent per reading. Sending it again occasionally only guards against a reset losing it.
+ * This is IWBPSQ, "set the vital-sign sensor test cycle". One sensor per command and a
+ * period in minutes, and the watch acknowledges it: IWBPSQ,imei,080835,1,3,# came back as
+ * IWAPSQ,080835,1,3, echoing the sensor and the interval.
  *
- * Three, because that is what the watch already does. Measured off its own readings: the
- * gaps run 137, 43, 137, 43 seconds - two readings per cycle, 180 seconds apart. Setting
- * anything larger here would slow it down rather than help, which is the trap in a knob
- * like this: the useful direction is faster, and faster costs battery on an optical sensor.
- * So this matches the device and exists to restore that value, not to change it.
+ * A period, not a window, and set once rather than re-sent per reading. The firmware
+ * multiplies the minutes by 60000, arms a one-shot wakeup alarm that re-arms itself each
+ * cycle, and stores the value under its PPGTestCycle preference, which CoreService
+ * re-applies at startup. It is still re-sent on the same six hour cadence as the health
+ * period, because a watch that has been reset comes back on the firmware default and there
+ * is no way to read the value back to find out.
+ *
+ * Three, because that is what it already does. Measured off its own readings rather than
+ * assumed: the gaps run 137, 43, 137, 43 seconds - two readings per 180 second cycle. The
+ * useful direction for this knob is faster, and faster costs battery on an optical sensor,
+ * so this matches the device and exists to restore that value rather than to change it.
+ *
+ * One warning, from nearly getting this wrong. The readings appeared to stop shortly after
+ * this first went out, and it looked like cause and effect: the command, then a 769 second
+ * gap where a 180 second one belonged. It was a hand-initiated reboot of the watch that
+ * happened to land in the same few minutes. The cadence either side of the command is
+ * untouched - 137 and 43 seconds before it, 137 and 43 seconds after it - and the gap is the
+ * reboot.
+ *
+ * Two things made that easy to misread and are worth knowing before reading this log again.
+ * Readings only reach the server when the watch connects, roughly every ten minutes, so a
+ * fresh silence means nothing on its own. And log_time stamps from conn->device_time, which
+ * freezes across a reboot, so a whole block of entries can carry one stale timestamp - the
+ * real times are inside the IWAPJK payloads, not on the log lines.
+ *
+ * The related BP86 warning below is still worth heeding: a wrong value in its switch field
+ * did stop the readings that matter. Configuring the schedule from the server is a place to
+ * change one thing and watch, not to change several.
  */
 #define DEVICE_SENSOR_CYCLE_MIN 3       //minutes between the watch's own pulse measurements; 0 disables
 #define SENSOR_HEART_RATE 1             //IWBPSQ sensor numbering - NOT the IWAPJK upload numbering
