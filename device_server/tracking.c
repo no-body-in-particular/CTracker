@@ -437,10 +437,12 @@ void poll_health(connection * conn)
      * The period is re-sent occasionally rather than once ever, so a watch that was reset,
      * factory defaulted or simply did not take the command picks it up again on its own.
      */
-    bool tell_interval = DEVICE_HEALTH_INTERVAL_MIN > 0 && conn->supports_health_interval
-                         && (time(0) - st.last_interval_cfg) >= DEVICE_HEALTH_INTERVAL_REFRESH;
+    bool due_config = conn->supports_health_interval
+                      && (time(0) - st.last_interval_cfg) >= DEVICE_HEALTH_INTERVAL_REFRESH;
+    bool tell_interval = DEVICE_HEALTH_INTERVAL_MIN > 0 && due_config;
+    bool tell_cycle = DEVICE_SENSOR_CYCLE_MIN > 0 && due_config;
 
-    if (tell_interval) {
+    if (tell_interval || tell_cycle) {
         st.last_interval_cfg = time(0);
     }
 
@@ -468,6 +470,31 @@ void poll_health(connection * conn)
         snprintf(cmd, sizeof(cmd), "HEALTHINT=%d,%d",
                  DEVICE_HEALTH_INTERVAL_MIN, DEVICE_HEALTH_INTERVAL_MIN);
         log_line(conn, "setting the device health period to %d minutes\n", DEVICE_HEALTH_INTERVAL_MIN);
+        conn->COMMAND_FUNCTION(conn, cmd);
+    }
+
+    /*
+     * And the watch's own pulse cycle, which is a different thing from the period above:
+     * HEALTHINT tells it how often to report, IWBPSQ tells it how often to measure. A watch
+     * that has been reset comes back on whatever the firmware defaults to, and there is no
+     * way to read the value back, so it is re-sent on the same slow cadence rather than once
+     * ever.
+     *
+     * If it parsed, the watch answers IWAPSQ and that is logged. Silence means it did not.
+     */
+    if (tell_cycle) {
+        char cmd[64] = {0};
+        //the trailing comma is deliberate. The command goes out terminated with a '#', and
+        //whether the firmware strips that before splitting the line could not be determined
+        //- the dispatch runs through quick opcodes that do not resolve. Without the comma
+        //the '#' would land inside the minutes field and Integer.parseInt("3#") throws,
+        //which the handler catches and turns into silence. With it, the '#' lands in a
+        //sixth field that is never read, and the minutes parse cleanly whether or not the
+        //firmware strips it. BPSQ wants at least five fields, not exactly five, so a sixth
+        //is allowed; BP86 above wants exactly five and could not do this.
+        snprintf(cmd, sizeof(cmd), "HEALTHCYCLE=%d,%d,",
+                 SENSOR_HEART_RATE, DEVICE_SENSOR_CYCLE_MIN);
+        log_line(conn, "setting the pulse measurement cycle to %d minutes\n", DEVICE_SENSOR_CYCLE_MIN);
         conn->COMMAND_FUNCTION(conn, cmd);
     }
 

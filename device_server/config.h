@@ -73,6 +73,24 @@
  * volunteers a full set. It is not right for this one. Set above 0 to re-enable.
  */
 #define DEVICE_HEALTH_INTERVAL_MIN 0
+
+/*
+ * How often the watch should measure a pulse itself, in minutes. 0 leaves its own schedule
+ * alone.
+ *
+ * This is IWBPSQ, "set the vital-sign sensor test cycle" - a period, not a window. The
+ * firmware turns it into a self-rescheduling alarm and stores it under its PPGTestCycle
+ * preference, which CoreService re-applies when it starts, so it is set once rather than
+ * re-sent per reading. Sending it again occasionally only guards against a reset losing it.
+ *
+ * Three, because that is what the watch already does. Measured off its own readings: the
+ * gaps run 137, 43, 137, 43 seconds - two readings per cycle, 180 seconds apart. Setting
+ * anything larger here would slow it down rather than help, which is the trap in a knob
+ * like this: the useful direction is faster, and faster costs battery on an optical sensor.
+ * So this matches the device and exists to restore that value, not to change it.
+ */
+#define DEVICE_SENSOR_CYCLE_MIN 3       //minutes between the watch's own pulse measurements; 0 disables
+#define SENSOR_HEART_RATE 1             //IWBPSQ sensor numbering - NOT the IWAPJK upload numbering
 //how often the period is re-sent, so a watch that was reset or lost the setting picks it
 //back up without waiting for anything to notice
 #define DEVICE_HEALTH_INTERVAL_REFRESH (6 * 60 * 60)

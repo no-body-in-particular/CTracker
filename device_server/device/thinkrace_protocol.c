@@ -255,6 +255,38 @@ bool thinkrace_send_command( void * c, const char * cmd) {
         send_string(conn, ",080835,");
         send_value_terminated(conn, cmd + 7);
 
+    } else if (strlen(cmd) > 12 && memcmp(cmd, "HEALTHCYCLE=", 12) == 0) {
+        /*
+         * IWBPSQ,IMEI,serial,<sensor>,<minutes># - "设置体征传感器测试周期", set the
+         * vital-sign sensor test cycle. One sensor per command, and the number is a
+         * period in minutes, not a window: the firmware multiplies it by 60000 and
+         * arms a one-shot ELAPSED_REALTIME_WAKEUP alarm that re-arms itself each
+         * cycle, cancelling the previous one first.
+         *
+         * The sensor numbering is the downlink one and it is NOT the numbering the
+         * device uses when it uploads a reading. Here 1 is heart rate and 2 is blood
+         * pressure; in the IWAPJK the device sends back, 1 is blood pressure and 2 is
+         * the pulse. Three and four agree - temperature and SpO2 - which makes the
+         * disagreement easy to miss.
+         *
+         *     1 heart rate      -> setHeartRateDetectAlarm(minutes)
+         *     2 blood pressure  -> setHeartRateDetectAlarm(minutes)
+         *     3 temperature     -> setTemperatureTestCycle + setTempAlarm
+         *     4 SpO2            -> setHeartRateDetectAlarm(minutes)
+         *
+         * Callers pass "<sensor>,<minutes>".
+         *
+         * Whether the trailing '#' lands inside the minutes field could not be settled
+         * from the firmware - the command dispatch goes through quick opcodes that do
+         * not resolve - so this is deliberately checkable from the outside. The handler
+         * parses both integers before it builds its reply, so a device that answers
+         * IWAPSQ parsed them, and a device that says nothing did not.
+         */
+        send_string(conn, "IWBPSQ,");
+        send_string(conn, conn->imei);
+        send_string(conn, ",080835,");
+        send_value_terminated(conn, cmd + 12);
+
     } else if (strlen(cmd) > 10 && memcmp(cmd, "HEALTHINT=", 10) == 0) {
         /*
          * IWBP86,IMEI,serial,<switch>,<value>#. The switch opens (1) or closes (0) health
@@ -1005,6 +1037,18 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
      * would feed is not installed on this watch. So the request is recorded and left
      * unanswered, which the spec explicitly allows, rather than answered with a guess.
      */
+    /*
+     * The acknowledgement for a sensor test cycle we set. Worth a line of its own rather
+     * than being dropped with the other acks, because it is the only evidence from outside
+     * the watch that IWBPSQ parsed: the handler reads both integers before it builds this
+     * reply, so silence after a IWBPSQ means the command was malformed and the cycle was
+     * never set.
+     */
+    if (memcmp(string, "IWAPSQ", 6) == 0) {
+        log_line(conn, "sensor test cycle accepted\n");
+        return;
+    }
+
     if (memcmp(string, "IWAPTQ", 6) == 0) {
         log_line(conn, "asked for weather - not answered, no weather source configured\n");
         return;
