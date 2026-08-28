@@ -438,14 +438,7 @@ void myrope_r18_process_message(connection * conn, char * string, size_t length)
     memset(data_buffers, 0, sizeof(data_buffers));
     memcpy(bufstr, string, min(length, BUF_SIZE - 1));
     size_t str_count = split_to(',', bufstr, BUF_SIZE, data_buffers, 40);
-    log_time(conn);
-    logprintf(conn, "split message: ");
-
-    for (size_t i = 0; i < str_count; i++) {
-        logprintf(conn, " [%u] %s", i, data_buffers[i]);
-    }
-
-    logprintf(conn, "\n");
+    log_fields(conn, "split message:", data_buffers, str_count);
 
     /*
      * This demanded a comma. The structure that actually matters is the '*' split checked

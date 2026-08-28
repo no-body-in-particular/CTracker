@@ -997,13 +997,7 @@ void thinkrace_process_message(connection * conn, char * string, size_t length) 
     memcpy(bufstr, string, min(length, BUF_SIZE - 1));
     message_type = parse_int(string + 4, 2);
     size_t str_count = split_to(',', bufstr + 6, BUF_SIZE, data_buffers, 40);
-    log_line(conn, "split message:", string);
-
-    for (size_t i = 0; i < str_count; i++) {
-        logprintf(conn, " [%u] %s", i, data_buffers[i]);
-    }
-
-    logprintf(conn, "\n");
+    log_fields(conn, "split message:", data_buffers, str_count);
 
     if (memcmp(string, "IWAPT6,", 7) == 0) {
         send_string(conn, "IWBPT6,1,1#");

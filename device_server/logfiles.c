@@ -249,9 +249,27 @@ void log_time(connection * conn) {
     logprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
-//the timestamp every line starts with, into a caller supplied buffer
+/*
+ * The timestamp every line starts with, into a caller supplied buffer.
+ *
+ * The server's clock, not the device's. This used conn->device_time, which is the watch's own
+ * idea of the time, and that has three problems as a log stamp: it freezes across a reboot,
+ * so fifty consecutive entries carry one value while real time moves on; it differs between
+ * connections, so two threads writing the same file disagree; and it is occasionally hours
+ * stale. Measured on this log: 93 lines out of 28911 go backwards, the worst by 5.4 hours.
+ *
+ * A log that does not sort is a log that cannot be read. It cost real time today - a reboot
+ * looked instantaneous and landed in the wrong place on the timeline, and a crash appeared to
+ * happen before the install that fixed it.
+ *
+ * The device's own clock is not lost. Every reading carries it inside the payload, which is
+ * where it belongs: IWAPJK,2026-08-28 03:08:17,13,0 is the watch saying when it measured,
+ * and that is a different fact from when the server heard about it.
+ */
 static int log_stamp(connection * conn, char * out, size_t size) {
-    struct tm tm = *gmtime(&conn->device_time);
+    time_t now = time(0);
+    struct tm tm = *gmtime(&now);
+    (void)conn;
     return snprintf(out, size, "%d-%02d-%02dT%02d:%02d:%02dZ,",
                     tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                     tm.tm_hour, tm.tm_min, tm.tm_sec);
@@ -282,6 +300,43 @@ void log_array(connection * conn, uint8_t * array, size_t len) {
     }
 
     logprintf(conn, "%s", hex);
+}
+
+/*
+ * The parsed fields of a message, in one write.
+ *
+ * Same fault as the send path had and the same fix. This looped a logprintf per field, so a
+ * message with six fields was seven writes with nothing stopping another connection landing
+ * between any two - which is where lines like
+ *
+ *   : [2] 10132026-08-27T18:05:06Z,imei recieved: ...
+ *
+ * came from, a field list with somebody else's entry fused into it. It survived the first
+ * pass over this file because that pass went looking for "sent command" and this says
+ * "split message".
+ */
+void log_fields(connection * conn, const char * prefix,
+                unsigned char * fields[], size_t count) {
+    char line[BUF_SIZE * 2];
+    int at = log_stamp(conn, line, sizeof(line));
+
+    if (at < 0 || at >= (int)sizeof(line)) {
+        return;
+    }
+
+    at += snprintf(line + at, sizeof(line) - (size_t)at, "%s", prefix);
+
+    for (size_t i = 0; i < count && at < (int)sizeof(line) - 32; i++) {
+        at += snprintf(line + at, sizeof(line) - (size_t)at, " [%u] %s",
+                       (unsigned)i, fields[i] ? (char *)fields[i] : "");
+    }
+
+    if (at < (int)sizeof(line) - 1) {
+        line[at++] = '\n';
+    }
+
+    line[at] = 0;
+    logprintf(conn, "%s", line);
 }
 
 /*
