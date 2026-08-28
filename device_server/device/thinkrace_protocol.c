@@ -957,6 +957,46 @@ void thinkrace_process_stat(connection * conn, size_t parse_count, unsigned char
             write_stat(conn,  "sleep_day", parse_int(data_buffers[3], 4));
             break;
 
+        /*
+         * The rest-activity rhythm. These were being sent and thrown away: the switch
+         * stopped at 14, so 15 to 20 fell to the default, were acked like everything else,
+         * and vanished. From the watch that is indistinguishable from working.
+         *
+         * The three ratios arrive multiplied by a hundred, because the frame carries
+         * integers and two decimal places is more than these measures can honestly claim.
+         * They are stored as sent - scaling them back here would put a fraction in a column
+         * of integers, and the reader that wants a ratio can divide.
+         *
+         * Four characters each, including for the ratios that cannot exceed 100. parse_int
+         * copies at most count characters and lets atoi stop at the first non-digit, so a
+         * width larger than the value is free, and a width smaller than it silently
+         * truncates - 1439 read three wide is 143, a sleep onset moved by twenty one hours.
+         * The starts really do reach four digits: minutes past midnight runs to 1439.
+         */
+        case 15:
+            write_stat(conn,  "sleep_ra", parse_int(data_buffers[3], 4));
+            break;
+
+        case 16:
+            write_stat(conn,  "sleep_iv", parse_int(data_buffers[3], 4));
+            break;
+
+        case 17:
+            write_stat(conn,  "sleep_is", parse_int(data_buffers[3], 4));
+            break;
+
+        case 18:
+            write_stat(conn,  "sleep_l5_start", parse_int(data_buffers[3], 4));
+            break;
+
+        case 19:
+            write_stat(conn,  "sleep_m10_start", parse_int(data_buffers[3], 4));
+            break;
+
+        case 20:
+            write_stat(conn,  "sleep_sri", parse_int(data_buffers[3], 4));
+            break;
+
         default:
             break;
     }
