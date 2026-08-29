@@ -422,8 +422,30 @@ void poll_health(connection * conn)
      * night's readings. Restart on the reading timeout alone.
      */
 
+    /*
+     * "Removed" has to go stale, or it becomes a permanent veto.
+     *
+     * st.worn is only as good as the last IWAPWR that arrived, and there is no timestamp on
+     * it. Until this week the watch never sent one at all and the field sat at -1 forever;
+     * the launcher sends them now, which makes the check meaningful and gives it a new way to
+     * fail. If a "removed" arrives and the "back on" that follows is lost - a dropped
+     * connection, a restart, any of the things that happen here hourly - the field stays 0
+     * and the recovery is disabled for as long as the watch keeps running.
+     *
+     * So the veto is bounded. A wearer who is genuinely off the wrist for three timeouts is
+     * a watch on a table, and rebooting a watch on a table costs nothing anybody notices. A
+     * watch wrongly marked as removed gets its recovery back after ninety minutes instead of
+     * never.
+     *
+     * Three times the timeout rather than a fixed hour so the two move together, and no new
+     * field: adding one to the state file would have to be read by a server that predates
+     * it, and this needs no memory the file does not already keep.
+     */
+    bool worn_veto = (st.worn == 0)
+                     && (time(0) - st.last_health_reading) < (3 * HEALTH_RECOVERY_TIMEOUT);
+
     if (HEALTH_RECOVERY_TIMEOUT > 0
-            && st.worn != 0
+            && !worn_veto
             && st.last_health_reading > 0
             && (time(0) - st.last_health_reading) > HEALTH_RECOVERY_TIMEOUT
             && (time(0) - st.last_recovery) > HEALTH_RECOVERY_COOLDOWN) {

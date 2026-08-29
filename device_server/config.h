@@ -119,6 +119,13 @@
  * TEMP# used to send a literal 1 meaning "switch it on" and the firmware reads that field as
  * a period.
  */
+/*
+ * How far a device's own clock may be from the server's before its timestamp is discarded.
+ * Thirty days: wide enough that a genuinely late reading is never rewritten, narrow enough to
+ * catch a watch that has not been told the time and is reporting 2022.
+ */
+#define STAT_CLOCK_SANITY (30 * 24 * 60 * 60)
+
 #define DEVICE_TEMP_CYCLE_MIN 10        //minutes between temperature measurements
 
 #define DEVICE_SENSOR_CYCLE_MIN 3       //minutes between the watch's own pulse measurements; 0 disables

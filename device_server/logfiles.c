@@ -147,6 +147,34 @@ void write_stat_at(connection * conn, char * value_name, float value, time_t whe
     //far smaller problem than vitals that all share a timestamp, and timeline_sort fixes
     //the ordering without inventing times.
 
+    /*
+     * A clock that is years out is not a late reading, it is a watch that has not been told
+     * the time.
+     *
+     * This is not the nudge described above and must not grow into it. That one moved small
+     * backward steps to keep the file sorted, and cost every health reading its own
+     * timestamp. This only replaces a stamp that cannot be a measurement time at all: three
+     * clusters in this file sit on 2022-12-31, 2025-11-27 and 2025-12-31, the dates a device
+     * reports before it has been given one, and a single 2022 row stretches a chart across
+     * four years and squashes everything real into the right-hand edge.
+     *
+     * Thirty days is deliberately loose. A reading can legitimately arrive late - a sleep
+     * summary is hours old by definition, and a watch out of signal buffers - so the window
+     * has to be wide enough that nothing genuine is ever rewritten. Nothing arrives a month
+     * late.
+     *
+     * The arrival time is used instead, and the substitution is logged, because a stat whose
+     * timestamp was invented should say so somewhere.
+     */
+    time_t now = time(0);
+    double drift = difftime(when, now);
+
+    if (when <= 0 || drift > STAT_CLOCK_SANITY || drift < -STAT_CLOCK_SANITY) {
+        log_line(conn, "stat %s: device clock reads %ld, %.0f days from now - using arrival time\n",
+                 value_name, (long)when, drift / 86400.0);
+        when = now;
+    }
+
     struct tm tm = *gmtime(&when);
     statsprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%s,%.2f\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, value_name, value);
 }
