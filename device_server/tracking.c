@@ -542,21 +542,27 @@ void poll_health(connection * conn)
     }
 
     /*
-     * Which trigger to use.
+     * The watch measures on its own schedule, so nothing is asked for here.
      *
-     * HEARTRATE# is IWBPXL, which acknowledges and then measures - usually.
-     * When it stops measuring it goes on acknowledging, so nothing looks
-     * wrong from here: the watch answers every poll, holds its connection and
-     * keeps reporting positions, and only the absence of readings says
-     * anything. That state used to persist until the recovery timeout
-     * rebooted the watch, half an hour later, on somebody's wrist.
+     * HEARTRATE# is IWBPXL. On the vendor firmware handleBPXL parses the frame, logs it,
+     * builds an APXL and returns - it never reaches the sensor, which is why the old
+     * escalation to PULSE# helped so little and why no handleBP50 exists on this build at
+     * all. The launcher that replaced it answers the command properly, but it is also
+     * already measuring to the period IWBPSQ sets, so the poll adds a round trip and
+     * nothing else.
      *
-     * PULSE# is IWBP50, the other trigger the protocol defines. It answers
-     * with the reading rather than with an acknowledgement, and against this
-     * hardware it measured when XL would not. So after a couple of empty
-     * polls, ask the other way before reaching for the restart.
+     * It looked like it was driving the readings: over six hours every poll was followed by
+     * a reading about twenty one seconds later, without exception. That is two timers of the
+     * same period running in step, not cause and effect - the watch was measuring every
+     * three minutes because it had been told to, and the poll happened to sit at a fixed
+     * offset in front of it.
+     *
+     * If the readings thin out after this, that inference was wrong and the poll goes back.
+     * DEVICE_HEALTH_POLL turns it on again without touching this file.
      */
-    conn->COMMAND_FUNCTION(conn, "HEARTRATE#");
+    if (DEVICE_HEALTH_POLL) {
+        conn->COMMAND_FUNCTION(conn, "HEARTRATE#");
+    }
 }
 
 void update_tracking_interval(connection * conn)

@@ -126,6 +126,15 @@
  */
 #define STAT_CLOCK_SANITY (30 * 24 * 60 * 60)
 
+/*
+ * Whether to ask the watch for a reading at all. 0 leaves it to its own schedule.
+ *
+ * Off, because the watch measures to the period IWBPSQ sets and the request adds nothing:
+ * the vendor firmware never routed IWBPXL to the sensor, and the launcher that replaced it
+ * is already measuring on its own timer. Turn it on if the readings thin out without it.
+ */
+#define DEVICE_HEALTH_POLL 0
+
 #define DEVICE_TEMP_CYCLE_MIN 10        //minutes between temperature measurements
 
 #define DEVICE_SENSOR_CYCLE_MIN 3       //minutes between the watch's own pulse measurements; 0 disables
