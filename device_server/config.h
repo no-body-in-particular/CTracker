@@ -131,7 +131,12 @@
  *
  * Off, because the watch measures to the period IWBPSQ sets and the request adds nothing:
  * the vendor firmware never routed IWBPXL to the sensor, and the launcher that replaced it
- * is already measuring on its own timer. Turn it on if the readings thin out without it.
+ * is already measuring on its own timer.
+ *
+ * Measured rather than assumed, since the correlation had argued the other way. Two hours
+ * with the poll: 18 readings, 9.0 an hour. Forty five minutes without it: 12 readings, 16.0
+ * an hour, median gap 209 s and no bunching. Removing the poll did not cost a single
+ * reading, and the rate went up rather than down.
  */
 #define DEVICE_HEALTH_POLL 0
 
