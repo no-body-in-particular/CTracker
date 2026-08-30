@@ -1,6 +1,6 @@
 <?php
-include 'lib.php';
-include 'database.php';
+include_once 'lib.php';
+include_once 'database.php';
 validateSession();
 
 ?>
@@ -237,9 +237,9 @@ validateSession();
             <button type="button" class="mapOverlay mapBtn" style="font-size:22pt;position:absolute;right:1em;bottom:4.5em;z-index: 2;" onclick="recenter();" title="Recentre the map on the device" aria-label="Recentre on the device"><i id="current" class="icon crosshair"></i></button>
 
             <div id="rangeControls">
-               <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" aria-label="Start date" type="date" onchange="searchdateChange()" class="input"/>
-               <input value="00:00" id="beginTime" type="time" onchange="searchdateChange()" class="input"/>
-               <select id="hourCount" aria-label="Time range" class="input" onchange="searchdateChange()">
+               <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" aria-label="Start date" type="date" onchange="rangeEdited()" class="input"/>
+               <input value="00:00" id="beginTime" type="time" onchange="rangeEdited()" class="input"/>
+               <select id="hourCount" aria-label="Time range" class="input" onchange="rangeEdited()">
                   <option value="720">30d</option>
                   <option value="168">7d</option>
                   <option value="72">72h</option>

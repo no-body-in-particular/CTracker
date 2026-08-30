@@ -11,7 +11,7 @@ $(document).ready(function() {
         dropdown: true,
         dynamic: true,
         scrollbar: true,
-        change: searchdateChange
+        change: rangeEdited
     };
     if ($('#beginTime').prop('type') != 'time') $('#beginTime').timepicker(tpSettings);
 });

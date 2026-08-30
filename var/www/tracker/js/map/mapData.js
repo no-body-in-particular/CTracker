@@ -1426,54 +1426,84 @@ function refreshData() {
 }
 
 /*
- * Today, as the browser reckons it, in the format a date input wants.
- *
- * Deliberately not the server's idea of today: the page is rendered with
- * PHP's date(), and if the two disagree about the day - a different timezone,
- * or simply a page loaded either side of midnight - the comparison below
- * would never match and the date would never roll.
+ * How far back the range the page picks for itself starts. setBeginDate() is called with this
+ * at the bottom of the file, so the page opens showing the last twelve hours.
  */
-function todayString() {
-    const d = new Date();
-    return d.getFullYear() + '-'
-        + String(d.getMonth() + 1).padStart(2, '0') + '-'
-        + String(d.getDate()).padStart(2, '0');
-}
+var AUTO_RANGE_MINUTES = 720;
 
 /*
- * Whether the start date should follow the calendar.
+ * Whether the range is still the one the page chose, rather than one the user asked for.
  *
- * The date input is filled in once, when the page is rendered. A page left
- * open overnight therefore keeps asking for yesterday, and the graph stops
- * where the old day ended - which looks exactly like the device having gone
- * quiet. This follows the day over instead, but only while the shown date is
- * today: someone who has deliberately gone back to look at last Tuesday
- * should not have it snatched away at midnight.
+ * The controls are filled in at load with a window that starts twelve hours ago, so with the
+ * default twenty four hour count it ends twelve hours from now. refreshData() collects new
+ * readings into it until then and stops: its own guard gives up once the selected end is in
+ * the past. A tab left open overnight went quiet at that point and the graph stopped where the
+ * window ended, which looks exactly like the device having gone quiet.
+ *
+ * Moving the window on once it has expired fixes that, and only while the user has not touched
+ * the controls - someone who has deliberately gone back to look at last Tuesday should not have
+ * it taken away from them.
+ *
+ * This replaces a version that compared the date box against today and rolled it over at
+ * midnight. It could not work here, because setBeginDate() had already written twelve hours ago
+ * into that box: before noon that is yesterday, so the comparison read every morning load as a
+ * date the user had chosen and nothing ever rolled. On an afternoon load, where it did match,
+ * rolling the date while the time box held a wall clock time moved the start of the window a day
+ * forward rather than up to now - so at midnight the range began hours in the future and the
+ * page went blank.
  */
-var followToday = true;
+var autoRange = true;
 
-function rollDateIfDayChanged() {
-    if (!followToday) { return; }
-    const input = document.getElementById('beginDate');
-    if (!input) { return; }
-    const today = todayString();
-    if (input.value === today) { return; }
-    input.value = today;
+/*
+ * The three controls in tracker.php call this rather than searchdateChange directly, so that
+ * handing control over is something the user does by touching one of them. Working it out
+ * afterwards by comparing values is what the version above got wrong.
+ */
+function rangeEdited() {
+    autoRange = false;
+    searchdateChange();
+}
+
+function rollAutoRange() {
+    //nothing to do while the window still reaches into the future: refreshData() is already
+    //collecting into it, and moving it would only throw away what it has collected
+    if (!autoRange || getSelectedEndDate() >= new Date()) {
+        return;
+    }
+
+    setBeginDate(AUTO_RANGE_MINUTES);
     searchdateChange();
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    const input = document.getElementById('beginDate');
-    followToday = !input || input.value === todayString();
-    // A minute is plenty: nothing here needs to notice midnight to the second,
-    // and the check is two string comparisons.
-    setInterval(rollDateIfDayChanged, 60000);
+    //a minute is plenty: the window is twelve hours wide and nothing here needs to notice its
+    //end to the second
+    setInterval(rollAutoRange, 60000);
 });
 
-function searchdateChange() {
-    const dateInput = document.getElementById('beginDate');
-    followToday = !dateInput || dateInput.value === todayString();
+/*
+ * Draw the emptied lists, so a new range starts from a blank view.
+ *
+ * searchdateChange throws the data arrays away, but nothing redraws from them: every fetch
+ * below renders only inside its success handler, and each one returns early when the server
+ * sends back no rows. A date the device has no data for - anything before it first reported,
+ * which is most of the calendar - therefore left the previous range's track, chart, tables
+ * and distance sitting on screen, and the page looked like it had ignored the date entirely.
+ *
+ * Rendering here instead of trusting the fetches means an empty range shows as empty, and a
+ * range with data has it drawn over this a moment later.
+ */
+function clearView() {
+    eventLayer.getSource().clear();
+    document.getElementById("alarmBody").innerHTML = '';
+    document.getElementById("commandBody").innerHTML = '';
+    document.getElementById("serverLoggingBody").innerHTML = '';
+    refreshHistory();
+    refreshTrips();
+    makeChart(makeDataset(statsList));
+}
 
+function searchdateChange() {
     tripActive = false;
     eventList = [];
     statsList = [];
@@ -1481,6 +1511,7 @@ function searchdateChange() {
     serverLogging = [];
     commandResults = [];
     unfilteredHistory = [];
+    clearView();
     refreshData();
 }
 
@@ -1579,10 +1610,10 @@ setInterval(updateCurrentPosition, 10000);
 setInterval(refreshData, 80000);
 setInterval(fetchLogging, 280000);
 
-setBeginDate(720);
+setBeginDate(AUTO_RANGE_MINUTES);
 
 function setBeginDate(offsetMinutes) {
-    var dateOffset = (60 * offsetMinutes * 1000); //5 days
+    var dateOffset = (60 * offsetMinutes * 1000);
     var date = new Date();
     date.setTime(date.getTime() - dateOffset);
     var seconds = String(date.getSeconds());
