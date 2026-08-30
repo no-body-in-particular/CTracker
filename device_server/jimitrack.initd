@@ -1,0 +1,84 @@
+#!/sbin/openrc-run
+
+description="Tracker device server"
+
+# supervise-daemon watches the process and restarts it when it dies.
+#
+# The script this replaces supervised itself, and could not. start() spawned a shell loop that
+# killed jimitrack, respawned it under nohup, slept 86400 and went round again; stop() set
+# stop=1 to end that loop. The assignment happened in a different process from the one running
+# the loop - openrc runs each command in its own shell - so the loop never saw it and never
+# ended. Every "start" left another immortal restarter behind and they accumulated: seventeen
+# were running, the oldest for nearly four days, each one still killing and respawning the
+# daemon once a day at its own offset.
+#
+# It was not supervision either. A daemon that died a minute after the sweep stayed dead until
+# the next one, up to twenty four hours later. supervise-daemon notices within seconds, and
+# stop() now actually stops it.
+supervisor="supervise-daemon"
+command="/bin/jimitrack"
+command_user="hiawatha"
+
+# unchanged from the old script, which started the daemon from a shell sitting in /root.
+# jimitrack looks for two optional cell database csvs by relative path, so where it starts is
+# part of its behaviour rather than an accident; neither file is there, and it runs without them.
+directory="/root"
+
+pidfile="/run/jimitrack.pid"
+output_log="/var/log/jimitrack.log"
+error_log="/var/log/jimitrack.log"
+
+# a tracker is no use while it is down, so keep restarting it rather than giving up after a
+# burst of failures - the delay is what stops a binary that cannot start from spinning
+respawn_delay=5
+respawn_max=0
+
+depend() {
+    need net
+}
+
+# jimitrack forks a worker and waits on it - see server_loop() in main.c - so the process
+# supervise-daemon starts and signals is the parent, and the worker actually holding port 9000
+# is never signalled. Stopping the service left that worker running, and the next start then
+# could not bind.
+#
+# The sweep identifies processes by what they are running rather than by name. openrc runs this
+# script with the service name as the process name, so a plain "pkill -x jimitrack" matches the
+# init script's own shell and kills the very start or stop it is in the middle of.
+# /proc/<pid>/exe cannot be confused that way.
+worker_pids() {
+    for pid in $(pgrep -x jimitrack 2>/dev/null); do
+        if [ "$(readlink -f /proc/$pid/exe 2>/dev/null)" = "$command" ]; then
+            printf '%s ' "$pid"
+        fi
+    done
+}
+
+sweep_workers() {
+    pids=$(worker_pids)
+
+    if [ -n "$pids" ]; then
+        kill "-$1" $pids 2>/dev/null
+    fi
+
+    return 0
+}
+
+start_pre() {
+    # anything still running while the service is stopped is a leftover worker, and it holds the port
+    sweep_workers KILL
+    return 0
+}
+
+stop_post() {
+    sweep_workers TERM
+    waited=0
+
+    while [ -n "$(worker_pids)" ] && [ $waited -lt 10 ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    sweep_workers KILL
+    return 0
+}
