@@ -1,7 +1,7 @@
 <?php
 
-include 'lib.php';
-include 'database.php';
+include_once 'lib.php';
+include_once 'database.php';
 
 if (!isset($_GET['imei']) || !check_imei($_GET['imei'])) {
     exit('Please accuire a valid device link.');

@@ -1,6 +1,6 @@
 <?php
 
-include 'config.php';
+include_once 'config.php';
 
 // Session cookie hardening, set here as well as in lib.php because index.php (the login page)
 // loads database.php and starts a session without going through lib.php. ini_set is harmless to
@@ -15,7 +15,7 @@ if (!empty($_SERVER['HTTPS']) && 'off' !== $_SERVER['HTTPS']) {
 
 function getDevice($view_alias)
 {
-    session_start();
+    start_session();
 
     $db = new SQLite3(DATABASE);
 
@@ -35,19 +35,19 @@ function getDevice($view_alias)
 function validateViewOnly()
 {
     if (isReadonly()) {
-        $dev = getDevice($_GET['viewonly']);
+        $dev = getDevice($_GET['viewonly'] ?? null);
         if (null === $dev) {
-            $dev = getDevice($_SESSION['viewonly']);
+            $dev = getDevice($_SESSION['viewonly'] ?? null);
         }
 
         if (null === $dev) {
             exit('<html<body>Please login first <meta http-equiv="Refresh" content="3; url=index.php" /></body></html>');
         }
-        if (null !== $_GET['imei'] && ($dev[1] !== $_GET['imei'])) {
+        if (null !== ($_GET['imei'] ?? null) && ($dev[1] !== $_GET['imei'])) {
             exit('<html<body>Please login first <meta http-equiv="Refresh" content="3; url=index.php" /></body></html>');
         }
 
-        $_SESSION['viewonly'] = $_GET['viewonly'];
+        $_SESSION['viewonly'] = $_GET['viewonly'] ?? null;
 
         return true;
     }
@@ -57,11 +57,11 @@ function validateViewOnly()
 
 function readDevices(): void
 {
-    session_start();
+    start_session();
     if (isReadonly()) {
         validateViewOnly();
 
-        $dev = getDevice($_SESSION['viewonly']);
+        $dev = getDevice($_SESSION['viewonly'] ?? null);
         if (null === $dev) {
             return;
         }
@@ -78,7 +78,7 @@ function readDevices(): void
     $db = new SQLite3(DATABASE);
     $sql = 'SELECT * from DEVICES where USER_ID=:uid;';
     $stmt = $db->prepare($sql);
-    $stmt->bindValue(':uid', $_SESSION['uid'], SQLITE3_TEXT);
+    $stmt->bindValue(':uid', $_SESSION['uid'] ?? null, SQLITE3_TEXT);
     $ret = $stmt->execute();
 
     while ($result = $ret->fetchArray()) {
@@ -94,13 +94,13 @@ function readDevices(): void
 
 function deviceClaimed($imei)
 {
-    session_start();
+    start_session();
 
     $db = new SQLite3(DATABASE);
 
     $id_db = uniqid();
     $filtered_imei = SQLite3::escapeString($imei);
-    $filtered_uid = $_SESSION['uid'];
+    $filtered_uid = $_SESSION['uid'] ?? null;
 
     $sql = 'SELECT * FROM DEVICES WHERE IMEI=:imei;';
     $stmt = $db->prepare($sql);
@@ -115,14 +115,14 @@ function deviceClaimed($imei)
 
 function addDevice($imei, $name)
 {
-    session_start();
+    start_session();
 
     $db = new SQLite3(DATABASE);
 
     $id_db = uniqid();
     $filtered_imei = SQLite3::escapeString($imei);
     $filtered_name = SQLite3::escapeString($name);
-    $filtered_uid = $_SESSION['uid'];
+    $filtered_uid = $_SESSION['uid'] ?? null;
 
     $sql = 'INSERT OR REPLACE INTO DEVICES (ID,IMEI,NAME,VIEW_ALIAS,USER_ID) VALUES (:id, :imei, :name , :view_alias, :uid);';
     $stmt = $db->prepare($sql);
@@ -141,13 +141,13 @@ function addDevice($imei, $name)
 
 function removeDevice($imei)
 {
-    session_start();
+    start_session();
 
     $db = new SQLite3(DATABASE);
 
     $id_db = uniqid();
     $filtered_imei = SQLite3::escapeString($imei);
-    $filtered_uid = $_SESSION['uid'];
+    $filtered_uid = $_SESSION['uid'] ?? null;
 
     $sql = 'DELETE FROM DEVICES WHERE IMEI=:imei AND USER_ID=:uid;';
     $stmt = $db->prepare($sql);
@@ -163,13 +163,13 @@ function removeDevice($imei)
 
 function isMyDevice($imei)
 {
-    session_start();
+    start_session();
 
     $db = new SQLite3(DATABASE);
 
     $id_db = uniqid();
     $filtered_imei = SQLite3::escapeString($imei);
-    $filtered_uid = $_SESSION['uid'];
+    $filtered_uid = $_SESSION['uid'] ?? null;
 
     $sql = 'SELECT * FROM DEVICES WHERE IMEI=:imei AND USER_ID=:uid;';
     $stmt = $db->prepare($sql);
@@ -184,7 +184,7 @@ function isMyDevice($imei)
 
 function validateIMEI($imei)
 {
-    session_start();
+    start_session();
 
     if (validateViewOnly()) {
         return true;
@@ -394,7 +394,7 @@ function validateLogin($username, $password)
         return false;
     }
 
-    session_start();
+    start_session();
     $_SESSION['login'] = $username;
     // the current hash, not the password. it identifies this session against the stored
     // value so that changing the password ends the session, but unlike the old whirlpool
@@ -473,16 +473,23 @@ function updateUser($id, $username, $name, $email, $pwd)
  * validateSession().
  */
 
+/*
+ * Neither key is normally there. A view-only link puts one in the query string and the session
+ * carries the other once such a link has been followed, so on an ordinary logged-in request
+ * both are absent and reading them warned twice - on every ajax poll, which is where most of
+ * the "Undefined array key" lines in the error log came from. ?? reads a missing key as null,
+ * which is what the comparison below was already testing for.
+ */
 function isReadonly()
 {
-    return null !== $_GET['viewonly'] || null !== $_SESSION['viewonly'];
+    return null !== ($_GET['viewonly'] ?? null) || null !== ($_SESSION['viewonly'] ?? null);
 }
 
 function validateSession()
 {
-    session_start();
+    start_session();
 
-    $username = $_SESSION['login'];
+    $username = $_SESSION['login'] ?? null;
     $pwhash = $_SESSION['pwhash'] ?? null;
 
     // credentials used to fall back to $_GET['username'] and $_GET['password'] when the

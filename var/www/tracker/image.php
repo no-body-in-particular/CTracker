@@ -13,8 +13,8 @@
  *   image.php?imei=...&ts=...   -> the image bytes
  */
 
-include 'lib.php';
-include 'database.php';
+include_once 'lib.php';
+include_once 'database.php';
 
 if (!isset($_GET['imei']) || !check_imei($_GET['imei'])) {
     http_response_code(400);

@@ -3,10 +3,10 @@
 //ini_set('display_startup_errors', 1);
 //error_reporting(E_ALL);
 
-require 'lib.php';
-require 'database.php';
+require_once 'lib.php';
+require_once 'database.php';
 
-session_start();
+start_session();
 
 validateSession();
 if (isReadOnly()) {

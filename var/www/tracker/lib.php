@@ -19,7 +19,7 @@ if (!empty($_SERVER['HTTPS']) && 'off' !== $_SERVER['HTTPS']) {
 }
 //ob_start("ob_gzhandler");
 
-include 'config.php';
+include_once 'config.php';
 
 $TZ = new DateTimeZone('UTC');
 

@@ -1,7 +1,7 @@
 <?php
-include 'database.php';
-include 'lib.php';
-include 'config.php';
+include_once 'database.php';
+include_once 'lib.php';
+include_once 'config.php';
 
 //ini_set('display_errors', 1);
 //ini_set('display_startup_errors', 1);

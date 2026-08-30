@@ -1,8 +1,8 @@
 <?php
 // debug error output removed - php warnings and their file paths do not belong in the response
 
-include 'lib.php';
-include 'database.php';
+include_once 'lib.php';
+include_once 'database.php';
 
 if (!isset($_GET['imei']) || !check_imei($_GET['imei'])) {
     echo 'Please accuire a valid device link.';

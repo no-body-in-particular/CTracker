@@ -1,9 +1,9 @@
 <?php
 
-include 'database.php';
-include 'lib.php';
+include_once 'database.php';
+include_once 'lib.php';
 
-session_start();
+start_session();
 
 $message = '';
 

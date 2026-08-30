@@ -1,11 +1,11 @@
 <?php
 
-include 'database.php';
+include_once 'database.php';
 // debug error output removed - php warnings and their file paths do not belong in the response
 
 
 $message = '<a href="registration.php">register here</a><br><br><a href="recover.php">forgot password?</a>';
-session_start();
+start_session();
 session_unset();
 
 if (isset($_GET['login'])) {
