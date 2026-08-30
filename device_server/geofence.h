@@ -9,7 +9,9 @@
 
 #include "connection.h"
 void read_geofence(connection * conn) ;
-void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon);
+//returns false when the fix was a verbatim repeat of the one already recorded, so a caller
+//that writes its own per-fix stats can leave them out rather than file a second copy
+bool move_to(connection * conn, time_t device_time, int position_type, double lat, double lon);
 
 
 #endif // GEOFENCE_H_INCLUDED

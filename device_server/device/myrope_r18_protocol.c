@@ -376,11 +376,17 @@ void myrope_r18_process_position(connection * conn, size_t parse_count, unsigned
 
     if (valid_position) {
         //if we're fairly certain about our location do trigger fences
-        move_to(conn, dt, position_type, lat, lng);
+        bool new_fix = move_to(conn, dt, position_type, lat, lng);
+        //the status file is rewritten rather than appended to, so a repeat costs nothing there
         set_status(conn, battery_level, signal_strength, position_type, num_sats);
-        write_stat(conn, "battery_level", battery_level);
-        write_sat_count(conn, position_type, num_sats);
-        write_stat(conn, "signal", signal_strength);
+
+        //but the stat files are appended to - see the thinkrace handler for the same reasoning
+        if (new_fix) {
+            write_stat(conn, "battery_level", battery_level);
+            write_sat_count(conn, position_type, num_sats);
+            write_stat(conn, "signal", signal_strength);
+        }
+
         conn->timeout_time = time(0) + MYROPE_TIMEOUT;
     }
 }

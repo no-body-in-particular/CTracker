@@ -642,10 +642,16 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
         //clock before calling it left that gap at zero, and compute_speed() then fell back
         //to assuming the reporting interval - so a minute of running was divided by ten
         //minutes and every speed came out a tenth of its true value.
-        move_to(conn, dt, position_type, lat, lng);
-        write_stat(conn, "battery_level", battery_level);
-        write_sat_count(conn, position_type, num_sats);
-        write_stat(conn, "signal", signal_strength);
+        //these three describe the fix, so they belong to it: when move_to() recognises the
+        //packet as a repeat of a fix already recorded, writing them again only files a second
+        //copy under the original timestamp. the timeout is refreshed either way - a repeat is
+        //still the device telling us it is there.
+        if (move_to(conn, dt, position_type, lat, lng)) {
+            write_stat(conn, "battery_level", battery_level);
+            write_sat_count(conn, position_type, num_sats);
+            write_stat(conn, "signal", signal_strength);
+        }
+
         conn->timeout_time = time(0) + THINKRACE_TIMEOUT;
 
     } else if (dt > conn->device_time) {

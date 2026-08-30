@@ -222,7 +222,15 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
     log_event(conn, buffer);
 }
 
-void move_to(connection * conn, time_t device_time, int position_type, double lat, double lon) {
+/*
+ * Two positions closer together than this are the same position. The gps file keeps six
+ * decimal places and conn->current_lat is a float, which at these latitudes cannot resolve
+ * much better than half a metre anyway, so a fix compared against one read back from the
+ * file will never match to the bit. About a metre.
+ */
+#define SAME_POSITION_DEGREES 1e-5
+
+bool move_to(connection * conn, time_t device_time, int position_type, double lat, double lon) {
     /*
      * Every protocol arrives here, so this is the one place worth checking that a coordinate
      * is a coordinate at all. The recorded history has two rows reading
@@ -235,7 +243,31 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
      */
     if (!(lat >= -90.0 && lat <= 90.0) || !(lon >= -180.0 && lon <= 180.0)) {
         log_line(conn, "position %f,%f is not on the planet, ignoring it\n", lat, lon);
-        return;
+        return false;
+    }
+
+    /*
+     * The watch repeats its last position packet verbatim when it has nothing new to report -
+     * same device timestamp, same coordinates, minutes apart - and every repeat was recorded
+     * as though it were a fresh fix: another row in the gps file, and another
+     * battery/satellites/signal triple from the caller, all filed under the one original
+     * timestamp. A third of a day's stat rows were copies of a row already there.
+     *
+     * The copies were worse than redundant. dt comes out zero between a fix and its own
+     * repeat, so compute_speed() has no interval to measure over and the duplicate row was
+     * written with the speed field empty - which the map reads as a position the device could
+     * not measure a speed for, rather than as the copy it is.
+     *
+     * Both halves have to match. A timestamp that fails to advance is not enough on its own:
+     * a device that resolves a second position within the same second has genuinely moved,
+     * and the jimi wifi path stamps its fixes with time(0), where that is easy to do.
+     */
+    if (device_time <= conn->device_time
+            && fabs(lat - conn->current_lat) < SAME_POSITION_DEGREES
+            && fabs(lon - conn->current_lon) < SAME_POSITION_DEGREES) {
+        log_line(conn, "position repeats the fix already recorded at %ld, not recording it again\n",
+                 (long) conn->device_time);
+        return false;
     }
 
     time_t dt = fabs(device_time - conn->device_time);
@@ -353,4 +385,6 @@ void move_to(connection * conn, time_t device_time, int position_type, double la
     if (conn->just_connected) {
         conn->just_connected = false;
     }
+
+    return true;
 }
