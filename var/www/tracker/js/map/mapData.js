@@ -1426,10 +1426,34 @@ function refreshData() {
 }
 
 /*
- * How far back the range the page picks for itself starts. setBeginDate() is called with this
- * at the bottom of the file, so the page opens showing the last twelve hours.
+ * How far back the range the page picks for itself starts: half the width it is about to be.
+ *
+ * This was a flat 720 minutes, which is half of the twenty four hours the count starts on - so
+ * the page opened showing the last twelve hours with twelve hours of room ahead of it, and
+ * refreshData() collected into that room until it ran out. That is the shape the whole range
+ * mechanism assumes: refreshData gives up entirely once the selected end is in the past, so a
+ * window has to reach into the future to stay live at all.
+ *
+ * Being flat, it only held for twenty four. Choosing any other duration left the start where it
+ * was and moved only the end, so:
+ *
+ *   12h  ->  begin now-12h, end now      live for no time at all; the last hour never arrives
+ *    6h  ->  begin now-12h, end now-6h   ends six hours ago, dead on selection
+ *    1h  ->  begin now-12h, end now-11h  one hour, from half a day ago
+ *
+ * Half the selected width is the same rule the default always followed, applied to the width
+ * actually selected: history behind, as much room ahead, and rollAutoRange to move it on when
+ * that room is used up.
  */
-var AUTO_RANGE_MINUTES = 720;
+function selectedHours() {
+    var el = document.getElementById('hourCount');
+    var v = el ? parseFloat(el.value) : 24;
+    return isFinite(v) && v > 0 ? v : 24;
+}
+
+function autoRangeMinutes() {
+    return selectedHours() * 30;
+}
 
 /*
  * Whether the range is still the one the page chose, rather than one the user asked for.
@@ -1464,6 +1488,22 @@ function rangeEdited() {
     searchdateChange();
 }
 
+/*
+ * The duration control is a width, not a start.
+ *
+ * It called rangeEdited() with the other two, which handed the range over to the user and left
+ * the start where it was - so asking for a shorter window asked for a window ending further in
+ * the past, and asking for six hours showed six hours from half a day ago. Choosing how much to
+ * look at is not the same as choosing when to look at, so this re-anchors on now and stays in
+ * automatic. The date and time boxes still hand over: someone who has typed last Tuesday into
+ * them means it.
+ */
+function durationEdited() {
+    autoRange = true;
+    setBeginDate(autoRangeMinutes());
+    searchdateChange();
+}
+
 function rollAutoRange() {
     //nothing to do while the window still reaches into the future: refreshData() is already
     //collecting into it, and moving it would only throw away what it has collected
@@ -1471,7 +1511,7 @@ function rollAutoRange() {
         return;
     }
 
-    setBeginDate(AUTO_RANGE_MINUTES);
+    setBeginDate(autoRangeMinutes());
     searchdateChange();
 }
 
@@ -1610,7 +1650,7 @@ setInterval(updateCurrentPosition, 10000);
 setInterval(refreshData, 80000);
 setInterval(fetchLogging, 280000);
 
-setBeginDate(AUTO_RANGE_MINUTES);
+setBeginDate(autoRangeMinutes());
 
 function setBeginDate(offsetMinutes) {
     var dateOffset = (60 * offsetMinutes * 1000);

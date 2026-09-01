@@ -239,7 +239,7 @@ validateSession();
             <div id="rangeControls">
                <input value="<?php echo date('Y-m-d'); ?>" id="beginDate" aria-label="Start date" type="date" onchange="rangeEdited()" class="input"/>
                <input value="00:00" id="beginTime" type="time" onchange="rangeEdited()" class="input"/>
-               <select id="hourCount" aria-label="Time range" class="input" onchange="rangeEdited()">
+               <select id="hourCount" aria-label="Time range" class="input" onchange="durationEdited()">
                   <option value="720">30d</option>
                   <option value="168">7d</option>
                   <option value="72">72h</option>
