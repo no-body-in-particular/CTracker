@@ -278,7 +278,14 @@ bool move_to(connection * conn, time_t device_time, int position_type, double la
     //of the speed stat, but log_position() still wrote them to the gps file, which is
     //where the several-hundred km/h rows came from.
     bool lbs_fix = (position_type == 1 || conn->current_position_type == 1);
-    double speed = lbs_fix ? NAN : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
+
+    //two fixes close together in time say more about how the position was resolved than
+    //about how far the device travelled: divide a position error by a one second interval
+    //and it comes back as a motorway speed. see MIN_SPEED_INTERVAL.
+    bool too_soon = dt < MIN_SPEED_INTERVAL;
+    double speed = (lbs_fix || too_soon)
+                   ? NAN
+                   : compute_speed(dt, conn->current_lat, conn->current_lon, lat, lon);
     bool allow_trigger = dt > 5 && dt < 1200;
 
     //a nan compares false against everything, so the old test let it through into the

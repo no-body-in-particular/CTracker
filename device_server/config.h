@@ -38,6 +38,24 @@
  * than charted as real movement. km/h. */
 #define MAX_PLAUSIBLE_SPEED 700
 
+/* Shortest interval a speed may be measured over. Seconds.
+ *
+ * compute_speed() divides the distance between two fixes by the time between them, so the
+ * error in each position is divided by that time too. Over a normal 60 s tracking interval
+ * a 70 m position error adds about 4 km/h and disappears into the noise. Over 1 s the same
+ * 70 m reads as 250 km/h.
+ *
+ * That is not hypothetical: on 2026-09-06 a watch sent a GPS fix stamped 19:29:54 and a
+ * WiFi-resolved fix stamped 19:29:55. The two positions were 73 m apart - well within WiFi
+ * accuracy, the wearer had not moved - and the pair was recorded as 264 km/h, under the
+ * 700 km/h cap and so charted as real.
+ *
+ * Below this interval the speed is left unmeasured rather than written as 0: the position
+ * is still recorded, but nothing claims to know how fast the device was going. A device
+ * only reports this often when it is resolving the same moment from two sources, which is
+ * exactly when the difference between them is error rather than travel. */
+#define MIN_SPEED_INTERVAL 15
+
 /* Adaptive tracking.
  *
  * The location interval is shortened while the wearer is active - either their heart rate
