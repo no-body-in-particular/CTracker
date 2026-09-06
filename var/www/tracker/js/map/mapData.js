@@ -1040,31 +1040,6 @@ function peekAtMap() {
     }, MAP_PEEK_MS);
 }
 
-//Chart.js caches each axis's measured min and max and only works them out again when
-//that cache has been invalidated: Scale.beforeLayout() clears _dataLimitsCached, and
-//determineDataLimits() runs only when it is false. Handing data.datasets a fresh array
-//does not reliably reach that path, so narrowing the range left the left hand axis still
-//fitted to values that were no longer plotted - the points bunched into a corner of a
-//scale belonging to the range the user had just navigated away from. The right hand axis
-//hid the same fault, because beginAtZero pins its bottom and the top rarely fell.
-//
-//There is no public "measure again" call, so the flag is cleared directly. The guard
-//keeps that harmless if a later Chart.js renames it: the axes are then no worse than
-//they were before.
-function refitAxes(chart) {
-    if (!chart || !chart.scales) {
-        return;
-    }
-
-    Object.keys(chart.scales).forEach(function (id) {
-        var scale = chart.scales[id];
-
-        if (scale && '_dataLimitsCached' in scale) {
-            scale._dataLimitsCached = false;
-        }
-    });
-}
-
 function makeChart(datasets) {
     var ctx = document.getElementById("lineChart");
     var narrow = narrowScreen();
@@ -1117,25 +1092,6 @@ function makeChart(datasets) {
                     //size: with the device group folded away it is seven entries, not twelve.
                     display: true,
                     position: 'top',
-                    //Chart.js already leaves a hidden series out of the range it measures,
-                    //but only when it measures at all - see refitAxes. Switching off the
-                    //widest series should hand its room to the ones left behind, so clear
-                    //the cache and let the update that follows do the measuring.
-                    onClick: function(e, legendItem, legend) {
-                        var chart = legend.chart;
-                        var index = legendItem.datasetIndex;
-
-                        if (chart.isDatasetVisible(index)) {
-                            chart.hide(index);
-                            legendItem.hidden = true;
-                        } else {
-                            chart.show(index);
-                            legendItem.hidden = false;
-                        }
-
-                        refitAxes(chart);
-                        chart.update();
-                    },
                     labels: {
                         color: CHART_INK,
                         boxWidth: narrow ? 8 : 12,
@@ -1244,9 +1200,6 @@ function makeChart(datasets) {
 
     if (lineChart && signature === chartSignature) {
         lineChart.data.datasets = datasets;
-        //the series are the same, so this is a new time range or a refreshed window: the
-        //axes have to be measured against the points that are actually on the chart now
-        refitAxes(lineChart);
         lineChart.update();
         return;
     }
