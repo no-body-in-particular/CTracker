@@ -1372,3 +1372,11 @@ nav {
     max-width: 220px;
     vertical-align: middle;
 }
+
+/* A night's sleep totals, listed among the events. Unlike every other row in that table
+   this one carries no position, so it does not move the map when clicked - the default
+   cursor says so before the click does. */
+.sleepRow {
+    cursor: default;
+    opacity: .85;
+}
