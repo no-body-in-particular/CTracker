@@ -1698,6 +1698,10 @@ window.addEventListener('hashchange', syncStatsMode);
  * Moving from one open panel to another replaces the entry instead. location.replace is what
  * does that rather than history.replaceState: :target is only re-evaluated by an actual
  * navigation, and replaceState is not one - the URL would change and the panel would not.
+ *
+ * The destination must still carry a fragment, even an empty one. A same-document move is
+ * only same-document when the new URL has a fragment; navigating to the bare path reloads,
+ * which is how closing a panel used to throw away the whole page state.
  */
 /*
  * Escape closes whichever right hand panel is open, the same as pressing back does. A panel is
@@ -1741,7 +1745,8 @@ document.addEventListener('keydown', function(e) {
 
         setTimeout(function() {
             if (window.location.hash.replace('#', '') === hash) {
-                window.location.replace(window.location.pathname + window.location.search);
+                //an empty fragment, not no fragment - see the click handler below
+                window.location.replace('#');
             }
         }, 120);
     }
@@ -1768,7 +1773,16 @@ document.addEventListener('click', function(e) {
 
     var href = link.getAttribute('href');
     e.preventDefault();
-    window.location.replace(href === '#' ? window.location.pathname + window.location.search : href);
+
+    //Replace with the href as written, including the bare "#" the close link carries.
+    //Rebuilding a URL without any fragment at all is what this used to do, and that is a
+    //different navigation: the browser only treats a move as same-document when the
+    //destination HAS a fragment, so dropping it reloaded the page. Closing a panel then
+    //cost the whole in-memory state - the date pickers went back to the values PHP had
+    //rendered, and the fresh page centred the map on the live position, throwing away
+    //whatever moment had been picked on the chart. Switching between two panels never
+    //reloaded, because that href keeps its fragment; only closing did.
+    window.location.replace(href);
 });
 
 setTimeout(updateCurrentPosition, 500);
