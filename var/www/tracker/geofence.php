@@ -44,11 +44,17 @@ if (isset($_GET['fence']) && !check_fence($_GET['fence'])) {
     exit();
 }
 
+// $imei is guaranteed by the isset() guard above, which exits. The rest are optional on
+// an ordinary request - a plain read sends neither an action nor a fence - and reading a key
+// that is not there warns on every request. ?? reads it as the empty string, which is the
+// value the switch and the isset() guards below were already treating it as.
+//
+// $begin and $end used to be read here too and were never used: geofence.php has no date
+// range, unlike history.php and the other pages that take them. Two of the warnings this
+// file wrote on every request came from collecting parameters it had no use for.
 $IMEI = $_GET['imei'];
-$BEGIN = $_GET['begin'];
-$END = $_GET['end'] ?: PHP_INT_MAX;
-$ACTION = $_GET['action'];
-$FENCE = $_GET['fence'];
+$ACTION = $_GET['action'] ?? '';
+$FENCE = $_GET['fence'] ?? '';
 $FOLDERS = $_GET['folders'] ?? '';
 
 validateSession();

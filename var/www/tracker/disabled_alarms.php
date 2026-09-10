@@ -24,9 +24,11 @@ if (isset($_GET['alarms']) && (!check_alarms($_GET['alarms']) || strlen($_GET['a
     exit();
 }
 
+// as in geofence.php: the imei is guaranteed by the guard above, the other two are absent
+// on a plain read and warned on every request
 $IMEI = $_GET['imei'];
-$ACTION = $_GET['action'];
-$EVENTS = $_GET['alarms'];
+$ACTION = $_GET['action'] ?? '';
+$EVENTS = $_GET['alarms'] ?? '';
 
 validateIMEI($IMEI);
 
