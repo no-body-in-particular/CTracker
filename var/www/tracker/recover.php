@@ -14,8 +14,13 @@ if ('POST' === $_SERVER['REQUEST_METHOD'] ) {
       $key=getResetKey($_POST['email']);
       $message='Mail sent. Please check your mailbox for a password reset link.';
          if($key){
-            $msg="You can reset your password with the following link: https://coredump.ws/tracker/reset.php?key=" . urlencode($key);
-            $msg = wordwrap($msg,70,"\n",true);
+            // Wrap the sentence, never the URL: wordwrap() with cut=true will
+            // break a long link mid-token, and a base64 key with enough
+            // +, / or = in it pushes the URL past 70 characters (76 at worst).
+            // That silently mailed an unclickable link about 1 time in 500.
+            $link = "https://coredump.ws/tracker/reset.php?key=" . urlencode($key);
+            $msg = wordwrap("You can reset your password with the following link:", 70, "\n", true)
+                 . "\n" . $link;
             mail($_POST['email'],"GPS tracker password reset",$msg);
          }
       }else{
