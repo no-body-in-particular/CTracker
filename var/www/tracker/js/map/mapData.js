@@ -155,6 +155,103 @@ function computeEventRow(cols) {
     return "<tr onclick='animateTo(" + escapeNumber(cols[2]) + "," + escapeNumber(cols[1]) + ")'><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td>" + escapeHtml(speedText(cols[3])) + "</td>" + last + "</tr>";
 }
 
+//The fields of a night's sleep, in the order they read best. Whatever the device did not
+//report is simply left out rather than shown as a zero, which would claim a measurement.
+var SLEEP_SUMMARY_FIELDS = [
+    { name: 'sleep_tst',        label: 'asleep',       kind: 'duration' },
+    { name: 'sleep_spt',        label: 'in bed',       kind: 'duration' },
+    { name: 'sleep_waso',       label: 'awake in bed', kind: 'duration' },
+    { name: 'sleep_deep',       label: 'deep',         kind: 'duration' },
+    { name: 'sleep_light',      label: 'light',        kind: 'duration' },
+    { name: 'sleep_efficiency', label: 'efficiency',   kind: 'percent'  },
+    { name: 'sleep_wakeups',    label: 'awakenings',   kind: 'count'    },
+    { name: 'sleep_score',      label: 'score',        kind: 'count'    }
+];
+
+//"731" is a number of minutes only if you already know that. 12h 11m is the same fact
+//without the arithmetic.
+function sleepDuration(minutes) {
+    var total = Math.round(minutes);
+    var hours = Math.floor(total / 60);
+
+    return hours ? hours + 'h ' + (total % 60) + 'm' : total + 'm';
+}
+
+//One row per night. The device stamps every total of a given night with the same instant,
+//so grouping on the timestamp is enough - no windowing, no guessing where a night ended.
+function sleepSummaryRows(items) {
+    var byTime = {};
+
+    for (var i = 0; i < items.length; i++) {
+        var meta = STAT_SERIES[items[i][1]];
+
+        if (!meta || !meta.summary) {
+            continue;
+        }
+
+        var key = items[i][0].getTime();
+        byTime[key] = byTime[key] || {};
+        byTime[key][items[i][1]] = items[i][2];
+    }
+
+    return Object.keys(byTime).map(function(key) {
+        var got = byTime[key];
+        var parts = [];
+
+        SLEEP_SUMMARY_FIELDS.forEach(function(field) {
+            if (got[field.name] === undefined) {
+                return;
+            }
+
+            var value = Number(got[field.name]);
+
+            parts.push(field.label + ' ' + (
+                field.kind === 'duration' ? sleepDuration(value)
+              : field.kind === 'percent'  ? Math.round(value) + '%'
+              : String(Math.round(value))
+            ));
+        });
+
+        return parts.length ? [Number(key), 'slept: ' + parts.join(', ')] : null;
+    }).filter(function(row) { return row !== null; });
+}
+
+//No position came with the totals, so unlike an event row this one does not move the map -
+//there is nowhere to move it to, and a row that looks clickable and does nothing is worse
+//than one that plainly is not.
+function computeSleepRow(when, text) {
+    return "<tr class='sleepRow'><td>" + escapeHtml(readableDate(new Date(when))) +
+           "</td><td></td><td>" + escapeHtml(text) + "</td></tr>";
+}
+
+//Events and sleep summaries share the one table, newest first, which is the order the event
+//list was already rendered in.
+function renderEventRows(events, beginDate, endDate) {
+    var rows = events.map(function(rv) {
+        return [rv[0].getTime(), computeEventRow(rv)];
+    });
+
+    sleepSummaryRows(statsList).forEach(function(row) {
+        if (beginDate !== undefined && (row[0] < beginDate || row[0] > endDate)) {
+            return;
+        }
+
+        rows.push([row[0], computeSleepRow(row[0], row[1])]);
+    });
+
+    rows.sort(function(a, b) { return b[0] - a[0]; });
+
+    return rows.map(function(row) { return row[1]; }).join('');
+}
+
+function refreshEventTable(events, beginDate, endDate) {
+    var body = document.getElementById("alarmBody");
+
+    if (body) {
+        body.innerHTML = renderEventRows(events || eventList, beginDate, endDate);
+    }
+}
+
 function computeHistoryRow(cols) {
     //escaped like every other row builder here. This one was missed: the two coordinates went
     //straight into an onclick attribute and into the cells, while computeEventRow directly
@@ -386,8 +483,7 @@ function fetchEvents() {
                 eventNotification(lastCaption);
             }
 
-            const tableBody = document.getElementById("alarmBody");
-            tableBody.innerHTML = eventList.slice().reverse().map(rv => computeEventRow(rv)).join('');
+            refreshEventTable(eventList);
         }
     });
 }
@@ -396,8 +492,7 @@ function fetchEvents() {
 function filterEvents(beginDate, endDate) {
     var filtered = eventList.filter(cols => cols[0] >= beginDate && cols[0] <= endDate);
 
-    const tableBody = document.getElementById("alarmBody");
-    tableBody.innerHTML = filtered.reverse().map(rv => computeEventRow(rv)).join('');
+    refreshEventTable(filtered, Number(beginDate), Number(endDate));
 }
 
 
@@ -808,16 +903,18 @@ var STAT_SERIES = {
     temperature:   { group: 'vitals',   axis: 'y',  colour: '#f78fb3', label: 'temperature',   unit: '\u00b0C' },
     speed:         { group: 'activity', axis: 'y2', colour: '#06d6a0', label: 'speed',         unit: 'km/h' },
     steps_k:       { group: 'activity', axis: 'y2', colour: '#a7e34d', label: 'steps',         unit: 'thousand' },
-    sleep_deep:    { group: 'sleep',    axis: 'y',  colour: '#7c5cff', label: 'sleep',         unit: 'min' },
-    sleep_light:   { group: 'sleep',    axis: 'y',  colour: '#b3a0ff', label: 'light sleep',   unit: 'min' },
-    sleep_score:   { group: 'sleep',    axis: 'y2', colour: '#5f7cff', label: 'sleep recorded', unit: '' },
-    sleep_tst:     { group: 'sleep',    axis: 'y',  colour: '#8f7bff', label: 'total sleep',   unit: 'min' },
-    sleep_spt:     { group: 'sleep',    axis: 'y',  colour: '#6f5ce0', label: 'sleep period',  unit: 'min' },
-    sleep_waso:    { group: 'sleep',    axis: 'y',  colour: '#ff8fb0', label: 'awake in bed',  unit: 'min' },
-    sleep_efficiency: { group: 'sleep', axis: 'y2', colour: '#4de3c1', label: 'efficiency',    unit: '%' },
-    sleep_wakeups: { group: 'sleep',    axis: 'y2', colour: '#ffc75f', label: 'awakenings',    unit: '' },
-    sleeping:      { group: 'sleep',    axis: 'y2', colour: '#a06bff', label: 'asleep',        unit: '' },
-    sleep_day:     { group: 'sleep',    axis: 'y',  colour: '#c0a0ff', label: 'slept today',   unit: 'min' },
+    sleep_deep:    { summary: true, group: 'sleep',    axis: 'y',  colour: '#7c5cff', label: 'sleep',         unit: 'min' },
+    sleep_light:   { summary: true, group: 'sleep',    axis: 'y',  colour: '#b3a0ff', label: 'light sleep',   unit: 'min' },
+    sleep_score:   { summary: true, group: 'sleep',    axis: 'y2', colour: '#5f7cff', label: 'sleep recorded', unit: '' },
+    sleep_tst:     { summary: true, group: 'sleep',    axis: 'y',  colour: '#8f7bff', label: 'total sleep',   unit: 'min' },
+    sleep_spt:     { summary: true, group: 'sleep',    axis: 'y',  colour: '#6f5ce0', label: 'sleep period',  unit: 'min' },
+    sleep_waso:    { summary: true, group: 'sleep',    axis: 'y',  colour: '#ff8fb0', label: 'awake in bed',  unit: 'min' },
+    sleep_efficiency: { summary: true, group: 'sleep', axis: 'y2', colour: '#4de3c1', label: 'efficiency',    unit: '%' },
+    sleep_wakeups: { summary: true, group: 'sleep',    axis: 'y2', colour: '#ffc75f', label: 'awakenings',    unit: '' },
+    //a flag, not a measurement - see the ySleep scale and the band styling below
+    sleeping:      { group: 'sleep',    axis: 'ySleep', band: true, colour: '#a06bff',
+                     fillColour: 'rgba(160, 107, 255, 0.28)', label: 'asleep',        unit: '' },
+    sleep_day:     { summary: true, group: 'sleep',    axis: 'y',  colour: '#c0a0ff', label: 'slept today',   unit: 'min' },
     battery_level: { group: 'device',   axis: 'y',  colour: '#9d8df1', label: 'battery',       unit: '%' },
     signal:        { group: 'device',   axis: 'y',  colour: '#6c8cff', label: 'gsm signal',    unit: '' },
     gps_sats:      { group: 'device',   axis: 'y2', colour: '#c8b6ff', label: 'gps satellites', unit: '' },
@@ -1057,6 +1154,17 @@ function makeDataset(itemList) {
             return;
         }
 
+        //A night's sleep arrives as one bundle of totals, in minutes: a sleep period can run
+        //past 1200 while body temperature sits around 36. Sharing the left axis with the
+        //vitals meant the axis had to span both, and the vitals collapsed into a few percent
+        //of the plot height - correctly fitted, and unreadable. They are a summary rather
+        //than a trace, so they are listed in the events pane instead. "sleeping" stays: it
+        //is the one sleep series that really is a time series, it is a plain 0 or 1, and it
+        //is what shows at a glance when the wearer was asleep.
+        if (meta.summary) {
+            return;
+        }
+
         var points = byType[name].sort(function(a, b) { return a.x - b.x; });
 
         datasets.push({
@@ -1065,14 +1173,17 @@ function makeDataset(itemList) {
             label: meta.unit ? meta.label + ' (' + meta.unit + ')' : meta.label,
             unit: meta.unit,
             yAxisID: meta.axis,
-            backgroundColor: meta.colour,
+            backgroundColor: meta.fillColour || meta.colour,
             borderColor: meta.colour,
-            borderWidth: 2,
+            //a flag is a square wave, not a curve: sloping between 0 and 1 would draw the
+            //wearer gradually falling asleep over the gap between two readings
+            stepped: meta.band ? 'before' : false,
+            borderWidth: meta.band ? 1 : 2,
             pointRadius: 0,
             pointHoverRadius: 4,
             pointHitRadius: 14,
             tension: 0,
-            fill: false,
+            fill: meta.band ? 'origin' : false,
             spanGaps: false,
             data: seriesData(points, budget)
         });
@@ -1313,6 +1424,18 @@ function makeChart(datasets) {
                         color: CHART_INK
                     }
                 },
+                //"asleep or not" is a flag rather than a measurement. On a shared axis it
+                //is a flat line pinned to the bottom - invisible - and it drags that axis
+                //around for no reason. Its own scale, not drawn, keeps it out of everyone
+                //else's range. The top is 6 rather than 1 so the band fills the bottom sixth
+                //of the plot: enough to read at a glance, not so much that it sits over the
+                //vitals it is meant to give context to.
+                ySleep: {
+                    display: false,
+                    position: 'right',
+                    min: 0,
+                    max: 6
+                },
                 y2: {
                     //the small ranged series, so they are not flattened against the bottom
                     //of a scale whose top blood pressure sets
@@ -1391,6 +1514,9 @@ function fetchStats() {
             if (parsed.length) {
 
                 makeChart(makeDataset(statsList));
+                //the sleep summaries are built from these stats, and the events they sit
+                //beside may already have been drawn without them
+                refreshEventTable(eventList);
             }
         }
     });
@@ -1718,6 +1844,10 @@ window.addEventListener('hashchange', syncStatsMode);
  * Moving from one open panel to another replaces the entry instead. location.replace is what
  * does that rather than history.replaceState: :target is only re-evaluated by an actual
  * navigation, and replaceState is not one - the URL would change and the panel would not.
+ *
+ * The destination must still carry a fragment, even an empty one. A same-document move is
+ * only same-document when the new URL has a fragment; navigating to the bare path reloads,
+ * which is how closing a panel used to throw away the whole page state.
  */
 /*
  * Escape closes whichever right hand panel is open, the same as pressing back does. A panel is
@@ -1761,7 +1891,8 @@ document.addEventListener('keydown', function(e) {
 
         setTimeout(function() {
             if (window.location.hash.replace('#', '') === hash) {
-                window.location.replace(window.location.pathname + window.location.search);
+                //an empty fragment, not no fragment - see the click handler below
+                window.location.replace('#');
             }
         }, 120);
     }
@@ -1788,7 +1919,16 @@ document.addEventListener('click', function(e) {
 
     var href = link.getAttribute('href');
     e.preventDefault();
-    window.location.replace(href === '#' ? window.location.pathname + window.location.search : href);
+
+    //Replace with the href as written, including the bare "#" the close link carries.
+    //Rebuilding a URL without any fragment at all is what this used to do, and that is a
+    //different navigation: the browser only treats a move as same-document when the
+    //destination HAS a fragment, so dropping it reloaded the page. Closing a panel then
+    //cost the whole in-memory state - the date pickers went back to the values PHP had
+    //rendered, and the fresh page centred the map on the live position, throwing away
+    //whatever moment had been picked on the chart. Switching between two panels never
+    //reloaded, because that href keeps its fragment; only closing did.
+    window.location.replace(href);
 });
 
 setTimeout(updateCurrentPosition, 500);
