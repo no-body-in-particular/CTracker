@@ -331,7 +331,19 @@ function folderDisabled(name) {
 //and drift apart
 var FENCE_DAYS = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', '', 'Every'];
 var FENCE_TYPES = ['In', 'Out', 'In+Out', 'Stay in', 'Exclusion zone'];
-var FENCE_ALARM = ['Off', 'On'];
+
+/*
+ * The fence exactly as it is written on disk, which is what the server matches on to delete
+ * it. The folder is only appended when there is one: a row parsed out of a nine field line
+ * has an undefined tenth column, and join() renders that as a trailing comma - a line the
+ * prefix match in geofence.php then never finds, so deleting any fence written before
+ * folders existed silently did nothing.
+ */
+function fenceLine(cols) {
+    var line = cols.slice(0, 9).join(',');
+
+    return (cols[9] && cols[9].length) ? line + ',' + cols[9] : line;
+}
 
 //the stored day is in UTC, so a fence that starts late in the evening local time belongs to
 //the following day on the wire. localTime() hands back that correction as its first element.
@@ -348,12 +360,6 @@ function fenceDayLabel(cols) {
 
     return FENCE_DAYS[displayDate];
 }
-
-function computeFenceRow(cols) {
-
-    return "<tr onclick='animateTo(" + escapeNumber(cols[5]) + "," + escapeNumber(cols[4]) + ")'><td>" + escapeHtml(localTime(cols[0])[1]) + "</td><td>" + escapeHtml(localTime(cols[1])[1]) + "</td><td>" + escapeHtml(fenceDayLabel(cols)) + "</td><td>" + escapeHtml(FENCE_TYPES[cols[3]]) + "</td><td>" + escapeNumber(cols[6]) + "m</td><td>" + escapeHtml(FENCE_ALARM[cols[7]]) + "</td><td>" + escapeHtml(cols[8]) + "</td><td>" + escapeHtml(folderOf(cols)) + "</td><td><button class='button' onClick='deleteFence(\"" + escapeHtml(cols.join(',')) + "\")' >delete</button></td></tr>";
-}
-
 
 function tableHeader(cols) {
     const tableHead = document.getElementById("dataHead");
@@ -656,6 +662,18 @@ function addFence() {
     });
 }
 
+//by position in fenceRows rather than by the line itself, so nothing user-named is
+//interpolated into an onclick
+function deleteFenceAt(index) {
+    var row = fenceRows[index];
+
+    if (row === undefined) {
+        return;
+    }
+
+    deleteFence(fenceLine(row));
+}
+
 function deleteFence(cols) {
     $.ajax({
         url: "geofence.php?imei=" + imei + "&action=remove&fence=" + encodeURIComponent(cols),
@@ -766,10 +784,6 @@ function renderFences() {
     //picked while they were still setting the radius. Put it back and redraw it from
     //whatever the panel currently says.
     moveDemoFeature();
-
-    const tableBody = document.getElementById("fenceBody");
-    tableBody.innerHTML = '';
-    tableBody.innerHTML = shown.map(rv => computeFenceRow(rv)).join('');
 }
 
 //which folders are expanded in the tree. kept by name rather than index so that adding or
@@ -808,7 +822,9 @@ function selectFolder(index) {
 }
 
 //a fence belonging to a folder, as one line: when it applies, what it does, what it is called
-function fenceLeaf(cols) {
+//One fence, as a line in its folder: when it applies, what it does, and the delete button -
+//which was the only thing the table underneath still offered that this does not.
+function fenceLeaf(cols, index) {
     var where = escapeNumber(cols[5]) + "," + escapeNumber(cols[4]);
 
     return '<div class="fenceLeaf" onclick="animateTo(' + where + ')" title="show on the map">' +
@@ -818,6 +834,11 @@ function fenceLeaf(cols) {
         escapeHtml(localTime(cols[0])[1]) + '\u2013' + escapeHtml(localTime(cols[1])[1]) + '</span>' +
         '<span class="leafType">' + escapeHtml(FENCE_TYPES[cols[3]]) + '</span>' +
         '<span class="leafRadius">' + escapeNumber(cols[6]) + 'm</span>' +
+        //only worth saying when it is off. on is the default and the common case, and printing
+        //it on every row was most of what made the table below noise.
+        (cols[7] == 0 ? '<span class="leafSilent">silent</span>' : '') +
+        '<button type="button" class="leafDelete" title="delete this fence"' +
+        ' onclick="event.stopPropagation(); deleteFenceAt(' + index + ')">delete</button>' +
         '</div>';
 }
 
@@ -851,7 +872,9 @@ function renderFolderTree() {
     }
 
     tree.innerHTML = names.map((name, index) => {
-        var inside = fenceRows.filter(rv => foldFolder(folderOf(rv)) === foldFolder(name));
+        //carry each fence's index in fenceRows so its delete button can name it
+        var inside = fenceRows.map((rv, at) => ({ rv: rv, at: at }))
+            .filter(e => foldFolder(folderOf(e.rv)) === foldFolder(name));
         var open = folderIsOpen(name);
         var selected = foldFolder(name) === foldFolder(fenceSelectedFolder);
         var off = folderDisabled(name);
@@ -876,7 +899,7 @@ function renderFolderTree() {
         }
 
         var children = inside.length
-            ? inside.map(rv => fenceLeaf(rv)).join('')
+            ? inside.map(e => fenceLeaf(e.rv, e.at)).join('')
             : '<div class="fenceLeaf fenceLeafEmpty">no fences in this folder</div>';
 
         return row + '<div class="folderChildren">' + children + '</div>';

@@ -174,8 +174,11 @@ validateSession();
                            <th><button onClick=addFence() class="button">add</button></th>
                         </tr>
                      </thead>
-                     <tbody id="fenceBody">
-                     </tbody>
+                     <!--
+                        No tbody: the fences are listed in the folder tree above, where each
+                        one carries its own delete button. What is left of this table is the
+                        row that adds one, with the header labelling its inputs.
+                     -->
                   </table>
                </div>
             </section>

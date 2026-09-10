@@ -1534,6 +1534,39 @@ nav {
     font-size: 9pt;
 }
 
+/* the delete button on a fence row. quiet until hovered - it sits next to a row whose whole
+   purpose is being clicked, so it should not compete with it, but it must not be hidden
+   either: a control that appears only on hover cannot be found on a touchscreen. */
+.leafDelete {
+    margin-left: auto;
+    flex: 0 0 auto;
+    padding: 1pt 7pt;
+    border: 1px solid var(--line);
+    border-radius: 6pt;
+    background: transparent;
+    color: var(--ink-dim);
+    font-family: Montserrat, sans-serif;
+    font-size: 8pt;
+    cursor: pointer;
+}
+
+.leafDelete:hover,
+.leafDelete:focus {
+    border-color: #e0796b;
+    color: #e0796b;
+    outline: 0;
+}
+
+/* a fence that raises no audible alarm. only shown when it is off, since on is the default */
+.leafSilent {
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 5pt;
+    padding: 0 4pt;
+    font-size: 8pt;
+    white-space: nowrap;
+}
+
 .fenceLeafEmpty {
     cursor: default;
     font-style: italic;
