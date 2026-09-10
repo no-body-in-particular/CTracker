@@ -41,7 +41,7 @@ validateSession();
                <a href="#stats" class="tooltip" aria-label="Statistics" ><span class="tooltiptext">Statistics</span><i class="icon chart-line"></i></a>
                <a href="#alarms" class="tooltip" aria-label="Alarms"><span class="tooltiptext">Alarms</span><i class="icon exclamation-triangle"></i></a>
                <a href="#geofence" class="tooltip" aria-label="Geofence"><span class="tooltiptext">Geofence</span><i class="icon map-marked-alt"></i></a>
-               <a href="#commands" onClick="refreshCommandResults()" class="tooltip" aria-label="Commands"><span class="tooltiptext">Commands</span><i class="icon terminal"></i></a>
+               <a href="#commands" onClick="fetchCommandResults()" class="tooltip" aria-label="Commands"><span class="tooltiptext">Commands</span><i class="icon terminal"></i></a>
                <a href="#serverLogging" class="tooltip" aria-label="Server logging" ><span class="tooltiptext">Server logging</span><i class="icon file"></i></a>
                <a href="#trips" class="tooltip" aria-label="Trips"><span class="tooltiptext">Trips</span><i class="icon address-card"></i></a>
                <a href="#settings" class="tooltip" aria-label="Settings" ><span class="tooltiptext">Settings</span><i class="icon cog"></i></a>

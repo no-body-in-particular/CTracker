@@ -744,6 +744,34 @@ function folderNames() {
     return seen;
 }
 
+/*
+ * The fences of the selected folder, drawn on the map and listed in the table. The others
+ * stay on file and stay enforced unless their folder is switched off - this is the view, not
+ * the switch.
+ */
+function renderFences() {
+    var shown = fenceRows.filter(rv => foldFolder(folderOf(rv)) === foldFolder(fenceSelectedFolder));
+
+    var coords = shown.map(rv => {
+        var f = new ol.Feature(fenceCircle(rv[4], rv[5], rv[6]));
+        f.TYPE = rv[3];
+        return f;
+    });
+
+    geofenceLayer.getSource().clear();
+    geofenceLayer.getSource().addFeatures(coords);
+
+    //The preview lives on this layer, so clearing it takes the preview with it - and
+    //this runs on the refresh timer, which used to wipe a point the user had just
+    //picked while they were still setting the radius. Put it back and redraw it from
+    //whatever the panel currently says.
+    moveDemoFeature();
+
+    const tableBody = document.getElementById("fenceBody");
+    tableBody.innerHTML = '';
+    tableBody.innerHTML = shown.map(rv => computeFenceRow(rv)).join('');
+}
+
 //which folders are expanded in the tree. kept by name rather than index so that adding or
 //removing a fence, which can change the ordering, does not collapse a different folder than
 //the one the user opened.
@@ -815,7 +843,11 @@ function renderFolderTree() {
     //under the user by removing the last fence in it. fall back to the first one rather than
     //showing an empty table for a folder that is no longer there.
     if (fenceSelectedFolder === null || !names.some(n => foldFolder(n) === foldFolder(fenceSelectedFolder))) {
-        fenceSelectedFolder = names[0];
+        //prefer a folder that actually holds fences. "default" is always offered so there is
+        //somewhere to put the first one, but it is empty on a device whose fences are all in
+        //named folders, and selecting it would open the panel on a blank map.
+        var populated = names.filter(n => fenceRows.some(rv => foldFolder(folderOf(rv)) === foldFolder(n)));
+        fenceSelectedFolder = populated.length ? populated[0] : names[0];
     }
 
     tree.innerHTML = names.map((name, index) => {
@@ -904,8 +936,12 @@ function fetchFence() {
             enableDownload(result, false);
             fenceRows = forEachRow(result, 8, cols => [cols[0], cols[1], cols[2], cols[3], parseFloat(cols[4]), parseFloat(cols[5]), parseFloat(cols[6]), cols[7], cols[8], cols[9]]);
 
-            //which folders are off decides how the selector reads, so the two are fetched
-            //together and drawn once, from fetchFolders()
+            //draw straight away: the circles depend only on the fence file, and making them
+            //wait on the folders request meant that if that request failed the map stayed
+            //empty. the folder list only decides how the tree reads, so it redraws when it
+            //arrives.
+            renderFolderTree();
+            renderFences();
             fetchFolders();
         }
     });
