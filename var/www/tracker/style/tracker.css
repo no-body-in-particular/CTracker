@@ -789,6 +789,20 @@ section:target h1 {
     --accent: #06d6a0;
 }
 
+/*
+ * Every panel is a dark surface, but neither body nor section ever set a text colour, so
+ * anything inside one that did not set its own inherited the original stylesheet's default
+ * black onto #22252E - black on near black. The tables set var(--ink) themselves, which is
+ * why this stayed hidden: it only showed on text that was not in a table.
+ *
+ * Safe as a blanket rule here because nothing inside a panel wants dark text: .select and
+ * .form, the two light-background classes left from the original stylesheet, are not used on
+ * this page, and .ol-popup lives outside every section.
+ */
+section {
+    color: var(--ink);
+}
+
 section:target {
     opacity: 1;
 }
@@ -1373,21 +1387,161 @@ nav {
     vertical-align: middle;
 }
 
-/* The folder selector above the geofence table. Sits on its own line so the table below
-   keeps its full width on a phone. */
+/*
+ * The geofence folders, as an expandable directory list: a row per folder carrying its
+ * fence count and its enforced switch, expanding to show the fences inside.
+ *
+ * Every colour here comes from the palette defined above. The first version of this block
+ * set no colour at all, so its labels inherited the original stylesheet's default black onto
+ * the near black panel and were effectively invisible.
+ */
 .fenceFolders {
-    display: flex;
-    align-items: center;
-    gap: .6em;
-    flex-wrap: wrap;
-    padding: .4em .2em;
+    padding: .3em .2em .6em;
+    color: var(--ink);
+    font-family: Montserrat, sans-serif;
+    font-size: 10pt;
 }
 
-.fenceFolders label {
+.folderTree {
+    display: flex;
+    flex-direction: column;
+    gap: 1pt;
+}
+
+.folderRow {
+    display: flex;
+    align-items: center;
+    gap: .45em;
+    padding: 3pt 5pt;
+    border-radius: 7pt;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.folderRow:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.folderSelected {
+    background: var(--surface-hi);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.folderTwisty {
+    flex: 0 0 auto;
+    width: 1.5em;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--ink-dim);
+    font-size: 11pt;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.folderTwisty:hover {
+    color: var(--ink);
+}
+
+.folderLabel {
+    display: flex;
+    align-items: center;
+    gap: .45em;
+    flex: 1 1 auto;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.folderName {
+    color: var(--ink);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folderCount {
+    color: var(--ink-dim);
+    font-size: 9pt;
+    white-space: nowrap;
+}
+
+/* a folder that is not being enforced. amber rather than the accent green, which on this
+   palette means "on", and stated in words as well as colour. */
+.folderBadge {
+    color: #f0b429;
+    border: 1px solid #f0b429;
+    border-radius: 5pt;
+    padding: 0 4pt;
+    font-size: 8pt;
+    white-space: nowrap;
+}
+
+.folderOff .folderName {
+    color: var(--ink-dim);
+}
+
+.folderSwitch {
     display: flex;
     align-items: center;
     gap: .3em;
+    flex: 0 0 auto;
+    color: var(--ink-dim);
+    font-size: 9pt;
     white-space: nowrap;
+    cursor: pointer;
+}
+
+.folderSwitch input {
+    accent-color: var(--accent);
+}
+
+.folderChildren {
+    display: flex;
+    flex-direction: column;
+    gap: 1pt;
+    margin: 1pt 0 3pt 1.9em;
+    padding-left: .6em;
+    border-left: 1px solid var(--line);
+}
+
+.fenceLeaf {
+    display: flex;
+    align-items: baseline;
+    gap: .5em;
+    padding: 2pt 5pt;
+    border-radius: 6pt;
+    color: var(--ink-dim);
+    cursor: pointer;
+}
+
+.fenceLeaf:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ink);
+}
+
+.leafGlyph {
+    color: var(--line);
+}
+
+.leafName {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.leafWhen,
+.leafType,
+.leafRadius {
+    font-size: 9pt;
+}
+
+.fenceLeafEmpty {
+    cursor: default;
+    font-style: italic;
+}
+
+.fenceLeafEmpty:hover {
+    background: none;
+    color: var(--ink-dim);
 }
 
 /* A night's sleep totals, listed among the events. Unlike every other row in that table

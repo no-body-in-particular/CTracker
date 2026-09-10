@@ -327,23 +327,31 @@ function folderDisabled(name) {
     return fenceDisabledFolders.split(',').some(entry => foldFolder(entry) === wanted);
 }
 
+//shared by the table and the folder tree, which would otherwise each carry their own copy
+//and drift apart
+var FENCE_DAYS = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', '', 'Every'];
+var FENCE_TYPES = ['In', 'Out', 'In+Out', 'Stay in', 'Exclusion zone'];
+var FENCE_ALARM = ['Off', 'On'];
+
+//the stored day is in UTC, so a fence that starts late in the evening local time belongs to
+//the following day on the wire. localTime() hands back that correction as its first element.
+function fenceDayLabel(cols) {
+    var displayDate = parseInt(cols[2]) + localTime(cols[0])[0];
+
+    if (displayDate == 0) {
+        displayDate = 7;
+    }
+
+    if (displayDate == 8) {
+        displayDate = 0;
+    }
+
+    return FENCE_DAYS[displayDate];
+}
+
 function computeFenceRow(cols) {
-    var dayOfWeek = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', '', 'Every'];
-    var fenceType = ['In', 'Out', 'In+Out', 'Stay in', 'Exclusion zone'];
-    var alarmEnabled = ['Off', 'On'];
-    var dateMod=localTime(cols[0])[0] ;
-    var displayDate=parseInt(cols[2]) + dateMod;
 
-    if(displayDate==0 ){
-          displayDate=7;   
-    }
-
-    if(displayDate==8){
-        displayDate=0;
-    }
-
-
-    return "<tr onclick='animateTo(" + escapeNumber(cols[5]) + "," + escapeNumber(cols[4]) + ")'><td>" + escapeHtml(localTime(cols[0])[1]) + "</td><td>" + escapeHtml(localTime(cols[1])[1]) + "</td><td>" + escapeHtml(dayOfWeek[displayDate]) + "</td><td>" + escapeHtml(fenceType[cols[3]]) + "</td><td>" + escapeNumber(cols[6]) + "m</td><td>" + escapeHtml(alarmEnabled[cols[7]]) + "</td><td>" + escapeHtml(cols[8]) + "</td><td>" + escapeHtml(folderOf(cols)) + "</td><td><button class='button' onClick='deleteFence(\"" + escapeHtml(cols.join(',')) + "\")' >delete</button></td></tr>";
+    return "<tr onclick='animateTo(" + escapeNumber(cols[5]) + "," + escapeNumber(cols[4]) + ")'><td>" + escapeHtml(localTime(cols[0])[1]) + "</td><td>" + escapeHtml(localTime(cols[1])[1]) + "</td><td>" + escapeHtml(fenceDayLabel(cols)) + "</td><td>" + escapeHtml(FENCE_TYPES[cols[3]]) + "</td><td>" + escapeNumber(cols[6]) + "m</td><td>" + escapeHtml(FENCE_ALARM[cols[7]]) + "</td><td>" + escapeHtml(cols[8]) + "</td><td>" + escapeHtml(folderOf(cols)) + "</td><td><button class='button' onClick='deleteFence(\"" + escapeHtml(cols.join(',')) + "\")' >delete</button></td></tr>";
 }
 
 
@@ -736,10 +744,68 @@ function folderNames() {
     return seen;
 }
 
-function populateFolderSelect() {
-    var select = document.getElementById("folderSelect");
+//which folders are expanded in the tree. kept by name rather than index so that adding or
+//removing a fence, which can change the ordering, does not collapse a different folder than
+//the one the user opened.
+var fenceOpenFolders = {};
 
-    if (!select) {
+function folderIsOpen(name) {
+    return fenceOpenFolders[foldFolder(name)] === true;
+}
+
+function toggleFolderOpen(index) {
+    var name = folderNames()[index];
+
+    if (name === undefined) {
+        return;
+    }
+
+    fenceOpenFolders[foldFolder(name)] = !folderIsOpen(name);
+    renderFolderTree();
+}
+
+//the folder being looked at. only this one is drawn on the map and listed in the table
+//below - the others are still on file and still enforced unless switched off.
+function selectFolder(index) {
+    var name = folderNames()[index];
+
+    if (name === undefined) {
+        return;
+    }
+
+    fenceSelectedFolder = name;
+    fenceOpenFolders[foldFolder(name)] = true;
+    renderFolderTree();
+    renderFences();
+}
+
+//a fence belonging to a folder, as one line: when it applies, what it does, what it is called
+function fenceLeaf(cols) {
+    var where = escapeNumber(cols[5]) + "," + escapeNumber(cols[4]);
+
+    return '<div class="fenceLeaf" onclick="animateTo(' + where + ')" title="show on the map">' +
+        '<span class="leafGlyph">\u2022</span>' +
+        '<span class="leafName">' + escapeHtml(cols[8]) + '</span>' +
+        '<span class="leafWhen">' + escapeHtml(fenceDayLabel(cols)) + ' ' +
+        escapeHtml(localTime(cols[0])[1]) + '\u2013' + escapeHtml(localTime(cols[1])[1]) + '</span>' +
+        '<span class="leafType">' + escapeHtml(FENCE_TYPES[cols[3]]) + '</span>' +
+        '<span class="leafRadius">' + escapeNumber(cols[6]) + 'm</span>' +
+        '</div>';
+}
+
+/*
+ * The folders as a directory list: one row each, expandable to show the fences inside, with
+ * the enforced switch on the row itself. Replaces the dropdown this started as - a dropdown
+ * hides how many fences are in a folder and whether the others are switched on, which is
+ * exactly what you need to see before changing a curfew.
+ *
+ * Handlers take an index into folderNames() rather than the folder name, so no user-chosen
+ * text is ever interpolated into a javascript attribute.
+ */
+function renderFolderTree() {
+    var tree = document.getElementById("folderTree");
+
+    if (!tree) {
         return;
     }
 
@@ -752,16 +818,37 @@ function populateFolderSelect() {
         fenceSelectedFolder = names[0];
     }
 
-    select.innerHTML = names.map(n =>
-        '<option value="' + escapeHtml(n) + '"' +
-        (foldFolder(n) === foldFolder(fenceSelectedFolder) ? ' selected' : '') + '>' +
-        escapeHtml(n) + (folderDisabled(n) ? ' (off)' : '') + '</option>').join('');
+    tree.innerHTML = names.map((name, index) => {
+        var inside = fenceRows.filter(rv => foldFolder(folderOf(rv)) === foldFolder(name));
+        var open = folderIsOpen(name);
+        var selected = foldFolder(name) === foldFolder(fenceSelectedFolder);
+        var off = folderDisabled(name);
 
-    var toggle = document.getElementById("folderEnabled");
+        var row = '<div class="folderRow' + (selected ? ' folderSelected' : '') + (off ? ' folderOff' : '') + '">' +
+            '<button type="button" class="folderTwisty" aria-expanded="' + (open ? 'true' : 'false') +
+            '" title="' + (open ? 'collapse' : 'expand') + '" onclick="toggleFolderOpen(' + index + ')">' +
+            (open ? '\u25be' : '\u25b8') + '</button>' +
+            '<span class="folderLabel" onclick="selectFolder(' + index + ')" title="show this folder on the map">' +
+            '<span class="folderGlyph">' + (open ? '\u{1F4C2}' : '\u{1F4C1}') + '</span>' +
+            '<span class="folderName">' + escapeHtml(name) + '</span>' +
+            '<span class="folderCount">' + inside.length + (inside.length == 1 ? ' fence' : ' fences') + '</span>' +
+            (off ? '<span class="folderBadge">not enforced</span>' : '') +
+            '</span>' +
+            '<label class="folderSwitch" title="whether the daemon enforces the fences in this folder">' +
+            '<input type="checkbox"' + (off ? '' : ' checked') +
+            ' onchange="setFolderEnforced(' + index + ', this.checked)"/> enforced</label>' +
+            '</div>';
 
-    if (toggle) {
-        toggle.checked = !folderDisabled(fenceSelectedFolder);
-    }
+        if (!open) {
+            return row;
+        }
+
+        var children = inside.length
+            ? inside.map(rv => fenceLeaf(rv)).join('')
+            : '<div class="fenceLeaf fenceLeafEmpty">no fences in this folder</div>';
+
+        return row + '<div class="folderChildren">' + children + '</div>';
+    }).join('');
 
     //a fence is added to the folder being looked at, which is almost always the intent
     var folderInput = document.getElementById("fenceFolder");
@@ -771,52 +858,23 @@ function populateFolderSelect() {
     }
 }
 
-//only the selected folder is drawn and listed. the others are still in the file, and still
-//enforced unless their folder is switched off - this is the view, not the switch.
-function renderFences() {
-    var shown = fenceRows.filter(rv => foldFolder(folderOf(rv)) === foldFolder(fenceSelectedFolder));
-
-    var coords = shown.map(rv => {
-        var f = new ol.Feature(fenceCircle(rv[4], rv[5], rv[6]));
-        f.TYPE = rv[3];
-        return f;
-    });
-
-    geofenceLayer.getSource().clear();
-    geofenceLayer.getSource().addFeatures(coords);
-
-    //The preview lives on this layer, so clearing it takes the preview with it - and
-    //this runs on the refresh timer, which used to wipe a point the user had just
-    //picked while they were still setting the radius. Put it back and redraw it from
-    //whatever the panel currently says.
-    moveDemoFeature();
-
-    const tableBody = document.getElementById("fenceBody");
-    tableBody.innerHTML = '';
-    tableBody.innerHTML = shown.map(rv => computeFenceRow(rv)).join('');
-}
-
-function onFolderChange() {
-    fenceSelectedFolder = document.getElementById("folderSelect").value;
-    populateFolderSelect();
-    renderFences();
-}
-
 //switching a folder off stops the daemon enforcing every fence in it, so say so plainly
 //rather than letting a stray click lift a curfew silently
-function onFolderEnabledChange() {
-    var toggle = document.getElementById("folderEnabled");
-    var name = fenceSelectedFolder;
-    var enable = toggle.checked;
+function setFolderEnforced(index, enforced) {
+    var name = folderNames()[index];
 
-    if (!enable && !confirm('Stop enforcing every fence in "' + name + '"?')) {
-        toggle.checked = true;
+    if (name === undefined) {
+        return;
+    }
+
+    if (!enforced && !confirm('Stop enforcing every fence in "' + name + '"?')) {
+        renderFolderTree();
         return;
     }
 
     var kept = fenceDisabledFolders.split(',').filter(e => e.length && foldFolder(e) !== foldFolder(name));
 
-    if (!enable) {
+    if (!enforced) {
         kept.push(foldFolder(name) === foldFolder('default') ? 'default' : name);
     }
 
@@ -833,7 +891,7 @@ function fetchFolders() {
         url: "geofence.php?imei=" + imei + "&action=folders" + viewOnlyParameter(),
         success: function(result) {
             fenceDisabledFolders = String(result || '').replace(/[\r\n]/g, '');
-            populateFolderSelect();
+            renderFolderTree();
             renderFences();
         }
     });

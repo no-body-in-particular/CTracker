@@ -119,9 +119,7 @@ validateSession();
                   fences on file and simply stops them being enforced.
                -->
                <div class="fenceFolders">
-                  <label for="folderSelect">folder</label>
-                  <select id="folderSelect" class="input" onchange="onFolderChange()"></select>
-                  <label for="folderEnabled"><input type="checkbox" id="folderEnabled" onchange="onFolderEnabledChange()"/> enforced</label>
+                  <div id="folderTree" class="folderTree" role="tree" aria-label="Geofence folders"></div>
                </div>
                <div class="table-scroll">
                   <table id="fenceTable"  class="table">
