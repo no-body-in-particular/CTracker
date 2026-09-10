@@ -1372,3 +1372,20 @@ nav {
     max-width: 220px;
     vertical-align: middle;
 }
+
+/* The folder selector above the geofence table. Sits on its own line so the table below
+   keeps its full width on a phone. */
+.fenceFolders {
+    display: flex;
+    align-items: center;
+    gap: .6em;
+    flex-wrap: wrap;
+    padding: .4em .2em;
+}
+
+.fenceFolders label {
+    display: flex;
+    align-items: center;
+    gap: .3em;
+    white-space: nowrap;
+}

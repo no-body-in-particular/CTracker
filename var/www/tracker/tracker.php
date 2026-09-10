@@ -112,6 +112,17 @@ validateSession();
                </div>
             </section>
             <section id='geofence' align="left">
+               <!--
+                  Which folder is on screen, and whether it is enforced. These are two
+                  separate things: the selection only decides what is drawn and listed, while
+                  the checkbox is what the daemon reads. A folder left unchecked keeps its
+                  fences on file and simply stops them being enforced.
+               -->
+               <div class="fenceFolders">
+                  <label for="folderSelect">folder</label>
+                  <select id="folderSelect" class="input" onchange="onFolderChange()"></select>
+                  <label for="folderEnabled"><input type="checkbox" id="folderEnabled" onchange="onFolderEnabledChange()"/> enforced</label>
+               </div>
                <div class="table-scroll">
                   <table id="fenceTable"  class="table">
                      <thead >
@@ -123,6 +134,7 @@ validateSession();
                            <th scope="col">radius</th>
                            <th scope="col">audible alarm</th>
                            <th scope="col">name</th>
+                           <th scope="col">folder</th>
                            <th scope="col">action</th>
                         </tr>
                         <tr>
@@ -158,6 +170,9 @@ validateSession();
                               </select>
                            </th>
                            <th><input id="fenceName" aria-label="Fence name" style="width:5em" value=default maxlength=31 onkeydown="alphanum(this)" onkeyup="alphanum(this)" onblur="alphanum(this)" onclick="alphanum(this)"></input></th>
+                           <!-- empty means the default folder, so a fence added without
+                                touching this reads exactly like one written before folders -->
+                           <th><input id="fenceFolder" aria-label="Fence folder" style="width:5em" value="" maxlength=31 onkeydown="alphanum(this)" onkeyup="alphanum(this)" onblur="alphanum(this)" onclick="alphanum(this)"></input></th>
                            <th><button onClick=addFence() class="button">add</button></th>
                         </tr>
                      </thead>

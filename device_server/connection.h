@@ -23,6 +23,10 @@ typedef struct {
     float radius;
     bool warn_enable;
     char name[32];
+    //the folder this fence belongs to, so a whole set of them can be switched off together.
+    //empty means the default folder, which is what every fence written before folders
+    //existed reads as.
+    char folder[32];
     bool valid;
 } geofence;
 
@@ -46,8 +50,10 @@ typedef struct {
     unsigned long connection_id;
     unsigned char command_infile[FILENAME_MAX];
     unsigned char disabled_alarms_infile[FILENAME_MAX];
+    unsigned char disabled_fences_infile[FILENAME_MAX];
     unsigned char current_packet[BUF_SIZE];
     unsigned char disabled_alarms[BUF_SIZE];
+    unsigned char disabled_fences[BUF_SIZE];
     unsigned char previous_command_packet[BUF_SIZE];
     unsigned char previous_packet[BUF_SIZE];
     FILE * log_filehandle;

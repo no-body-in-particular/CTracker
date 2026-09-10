@@ -188,6 +188,48 @@ function computeLogRow(cols) {
     return "<tr><td>" + escapeHtml(readableDate(new Date(cols[0]))) + "</td><td style='font-size:10px'>" + escapeHtml(text) + extra + "</td></tr>";
 }
 
+/*
+ * Fence folders.
+ *
+ * A fence carries an optional tenth field naming the folder it belongs to; a fence without
+ * one belongs to "default", which is every fence written before folders existed. The folders
+ * that are switched off are kept in their own file, read here from geofence.php?action=folders
+ * as a comma separated list, or a single * for all of them. Off is stored rather than on so
+ * that an absent file leaves every fence enforced, which is the safe direction for a curfew
+ * and matches what the daemon does with the same file.
+ *
+ * The selection is a separate idea from the switch: it decides which folder is on screen,
+ * and does not change what is enforced.
+ */
+var fenceDisabledFolders = '';
+var fenceSelectedFolder = null;
+var fenceRows = [];
+
+function folderOf(cols) {
+    return (cols[9] && cols[9].length) ? cols[9] : 'default';
+}
+
+//letters and digits only, folded to lower case - the same comparison the daemon makes, so
+//the page cannot disagree with it about which folder a fence is in
+function foldFolder(name) {
+    return String(name == null ? '' : name).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+//whole entries, not substrings: a folder called Sommer must not switch off SommerFerien
+function folderDisabled(name) {
+    if (fenceDisabledFolders.indexOf('*') != -1) {
+        return true;
+    }
+
+    var wanted = foldFolder(name.length ? name : 'default');
+
+    if (!wanted.length) {
+        return false;
+    }
+
+    return fenceDisabledFolders.split(',').some(entry => foldFolder(entry) === wanted);
+}
+
 function computeFenceRow(cols) {
     var dayOfWeek = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', '', 'Every'];
     var fenceType = ['In', 'Out', 'In+Out', 'Stay in', 'Exclusion zone'];
@@ -204,7 +246,7 @@ function computeFenceRow(cols) {
     }
 
 
-    return "<tr onclick='animateTo(" + escapeNumber(cols[5]) + "," + escapeNumber(cols[4]) + ")'><td>" + escapeHtml(localTime(cols[0])[1]) + "</td><td>" + escapeHtml(localTime(cols[1])[1]) + "</td><td>" + escapeHtml(dayOfWeek[displayDate]) + "</td><td>" + escapeHtml(fenceType[cols[3]]) + "</td><td>" + escapeNumber(cols[6]) + "m</td><td>" + escapeHtml(alarmEnabled[cols[7]]) + "</td><td>" + escapeHtml(cols[8]) + "</td><td><button class='button' onClick='deleteFence(\"" + escapeHtml(cols.join(',')) + "\")' >delete</button></td></tr>";
+    return "<tr onclick='animateTo(" + escapeNumber(cols[5]) + "," + escapeNumber(cols[4]) + ")'><td>" + escapeHtml(localTime(cols[0])[1]) + "</td><td>" + escapeHtml(localTime(cols[1])[1]) + "</td><td>" + escapeHtml(dayOfWeek[displayDate]) + "</td><td>" + escapeHtml(fenceType[cols[3]]) + "</td><td>" + escapeNumber(cols[6]) + "m</td><td>" + escapeHtml(alarmEnabled[cols[7]]) + "</td><td>" + escapeHtml(cols[8]) + "</td><td>" + escapeHtml(folderOf(cols)) + "</td><td><button class='button' onClick='deleteFence(\"" + escapeHtml(cols.join(',')) + "\")' >delete</button></td></tr>";
 }
 
 
@@ -492,7 +534,8 @@ function addFence() {
 
     var f = [startTime[1], endTime, parseInt(document.getElementById("fenceDay").value)-startTime[0], document.getElementById("fenceType").value,
         document.getElementById("fenceLat").value, document.getElementById("fenceLong").value, document.getElementById("fenceRadius").value,
-        document.getElementById("alarmEnable").value, document.getElementById("fenceName").value
+        document.getElementById("alarmEnable").value, document.getElementById("fenceName").value,
+        document.getElementById("fenceFolder").value
     ];
 
     var cols = f.join(',');
@@ -582,32 +625,135 @@ function moveDemoFeature() {
     feature.setGeometry(fenceCircle(lat, lng, radius));
 }
 
+//every folder that appears in the fence file, plus default, so an empty file still offers
+//somewhere to put the first fence
+function folderNames() {
+    var seen = ['default'];
+
+    fenceRows.forEach(rv => {
+        var name = folderOf(rv);
+
+        if (!seen.some(s => foldFolder(s) === foldFolder(name))) {
+            seen.push(name);
+        }
+    });
+
+    return seen;
+}
+
+function populateFolderSelect() {
+    var select = document.getElementById("folderSelect");
+
+    if (!select) {
+        return;
+    }
+
+    var names = folderNames();
+
+    //a folder only exists while a fence is in it, so the selection can be deleted out from
+    //under the user by removing the last fence in it. fall back to the first one rather than
+    //showing an empty table for a folder that is no longer there.
+    if (fenceSelectedFolder === null || !names.some(n => foldFolder(n) === foldFolder(fenceSelectedFolder))) {
+        fenceSelectedFolder = names[0];
+    }
+
+    select.innerHTML = names.map(n =>
+        '<option value="' + escapeHtml(n) + '"' +
+        (foldFolder(n) === foldFolder(fenceSelectedFolder) ? ' selected' : '') + '>' +
+        escapeHtml(n) + (folderDisabled(n) ? ' (off)' : '') + '</option>').join('');
+
+    var toggle = document.getElementById("folderEnabled");
+
+    if (toggle) {
+        toggle.checked = !folderDisabled(fenceSelectedFolder);
+    }
+
+    //a fence is added to the folder being looked at, which is almost always the intent
+    var folderInput = document.getElementById("fenceFolder");
+
+    if (folderInput && foldFolder(folderInput.value) !== foldFolder(fenceSelectedFolder)) {
+        folderInput.value = (foldFolder(fenceSelectedFolder) === foldFolder('default')) ? '' : fenceSelectedFolder;
+    }
+}
+
+//only the selected folder is drawn and listed. the others are still in the file, and still
+//enforced unless their folder is switched off - this is the view, not the switch.
+function renderFences() {
+    var shown = fenceRows.filter(rv => foldFolder(folderOf(rv)) === foldFolder(fenceSelectedFolder));
+
+    var coords = shown.map(rv => {
+        var f = new ol.Feature(fenceCircle(rv[4], rv[5], rv[6]));
+        f.TYPE = rv[3];
+        return f;
+    });
+
+    geofenceLayer.getSource().clear();
+    geofenceLayer.getSource().addFeatures(coords);
+
+    //The preview lives on this layer, so clearing it takes the preview with it - and
+    //this runs on the refresh timer, which used to wipe a point the user had just
+    //picked while they were still setting the radius. Put it back and redraw it from
+    //whatever the panel currently says.
+    moveDemoFeature();
+
+    const tableBody = document.getElementById("fenceBody");
+    tableBody.innerHTML = '';
+    tableBody.innerHTML = shown.map(rv => computeFenceRow(rv)).join('');
+}
+
+function onFolderChange() {
+    fenceSelectedFolder = document.getElementById("folderSelect").value;
+    populateFolderSelect();
+    renderFences();
+}
+
+//switching a folder off stops the daemon enforcing every fence in it, so say so plainly
+//rather than letting a stray click lift a curfew silently
+function onFolderEnabledChange() {
+    var toggle = document.getElementById("folderEnabled");
+    var name = fenceSelectedFolder;
+    var enable = toggle.checked;
+
+    if (!enable && !confirm('Stop enforcing every fence in "' + name + '"?')) {
+        toggle.checked = true;
+        return;
+    }
+
+    var kept = fenceDisabledFolders.split(',').filter(e => e.length && foldFolder(e) !== foldFolder(name));
+
+    if (!enable) {
+        kept.push(foldFolder(name) === foldFolder('default') ? 'default' : name);
+    }
+
+    $.ajax({
+        url: "geofence.php?imei=" + imei + "&action=setfolders&folders=" + encodeURIComponent(kept.join(',')),
+        success: function(result) {
+            fetchFolders();
+        }
+    });
+}
+
+function fetchFolders() {
+    $.ajax({
+        url: "geofence.php?imei=" + imei + "&action=folders" + viewOnlyParameter(),
+        success: function(result) {
+            fenceDisabledFolders = String(result || '').replace(/[\r\n]/g, '');
+            populateFolderSelect();
+            renderFences();
+        }
+    });
+}
+
 function fetchFence() {
     $.ajax({
         url: "geofence.php?imei=" + imei + viewOnlyParameter(),
         success: function(result) {
             enableDownload(result, false);
-            var parsed = forEachRow(result, 8, cols => [cols[0], cols[1], cols[2], cols[3], parseFloat(cols[4]), parseFloat(cols[5]), parseFloat(cols[6]), cols[7], cols[8]]);
+            fenceRows = forEachRow(result, 8, cols => [cols[0], cols[1], cols[2], cols[3], parseFloat(cols[4]), parseFloat(cols[5]), parseFloat(cols[6]), cols[7], cols[8], cols[9]]);
 
-
-            var coords = parsed.map(rv => {
-                var f = new ol.Feature(fenceCircle(rv[4], rv[5], rv[6]));
-                f.TYPE = rv[3];
-                return f;
-            });
-
-            geofenceLayer.getSource().clear();
-            geofenceLayer.getSource().addFeatures(coords);
-
-            //The preview lives on this layer, so clearing it takes the preview with it - and
-            //this runs on the refresh timer, which used to wipe a point the user had just
-            //picked while they were still setting the radius. Put it back and redraw it from
-            //whatever the panel currently says.
-            moveDemoFeature();
-
-            const tableBody = document.getElementById("fenceBody");
-            tableBody.innerHTML = '';
-            tableBody.innerHTML = parsed.map(rv => computeFenceRow(rv)).join('');
+            //which folders are off decides how the selector reads, so the two are fetched
+            //together and drawn once, from fetchFolders()
+            fetchFolders();
         }
     });
 }

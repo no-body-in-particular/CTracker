@@ -265,6 +265,7 @@ void * process_thread(void * int_ptr) {
             if (conn.iteration % 100 == 0) {
                 read_geofence(&conn);
                 read_disabled_alarms(&conn);
+                read_disabled_fences(&conn);
             }
 
             /*
@@ -285,6 +286,7 @@ void * process_thread(void * int_ptr) {
                 conn.stats_filehandle =    log_truncate(conn.stats_filehandle, conn.stats_file, MAX_DATA_SIZE);
                 read_geofence(&conn);
                 read_disabled_alarms(&conn);
+                read_disabled_fences(&conn);
             }
 
             if ( time(0) > conn.timeout_time ) {

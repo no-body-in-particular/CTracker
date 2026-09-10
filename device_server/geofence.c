@@ -43,6 +43,9 @@ geofence fence_from_str(char * str) {
     char * time_buffers[4] = {0};
     ret.valid = false;
     size_t str_count = split_to(',', str, BUF_SIZE, (unsigned char **)data_buffers, 39);
+    //str_count is reused by the ':' splits below, so keep the number of comma separated
+    //fields for the optional 10th one
+    size_t field_count = str_count;
     time_t t = time(NULL);
     struct tm tm = *gmtime(&t);
     time_t today_begin = time_on_day(tm.tm_wday, 0, 0) ;
@@ -114,6 +117,26 @@ geofence fence_from_str(char * str) {
 
     strcpy(ret.name, data_buffers[8]);
     strip_unprintable(ret.name);
+
+    //Optional 10th field: the folder. A line without one is a fence in the default folder,
+    //which is how every fence written before folders existed reads. split_to() takes up to
+    //39 fields and only str_count < 9 is rejected, so an older build reads these lines
+    //without complaint and simply ignores the folder.
+    ret.folder[0] = 0;
+
+    if (field_count >= 10 && strlen(data_buffers[9]) < sizeof(ret.folder)) {
+        strcpy(ret.folder, data_buffers[9]);
+        strip_unprintable(ret.folder);
+
+        //strip_unprintable() replaces an unprintable character with a space rather than
+        //removing it, so the newline fgets() leaves on the last field arrives here as a
+        //trailing space. The name has always carried that and the alert text is built from
+        //it, so it is left alone, but a folder name is matched against the switched-off list
+        //and has to be exactly what the file says. split_to() already skips leading space.
+        for (size_t i = strlen(ret.folder); i > 0 && ret.folder[i - 1] == ' '; i--) {
+            ret.folder[i - 1] = 0;
+        }
+    }
 
     //all day fence
     if ((ret.start_hour * 60 + ret.start_minute) == ( ret.end_hour * 60 + ret.end_minute)) {
@@ -315,6 +338,13 @@ bool move_to(connection * conn, time_t device_time, int position_type, double la
         for (size_t idx = 0; idx < conn->fence_count; idx++) {
             geofence f = conn->fence_list[idx];
 
+            //a fence in a switched-off folder is not enforced. checked here rather than
+            //filtered out in read_geofence() so that the folder list and the fence list can
+            //be re-read in any order - both are re-read on the same triggers.
+            if (is_fence_folder_disabled(conn, f.folder)) {
+                continue;
+            }
+
             if ( time(0) > f.fence_start_today && time(0) < f.fence_end_today  ) {
                 if ((f.type == FENCE_IN || f.type == FENCE_IN_OUT) && (haversineDistance(f.lat, f.lon, lat, lon) < f.radius) &&
                         (haversineDistance(f.lat, f.lon, conn->current_lat, conn->current_lon) >= f.radius)) {
@@ -345,6 +375,14 @@ bool move_to(connection * conn, time_t device_time, int position_type, double la
 
         for (size_t idx = 0; idx < conn->fence_count; idx++) {
             geofence f = conn->fence_list[idx];
+
+            //a fence in a switched-off folder is not enforced. checked here rather than
+            //filtered out in read_geofence() so that the folder list and the fence list can
+            //be re-read in any order - both are re-read on the same triggers.
+            if (is_fence_folder_disabled(conn, f.folder)) {
+                continue;
+            }
+
             //test if we have mandatory fences at this time
             //and we are in at least one
 

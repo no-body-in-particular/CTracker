@@ -229,6 +229,7 @@ void init_imei(connection * conn) {
     memcpy(conn->current_status_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->geofence_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->disabled_alarms_infile, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
+    memcpy(conn->disabled_fences_infile, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->stats_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->tracking_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
     memcpy(conn->images_file, conn->gps_outfile, strlen(conn->gps_outfile) + 1);
@@ -242,6 +243,7 @@ void init_imei(connection * conn) {
     strcat(conn->current_status_file, ".status.txt");
     strcat(conn->geofence_file, ".fence.txt");
     strcat(conn->disabled_alarms_infile, ".disabled-alarms.txt");
+    strcat(conn->disabled_fences_infile, ".disabled-fences.txt");
     strcat(conn->stats_file, ".stats.txt");
     strcat(conn->tracking_file, ".tracking.txt");
     strcat(conn->images_file, ".images.db");
@@ -255,6 +257,7 @@ void init_imei(connection * conn) {
     log_line(conn, "imei recieved: %s \n", conn->imei);
     init_position(conn);
     read_disabled_alarms(conn);
+    read_disabled_fences(conn);
     read_geofence(conn);
     //Only an absence worth noticing goes in the event log. This device re-opens its socket
     //constantly, so an unconditional entry here produced hundreds of "reconnected after 3
