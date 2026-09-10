@@ -74,7 +74,11 @@
 
      // create image and fill background colour
      $image = imagecreatetruecolor($width, $height);
-     imagefill($image, 0, 0, imagecolorallocate($image, random_int(200, 255), random_int(200, 255), random_int(200, 255)));
+     // $bg has to be kept: the distortion loop below uses it for every sample
+     // that falls outside the source image. Left undefined it was null, i.e.
+     // colour index 0 = black, which is what turned the captcha black.
+     $bg = imagecolorallocate($image, random_int(200, 255), random_int(200, 255), random_int(200, 255));
+     imagefill($image, 0, 0, $bg);
 
      //draw lines behidn the text
      $line_count = random_int(4, 15);
@@ -116,6 +120,9 @@
      }
 
      $contents = imagecreatetruecolor($width, $height);
+     // Start from the background colour, not the black an empty truecolor
+     // canvas comes with: only distorted pixels get written below.
+     imagefill($contents, 0, 0, $bg);
      $X = random_int(0, $width);
      $Y = random_int(0, $height);
      $phase = random_int(0, 10);
