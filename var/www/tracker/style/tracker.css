@@ -1584,3 +1584,29 @@ nav {
     cursor: default;
     opacity: .85;
 }
+
+/*
+ * Keep the add-a-fence row reachable however many fences a folder holds.
+ *
+ * The panel is capped at 46vh and section is overflow:hidden, and the tree had neither a
+ * flex basis nor an overflow of its own, so expanding a folder with a lot of fences in it
+ * grew the tree until it pushed the table - and with it the row that adds a fence - out of
+ * the bottom of the panel, where the hidden overflow made it unreachable.
+ *
+ * The tree takes whatever space is left and scrolls inside itself; min-height:0 is what
+ * allows a flex item to shrink below its content and scroll rather than push its sibling
+ * out. The table keeps its own height instead of being squeezed: it is two header rows now
+ * that the fences are listed above, so it costs little.
+ *
+ * Named for #geofence alone. #account and #trips share the .table-scroll rule above and do
+ * still hold real tables that need to shrink.
+ */
+#geofence .fenceFolders {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#geofence .table-scroll {
+    flex: 0 0 auto;
+}
