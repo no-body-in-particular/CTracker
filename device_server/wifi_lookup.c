@@ -62,6 +62,63 @@ double wifi_network_compare(void * a, void * b) {
     return memcmp(b, a, 6);
 }
 
+/*
+ * One radio, several BSSIDs.
+ *
+ * A router carrying a guest network and a couple of bands answers on a block of consecutive
+ * addresses - 1c:28:af:cc:6c:20 through :25 is one device, not six - and virtual or
+ * randomised interfaces derive an address from the real one by setting the locally
+ * administered bit. Counted separately they make two scans of the same room look like two
+ * different places; counted together they are the landmark they actually are.
+ *
+ * Masking the low three bits of the last octet covers a block of eight, which is what
+ * multi-BSSID hardware allocates. The bits above that are left alone: they are still the
+ * vendor's address, and merging further would start joining genuinely different devices.
+ */
+void normalise_mac(uint8_t * out, const uint8_t * in) {
+    memcpy(out, in, 6);
+    out[0] &= (uint8_t) ~0x02u;
+    out[5] &= (uint8_t) ~0x07u;
+}
+
+//Normalise every address in an entry in place, then sort so comparisons stay cheap. Used on
+//what a device reports and on what is already stored, so old entries written before any of
+//this match new scans without the file needing converting.
+void normalise_entry(wifi_db_entry * entry) {
+    if (entry->network_count > 16) {
+        entry->network_count = 16;
+    }
+
+    for (size_t i = 0; i < entry->network_count; i++) {
+        normalise_mac(entry->network_buffer[i].mac_addr, entry->network_buffer[i].mac_addr);
+    }
+
+    //the comparator is passed twice on purpose: the second argument is what quick_sort uses
+    //to drop duplicates, and after normalisation a block of BSSIDs from one radio really is
+    //one entry repeated. Leaving them in would count that radio six times over when weighing
+    //how much two scans have in common.
+    entry->network_count = quick_sort(entry->network_buffer, entry->network_count,
+                                      sizeof(wifi_network), wifi_network_compare,
+                                      wifi_network_compare);
+}
+
+//How many access points the two have in common, once normalised. Both are sorted, but the
+//counts are at most sixteen so a straight walk is clearer than merging and no slower.
+size_t shared_networks(wifi_db_entry * a, wifi_db_entry * b) {
+    size_t shared = 0;
+
+    for (size_t i = 0; i < a->network_count && i < 16; i++) {
+        for (size_t j = 0; j < b->network_count && j < 16; j++) {
+            if (memcmp(a->network_buffer[i].mac_addr, b->network_buffer[j].mac_addr, 6) == 0) {
+                shared++;
+                break;
+            }
+        }
+    }
+
+    return shared;
+}
+
 bool is_subset(wifi_db_entry in, wifi_db_entry  find) {
     for (size_t n = 0; n < find.network_count; n++) {
         bool found = false;
@@ -227,6 +284,19 @@ void wifi_database_from_file(wifi_db * database, char * file) {
     }
 
     fclose(fp);
+
+    /*
+     * Normalise what came off disk before anything is compared against it. Entries written
+     * before BSSIDs were normalised hold the addresses exactly as the devices reported them,
+     * and a scan normalised on the way in would never match one of those - the whole stored
+     * history would look empty and every lookup would go to the positioning service. Doing it
+     * here converts the file as it is read instead, so nothing needs migrating and the next
+     * save writes it back in the new form.
+     */
+    for (size_t idx = 0; idx < database->network_count; idx++) {
+        normalise_entry(&database->network_buffer[idx]);
+    }
+
     wifi_sort(database);
     fprintf(stdout, "   done.\n");
 }
@@ -323,6 +393,118 @@ location_result wifi_to_cache( wifi_db_entry  networks) {
 }
 
 //first must always point to a list of at least 2 wifi networks.
+/*
+ * A position from everything that knows about these access points.
+ *
+ * Every stored entry sharing at least one access point with the scan votes for its own
+ * position, weighted by how many it shares - an entry overlapping six of them says more
+ * about where the device is than one overlapping a single neighbour's router. Votes within
+ * WIFI_CONSENSUS_RADIUS of each other are the same place, and the heaviest such cluster
+ * wins. The answer is that cluster's weighted centre, so the wrong entries are outvoted
+ * rather than averaged in.
+ *
+ * Called with the database mutex held.
+ */
+location_result wifi_consensus(wifi_db_entry * key) {
+    static __thread float vote_lat[WIFI_CONSENSUS_MAX_VOTES];
+    static __thread float vote_lng[WIFI_CONSENSUS_MAX_VOTES];
+    static __thread double vote_weight[WIFI_CONSENSUS_MAX_VOTES];
+    size_t votes = 0;
+
+    location_result out;
+    memset(&out, 0, sizeof(out));
+    out.valid = false;
+
+    wifi_db_entry * pools[2] = { wifi_database.network_buffer, wifi_database.network_cache };
+    size_t counts[2] = { wifi_database.network_count, wifi_database.cache_count };
+
+    for (size_t pool = 0; pool < 2; pool++) {
+        if (pools[pool] == 0) {
+            continue;
+        }
+
+        for (size_t idx = 0; idx < counts[pool] && votes < WIFI_CONSENSUS_MAX_VOTES; idx++) {
+            wifi_db_entry * stored = &pools[pool][idx];
+
+            if (!stored->result.valid) {
+                continue;
+            }
+
+            size_t shared = shared_networks(key, stored);
+
+            if (shared == 0) {
+                continue;
+            }
+
+            vote_lat[votes] = stored->result.lat;
+            vote_lng[votes] = stored->result.lng;
+            vote_weight[votes] = (double) shared;
+            votes++;
+        }
+    }
+
+    if (votes == 0) {
+        return out;
+    }
+
+    size_t best = 0;
+    double best_weight = -1.0;
+
+    for (size_t i = 0; i < votes; i++) {
+        double weight = 0.0;
+
+        for (size_t j = 0; j < votes; j++) {
+            if (haversineDistance(vote_lat[i], vote_lng[i], vote_lat[j], vote_lng[j]) * 1000.0
+                    <= WIFI_CONSENSUS_RADIUS) {
+                weight += vote_weight[j];
+            }
+        }
+
+        if (weight > best_weight) {
+            best_weight = weight;
+            best = i;
+        }
+    }
+
+    if (best_weight < WIFI_CONSENSUS_MIN_VOTES) {
+        return out;
+    }
+
+    //the centre of the winning cluster only - everything outside it lost the vote and must
+    //not be allowed to drag the answer toward itself
+    double sum_lat = 0.0, sum_lng = 0.0, sum_weight = 0.0;
+    double spread = 0.0;
+
+    for (size_t j = 0; j < votes; j++) {
+        double away = haversineDistance(vote_lat[best], vote_lng[best], vote_lat[j], vote_lng[j]) * 1000.0;
+
+        if (away > WIFI_CONSENSUS_RADIUS) {
+            continue;
+        }
+
+        sum_lat += vote_lat[j] * vote_weight[j];
+        sum_lng += vote_lng[j] * vote_weight[j];
+        sum_weight += vote_weight[j];
+
+        if (away > spread) {
+            spread = away;
+        }
+    }
+
+    if (sum_weight <= 0.0) {
+        return out;
+    }
+
+    out.lat = (float) (sum_lat / sum_weight);
+    out.lng = (float) (sum_lng / sum_weight);
+    //how far the agreeing entries are spread, which is a better statement of how well this is
+    //known than any single stored entry's own radius
+    out.radius = (float) (spread > 10.0 ? spread : 10.0);
+    out.last_tried = (uint64_t) time(0);
+    out.valid = true;
+    return out;
+}
+
 location_result wifi_lookup(wifi_network * first, size_t network_count) {
     //create a sorted network entry
     wifi_db_entry entry;
@@ -331,33 +513,26 @@ location_result wifi_lookup(wifi_network * first, size_t network_count) {
     entry.network_count = network_count;
     quick_sort(entry.network_buffer, entry.network_count, sizeof(wifi_network), wifi_network_compare, 0);
     entry.result.valid = false;
+
+    /*
+     * The address the positioning service is asked about has to be the one the device
+     * actually saw, so the raw scan is kept for that. Everything this server matches on uses
+     * the normalised form, in its own copy.
+     */
+    wifi_db_entry key = entry;
+    normalise_entry(&key);
+
     //held across every read of the shared database below, and dropped again before the
     //network lookup at the end - that one can take ten seconds and must not hold anybody up
     pthread_mutex_lock(&wifi_database.mutex);
-    wifi_db_entry * network_ptr = wifi_database.network_count == 0 ? 0 : (wifi_db_entry *) binary_search(wifi_database.network_buffer, (wifi_database.network_buffer + wifi_database.network_count), &entry,  sizeof(wifi_db_entry), wifi_hash_compare) ;
 
-    for (; network_ptr != 0 && (network_ptr <= (wifi_database.network_buffer + wifi_database.network_count))
-            && wifi_db_entry_hash( network_ptr) == wifi_db_entry_hash(&entry)
-            ; network_ptr++) {
-        if (is_same(network_ptr, &entry) == 0) {
-            entry.result = network_ptr->result;
-            break;
-        }
-    }
-
-    for (size_t network_idx = 0; !entry.result.valid && (network_idx < wifi_database.cache_count); network_idx++) {
-        if (is_same(&wifi_database.network_cache[network_idx], &entry) == 0) {
-            entry.result = wifi_database.network_cache[network_idx].result;
-        }
-    }
-
-    if (!entry.result.valid) {
-        for (size_t network_idx = 0; !entry.result.valid && (network_idx < wifi_database.network_count); network_idx++) {
-            if (is_subset(wifi_database.network_buffer[network_idx], entry )) {
-                entry.result = wifi_database.network_buffer[network_idx].result;
-            }
-        }
-    }
+    /*
+     * Consensus rather than a lookup of this exact set. Matching the set was what let a
+     * single wrong entry answer for a scan that happened to reproduce it, and made an
+     * otherwise identical scan with one BSSID more or less into a different question with
+     * its own unrelated answer.
+     */
+    entry.result = wifi_consensus(&key);
 
     if ((time(0) - wifi_database.cache_age) > CACHE_SAVE_TIME) {
         wifi_cache_to_database(&wifi_database);
@@ -369,7 +544,9 @@ location_result wifi_lookup(wifi_network * first, size_t network_count) {
         entry.result = geolocate_wifi(entry.network_buffer, entry.network_count);
 
         if (entry.result.valid) {
-            wifi_to_cache( entry);
+            //stored normalised, because that is what every later comparison uses
+            key.result = entry.result;
+            wifi_to_cache(key);
         }
     }
 

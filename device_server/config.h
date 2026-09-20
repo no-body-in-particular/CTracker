@@ -270,6 +270,26 @@
 #define STAT_ORDER_TOLERANCE 30
 
 //smallest number of access points worth sending to a wifi geolocation lookup
+/*
+ * Resolving a wifi position from the access points themselves rather than from the exact
+ * set that was scanned.
+ *
+ * A scan is not reproducible: routers answer on several BSSIDs, phones and watches report a
+ * different subset each minute, and neighbours come and go. Keying a stored position on the
+ * whole set made every one of those variations a separate entry with its own independent
+ * answer, so two scans of the same room could hold positions kilometres apart and the
+ * device appeared to jump between them once a minute.
+ *
+ * Every stored entry sharing an access point with the scan now votes, weighted by how many
+ * it shares. Votes falling within CONSENSUS_RADIUS of each other form a cluster, and the
+ * heaviest cluster wins - so a handful of wrong entries lose to the many right ones instead
+ * of taking turns with them. On the data this was written for: 141 entries agreed on one
+ * position and 6 on another 3.2 km away.
+ */
+#define WIFI_CONSENSUS_RADIUS 300.0   //metres; votes this close together are the same place
+#define WIFI_CONSENSUS_MIN_VOTES 2    //below this, ask the positioning service instead
+#define WIFI_CONSENSUS_MAX_VOTES 512  //bound on the working set for one lookup
+
 #define WIFI_LOOKUP_MIN 2
 //most access points we will carry from one scan
 #define WIFI_LOOKUP_MAX 16
