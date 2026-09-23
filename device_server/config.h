@@ -290,6 +290,29 @@
 #define WIFI_CONSENSUS_MIN_VOTES 2    //below this, ask the positioning service instead
 #define WIFI_CONSENSUS_MAX_VOTES 512  //bound on the working set for one lookup
 
+/*
+ * Learning where access points are from a device's own GPS fix.
+ *
+ * This is how the database comes to know places no positioning service does, and it is
+ * worth having - but a scan and the fix it arrives with are not the same measurement. The
+ * device scans, then sends; a watch may report a scan minutes old. Standing still that does
+ * not matter. Moving, the two describe different places, and the database learns that a
+ * building's access points live wherever the wearer happened to be when the frame went out.
+ *
+ * That is not hypothetical. On 2026-09-20 a watch drove at 41 km/h while still reporting the
+ * access points from home, and six entries were written putting them 3.2 km away. For the
+ * rest of the day, every wifi-only lookup indoors alternated between the real position and
+ * that one, which read as the wearer crossing 3.2 km and back once a minute at 190 km/h.
+ *
+ * So: only learn from a device that is essentially stationary, and never let one sample
+ * overrule a position many stored entries already agree on. A genuinely relocated access
+ * point is then slower to be re-learned, which is the right way round - a wrong entry is
+ * read back thousands of times before anyone notices, and a stale one only costs precision.
+ */
+#define WIFI_LEARN_MAX_SPEED 5.0      //km/h; below a walking pace, the scan is where the fix is
+#define WIFI_LEARN_MAX_DISAGREE 500.0 //m; further than this from the known position is a contradiction
+#define WIFI_LEARN_RADIUS 50.0        //m; a device fix with a scan of unknown age, stated honestly
+
 #define WIFI_LOOKUP_MIN 2
 //most access points we will carry from one scan
 #define WIFI_LOOKUP_MAX 16

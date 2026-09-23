@@ -359,8 +359,10 @@ location_result wifi_to_cache( wifi_db_entry  networks) {
      * meant to and simply came out the wrong way round.
      */
     pthread_mutex_lock(&wifi_database.mutex);
-    //sort our networks first
-    networks.network_count = quick_sort(networks.network_buffer, networks.network_count, sizeof(wifi_network), wifi_network_compare, wifi_network_compare);
+    //Normalise here rather than at each caller: this is the one place entries are written,
+    //and a self-learned entry stored with raw addresses would never match a scan that had
+    //been normalised on the way in - it would sit in the cache answering nothing.
+    normalise_entry(&networks);
 
     for (size_t network_idx = 0; network_idx < wifi_database.cache_count; network_idx++) {
         if (is_same(&wifi_database.network_cache[network_idx], &networks) == 0) {
@@ -503,6 +505,54 @@ location_result wifi_consensus(wifi_db_entry * key) {
     out.last_tried = (uint64_t) time(0);
     out.valid = true;
     return out;
+}
+
+/*
+ * Record where these access points were seen, from the device's own fix.
+ *
+ * Refused while the device is moving, and refused when it contradicts a position the stored
+ * entries already agree on - see the constants in config.h for why. Returns whether anything
+ * was learned, which callers are free to ignore; nothing downstream depends on it.
+ */
+bool wifi_learn_position(wifi_db_entry * entry, double lat, double lon, double speed_kmh) {
+    if (entry == 0 || entry->network_count < WIFI_LOOKUP_MIN) {
+        return false;
+    }
+
+    //A fix at 0,0 is the absence of one. Learning from it would put every access point the
+    //device can see in the Gulf of Guinea.
+    if (lat == 0.0 && lon == 0.0) {
+        return false;
+    }
+
+    if (speed_kmh > WIFI_LEARN_MAX_SPEED) {
+        return false;
+    }
+
+    wifi_db_entry key = *entry;
+    normalise_entry(&key);
+
+    pthread_mutex_lock(&wifi_database.mutex);
+    location_result known = wifi_consensus(&key);
+    pthread_mutex_unlock(&wifi_database.mutex);
+
+    if (known.valid) {
+        double away = haversineDistance(known.lat, known.lng, lat, lon) * 1000.0;
+
+        if (away > WIFI_LEARN_MAX_DISAGREE) {
+            fprintf(stdout, "wifi: not learning a position %.0f m from where the database already puts these %u access points\n",
+                    away, (unsigned) key.network_count);
+            return false;
+        }
+    }
+
+    key.result.lat = (float) lat;
+    key.result.lng = (float) lon;
+    key.result.radius = (float) WIFI_LEARN_RADIUS;
+    key.result.last_tried = (uint64_t) time(0);
+    key.result.valid = true;
+    wifi_to_cache(key);
+    return true;
 }
 
 location_result wifi_lookup(wifi_network * first, size_t network_count) {

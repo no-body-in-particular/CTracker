@@ -422,12 +422,9 @@ void process_message(connection * conn, char * string, size_t length) {
                 num_sats =  db_entry.network_count;
 
             } else {
-                db_entry.result.lat = lat;
-                db_entry.result.lng = lon;
-                db_entry.result.last_tried = time(0);
-                db_entry.result.valid = true;
-                db_entry.result.radius = 10;
-                db_entry.result = wifi_to_cache(db_entry);
+                //teach the database where these networks are, if the fix is one worth
+                //learning from - see wifi_learn_position()
+                wifi_learn_position(&db_entry, lat, lon, spd);
             }
         }
     }

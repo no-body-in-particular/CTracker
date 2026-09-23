@@ -600,12 +600,9 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
                 }
 
             } else {
-                db_entry.result.lat = lat;
-                db_entry.result.lng = lng;
-                db_entry.result.last_tried = time(0);
-                db_entry.result.valid = true;
-                db_entry.result.radius = 10;
-                db_entry.result = wifi_to_cache(db_entry);
+                //teach the database where these networks are, if the fix is one worth
+                //learning from - see wifi_learn_position()
+                wifi_learn_position(&db_entry, lat, lng, speed);
             }
         }
     }
