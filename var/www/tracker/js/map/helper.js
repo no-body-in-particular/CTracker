@@ -24,39 +24,88 @@ function minutePart(min) {
     return m;
 }
 
-function utcTime(timeString) {
-    let [hour, minute] = timeString.split(':');
-    let tzOffset = (new Date()).getTimezoneOffset();
-    let dt = new Date();
-    dt.setHours(hour);
-    dt.setMinutes(minute);
-    dt.setSeconds(0);
-    dt.setTime(dt.getTime() + (tzOffset * 60000));
-    let totalMinutes = (parseInt(hour, 10) * 60) + parseInt(minute, 10) + tzOffset;
-    let ret = timePad(dt.getHours()) + ':' + timePad(dt.getMinutes());
-    let dayLT=dt.getDay()<new Date().getDay();
-    let dayGT=dt.getDay()>new Date().getDay();
-    let offset=dayLT?-1:0;
-    offset=dayGT?1:dayLT;
- 
-    return [offset,ret];
+/*
+ * Which clock this device's times are meant in.
+ *
+ * Everything here used to convert against the browser's own timezone, which is only right
+ * when the person looking happens to live where the device does. Two people in different
+ * countries watching the same bracelet read different times off the same row, and a fence
+ * one of them wrote landed an hour or two from where the other one thought they had put
+ * it. One zone per device - the wearer's - settles it for both.
+ *
+ * Fetched once at startup from timezone.php, which answers the server's own zone until
+ * somebody chooses one. Kept as an IANA name so daylight saving comes from the zone
+ * database rather than from anyone remembering to adjust it.
+ */
+var deviceTimezone = null;
+
+function deviceZone() {
+    //before the fetch lands, the browser's own zone is the only thing available - the same
+    //answer as before this existed, so nothing is worse than it was
+    return deviceTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+/*
+ * How far the device's zone is from UTC at a given moment, in the sign getTimezoneOffset()
+ * uses: minutes to ADD to a local time to get UTC, so positive west of Greenwich.
+ *
+ * Read out of Intl rather than computed, so the answer already accounts for whether summer
+ * time was in force at that particular moment - which is the part nobody wants to do by
+ * hand twice a year.
+ */
+function zoneOffsetMinutes(when) {
+    when = when || new Date();
 
+    try {
+        var parts = {};
+        new Intl.DateTimeFormat('en-US', {
+            timeZone: deviceZone(), hour12: false,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }).formatToParts(when).forEach(function (p) { parts[p.type] = p.value; });
+
+        //the same instant written as the zone's wall clock, then read back as though that
+        //wall clock were UTC: the gap between the two is the offset
+        var asIfUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day,
+                               (+parts.hour) % 24, +parts.minute, +parts.second);
+
+        return -Math.round((asIfUtc - when.getTime()) / 60000);
+
+    } catch (e) {
+        //an unknown zone name would otherwise take the whole page down with it
+        return when.getTimezoneOffset();
+    }
+}
+
+//"HH:MM" plus a number of minutes, wrapped into a day. Returns [dayShift, "HH:MM"], where
+//dayShift is -1 when the result fell back into yesterday and +1 when it ran into tomorrow.
+function shiftClock(timeString, minutes) {
+    var bits = timeString.split(':');
+    var total = (parseInt(bits[0], 10) * 60) + parseInt(bits[1], 10) + minutes;
+    var dayShift = Math.floor(total / 1440);
+
+    total = ((total % 1440) + 1440) % 1440;
+
+    return [dayShift, timePad(Math.floor(total / 60)) + ':' + timePad(total % 60)];
+}
+
+/*
+ * A time typed in the device's zone, as UTC. The caller adds the day shift to the weekday
+ * the fence was given, because 00:30 on Monday in Berlin is 22:30 on Sunday on the wire.
+ *
+ * The day handling here used to read
+ *     offset = dayLT ? -1 : 0;  offset = dayGT ? 1 : dayLT;
+ * where the second line overwrote the first and left a bare boolean, so a time that
+ * crossed backwards over midnight came out as +1 exactly like one that crossed forwards.
+ * Both directions moved the fence to the same wrong day.
+ */
+function utcTime(timeString) {
+    return shiftClock(timeString, zoneOffsetMinutes());
+}
+
+//and back again, for showing a stored fence time
 function localTime(timeString) {
-    let [hour, minute] = timeString.split(':');
-    let tzOffset = (new Date()).getTimezoneOffset();
-    let dt = new Date();
-    dt.setHours(hour);
-    dt.setMinutes(minute);
-    dt.setSeconds(0);
-    dt.setTime(dt.getTime() - (tzOffset * 60000));
-    let dayLT=dt.getDay()<new Date().getDay();
-    let dayGT=dt.getDay()>new Date().getDay();
-    let offset=dayLT?-1:0;
-    offset=dayGT?1:dayLT;
- 
-    return [offset,timePad(dt.getHours()) + ':' + timePad(dt.getMinutes())];
+    return shiftClock(timeString, -zoneOffsetMinutes());
 }
 
 function deg2rad(deg) {
@@ -81,8 +130,26 @@ function distance(x, y, a, b) {
     return Math.sqrt((y - b) * (y - b) + (x - a) * (x - a));
 }
 
+/*
+ * Every time on the page, in the device's zone with the zone named.
+ *
+ * This was toLocaleString(), which renders in whatever zone the browser is in and says so
+ * nowhere - so the guard abroad and the wearer at home read the same event as two different
+ * times, each believing their own. Naming the zone costs a few characters and removes the
+ * question entirely.
+ */
 function readableDate(dt) {
-    return dt.toLocaleString();
+    try {
+        return dt.toLocaleString(undefined, {
+            timeZone: deviceZone(),
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            timeZoneName: 'short'
+        });
+
+    } catch (e) {
+        return dt.toLocaleString();
+    }
 }
 
 function sumDistance(rows, beginIndex, endIndex) {

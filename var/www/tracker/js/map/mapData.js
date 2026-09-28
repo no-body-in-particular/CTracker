@@ -637,11 +637,27 @@ function sendCommand(cmd) {
 function addFence() {
     var startTime=utcTime(document.getElementById("fenceStart").value);
     var endTime=utcTime(document.getElementById("fenceEnd").value)[1];
-    var fenceDay=parseInt(document.getElementById("fenceDay").value)-startTime[0];
-    if(fenceDay==0)fenceDay=7;
-    if(fenceDay==8)fenceDay=1;
 
-    var f = [startTime[1], endTime, parseInt(document.getElementById("fenceDay").value)-startTime[0], document.getElementById("fenceType").value,
+    /*
+     * The stored day is the UTC one, so a start time that crosses midnight on the way to UTC
+     * belongs to the neighbouring day: 00:30 Monday in Berlin is 22:30 Sunday on the wire.
+     * utcTime() returns -1 for that, so the shift is added.
+     *
+     * It used to be subtracted, which moved such a fence a day the wrong way - two days from
+     * where it was meant, since the shift itself was also coming back with the wrong sign.
+     * "Every" (8 and 9) is left alone: it means today, whatever today is.
+     */
+    var chosenDay = parseInt(document.getElementById("fenceDay").value);
+    var fenceDay = chosenDay;
+
+    if (chosenDay < 8) {
+        fenceDay = chosenDay + startTime[0];
+
+        if (fenceDay < 1) { fenceDay = 7; }
+        if (fenceDay > 7) { fenceDay = 1; }
+    }
+
+    var f = [startTime[1], endTime, fenceDay, document.getElementById("fenceType").value,
         document.getElementById("fenceLat").value, document.getElementById("fenceLong").value, document.getElementById("fenceRadius").value,
         document.getElementById("alarmEnable").value, document.getElementById("fenceName").value,
         document.getElementById("fenceFolder").value
@@ -952,6 +968,30 @@ function fetchFolders() {
     });
 }
 
+/*
+ * The device's timezone, before anything is drawn with it.
+ *
+ * Fetched rather than assumed: the whole point is that it is not the viewer's own. Failure
+ * leaves deviceTimezone null and deviceZone() falls back to the browser, which is what the
+ * page did before any of this - so a server that cannot answer costs accuracy, not function.
+ */
+function fetchTimezone() {
+    $.ajax({
+        url: "timezone.php?imei=" + imei + "&action=read" + viewOnlyParameter(),
+        success: function(result) {
+            var zone = String(result || '').trim();
+
+            //only when it actually changes: this is cheap to call again, and anything
+            //already on screen was drawn against the wrong clock
+            if (zone && zone !== deviceTimezone) {
+                deviceTimezone = zone;
+                refreshEventTable(eventList);
+                fetchFence();
+            }
+        }
+    });
+}
+
 function fetchFence() {
     $.ajax({
         url: "geofence.php?imei=" + imei + viewOnlyParameter(),
@@ -980,10 +1020,42 @@ function refreshSettings() {
             const tableBody = document.getElementById("settingsBody");
             tableBody.innerHTML = '';
             tableBody.innerHTML += '<tr><td>disabled alarms</td><td><input id="disabledAlarms" class="input_small" value =\"' + result + '\"/><button onclick="saveSettings()"  class="button">Save</button></td></tr>';
+
+            //The zone every time on this page is written in, and the one fence hours are
+            //taken to mean. The wearer's, not the viewer's - that is the whole point of it
+            //being stored per device rather than read from the browser.
+            tableBody.innerHTML += '<tr><td>timezone</td><td><input id="deviceTimezoneInput" class="input_small" value="'
+                + escapeHtml(deviceZone())
+                + '"/><button onclick="saveTimezone()" class="button">Save</button>'
+                + ' <span style="opacity:.7">IANA name, e.g. Europe/Berlin</span></td></tr>';
         }
     });
 }
 
+
+function saveTimezone() {
+    var zone = document.getElementById("deviceTimezoneInput").value.trim();
+
+    if (!zone) {
+        return;
+    }
+
+    $.ajax({
+        url: "timezone.php?imei=" + imei + "&action=write&zone=" + encodeURIComponent(zone),
+        success: function(result) {
+            //the server rejects a name the zone database does not know, and says so rather
+            //than storing it - a device filed under a zone that does not exist would quietly
+            //fall back to the browser, which is the bug this is here to remove
+            if (String(result || '').trim()) {
+                alert(result);
+                return;
+            }
+
+            deviceTimezone = null;
+            fetchTimezone();
+        }
+    });
+}
 
 function saveSettings() {
     $.ajax({
@@ -2047,6 +2119,9 @@ document.addEventListener('click', function(e) {
     //reloaded, because that href keeps its fragment; only closing did.
     window.location.replace(href);
 });
+
+//once, before anything is drawn: every time on the page is rendered in this zone
+fetchTimezone();
 
 setTimeout(updateCurrentPosition, 500);
 setInterval(updateCurrentPosition, 10000);

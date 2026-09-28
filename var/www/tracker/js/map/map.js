@@ -16,36 +16,95 @@ closer.onclick = function() {
     return false;
 };
 
-function travelLayerStyle(feature) {
-    var styles = [
-        // linestring
-        new ol.style.Style({
-            stroke: new ol.style.Stroke({
-                color: 'blue',
-                width: 4,
-            }),
-        })
-    ];
+//How far apart the direction arrows sit, measured on the screen rather than on the ground.
+var ARROW_SPACING_PX = 90;
 
-    feature.getGeometry().forEachSegment(function(start, end) {
-        var dx = end[0] - start[0];
-        var dy = end[1] - start[1];
-        var rotation = Math.atan2(dy, dx);
-        // arrows
-        styles.push(
+//A ceiling on how many are drawn at once. Only reachable when a track wanders far outside
+//the viewport, since anything on screen is bounded by the window divided by the spacing.
+var ARROW_LIMIT = 400;
+
+/*
+ * The travelled track, with an arrow every ARROW_SPACING_PX along it.
+ *
+ * There used to be one arrow per segment. A segment is one reading to the next, so at a
+ * minute apart and walking pace they are metres long: zoom out and several hundred fixed
+ * size arrows land on top of each other and the track reads as a thick worm rather than a
+ * line with a direction.
+ *
+ * Spacing them by distance on screen fixes it at every zoom, and it is the spacing that
+ * has to change rather than the size - shrinking the arrows to fit would just make an
+ * unreadable worm out of smaller arrows.
+ *
+ * Returned as a function, which is what makes it work: OpenLayers calls a style function
+ * again on every render with the current resolution, while a style array is built once and
+ * never revisited. The old one kept whatever spacing was current when the track was first
+ * drawn, however far you zoomed afterwards. Every caller already passes the result straight
+ * to setStyle() or a layer's style, both of which take a function, so none of them change.
+ */
+function travelLayerStyle(feature) {
+    return function(styled, resolution) {
+        var styles = [
+            // linestring
             new ol.style.Style({
-                geometry: new ol.geom.Point(end),
-                image: new ol.style.Icon({
-                    src: 'icons/arrow.png',
-                    anchor: [0.75, 0.5],
-                    rotateWithView: true,
-                    rotation: -rotation,
+                stroke: new ol.style.Stroke({
+                    color: 'blue',
+                    width: 4,
                 }),
             })
-        );
-    });
+        ];
 
-    return styles;
+        var geometry = styled ? styled.getGeometry() : feature.getGeometry();
+
+        if (!geometry || !resolution) {
+            return styles;
+        }
+
+        //resolution is map units per pixel, so this is the on-screen spacing in map units
+        var spacing = ARROW_SPACING_PX * resolution;
+        //distance already walked since the last arrow, carried across segment boundaries so
+        //that a run of very short segments still accumulates into one arrow
+        var since = spacing / 2;
+
+        geometry.forEachSegment(function(start, end) {
+            if (styles.length > ARROW_LIMIT) {
+                return;
+            }
+
+            var dx = end[0] - start[0];
+            var dy = end[1] - start[1];
+            var length = Math.sqrt(dx * dx + dy * dy);
+
+            if (length === 0) {
+                return;
+            }
+
+            var rotation = Math.atan2(dy, dx);
+
+            for (var along = spacing - since; along <= length; along += spacing) {
+                var t = along / length;
+
+                styles.push(
+                    new ol.style.Style({
+                        geometry: new ol.geom.Point([start[0] + dx * t, start[1] + dy * t]),
+                        image: new ol.style.Icon({
+                            src: 'icons/arrow.png',
+                            anchor: [0.75, 0.5],
+                            rotateWithView: true,
+                            rotation: -rotation,
+                        }),
+                    })
+                );
+
+                if (styles.length > ARROW_LIMIT) {
+                    break;
+                }
+            }
+
+            since = (since + length) % spacing;
+        });
+
+        return styles;
+    };
 }
 
 const markerIcon = new ol.style.Icon({
