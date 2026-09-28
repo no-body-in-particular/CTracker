@@ -1610,3 +1610,94 @@ nav {
 #geofence .table-scroll {
     flex: 0 0 auto;
 }
+
+
+/* ---- touched rather than clicked, and iOS in particular ------------------ */
+
+/*
+ * Mobile Safari zooms the page in whenever a form control whose computed font size is under
+ * 16px takes focus, and it does not zoom back out when the field is done with. Every field
+ * here was 10pt - 13.3px - and the three range pickers 9pt on a narrow screen, so tapping the
+ * date box on an iPhone scaled the whole page up and left it scaled. html and body are both
+ * overflow:hidden, so there was then no scrolling across to the half of the map that had gone
+ * off the right hand edge: reloading was the only way back.
+ *
+ * Sixteen pixels is where the behaviour stops, so sixteen pixels is what they get. Keyed on
+ * the pointer rather than on the width, because it is a property of the input device and not
+ * of the screen - a phone held sideways is wider than some laptops, and a laptop with a mouse
+ * gains nothing from larger fields. A finger has an easier time of them at this size anyway.
+ */
+@media (pointer: coarse) {
+
+    .input,
+    .input_small,
+    .select,
+    #rangeControls .input,
+    select,
+    textarea,
+    .button {
+        font-size: 16px;
+    }
+
+    /* The picker row was forced onto one line because three controls at 9pt fitted and a
+       second row cost panel height. At 16px they no longer fit across a phone, and nowrap
+       does not make room - it runs off the side of the screen. Wrapping is the honest answer
+       here, and --pickers is measured from the rendered row at runtime, so whatever is open
+       below already steps out of the way of however many rows it comes to. */
+    #rangeControls {
+        flex-wrap: wrap;
+    }
+
+    /* the grey rectangle iOS paints over whatever was tapped, and the wait for a possible
+       second tap - which came back when maximum-scale was dropped from the viewport */
+    a,
+    nav a,
+    .button,
+    .chip,
+    .playctl,
+    .table tr {
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+}
+
+/*
+ * vh on iOS means the viewport with the browser's own toolbars retracted, which is not the
+ * viewport anything is being drawn into while they are showing. A panel capped at 46vh is
+ * taller than the room it has, and the part that overhangs is the bottom - which is where the
+ * buttons are. Adding a fence on an iPhone meant reaching for a Save that was behind the
+ * toolbar, in a panel that had nothing left to scroll.
+ *
+ * dvh is the same measurement taken against the viewport as it currently stands, so the panel
+ * is whatever will fit at the moment, toolbars or no toolbars. Safari has had it since 15.4
+ * and the other engines since 2022; where it is missing the vh rules above still apply and
+ * nothing is worse than it was.
+ */
+@supports (height: 100dvh) {
+
+    .table-scroll {
+        height: 40dvh;
+    }
+
+    #geofence,
+    #account,
+    #trips {
+        max-height: 46dvh;
+    }
+
+    #geofence .table-scroll,
+    #account .table-scroll,
+    #trips .table-scroll {
+        max-height: 34dvh;
+    }
+
+    .photoViewer img {
+        max-height: 94dvh;
+    }
+
+    @media (orientation: portrait) {
+        .table-scroll {
+            height: 54dvh;
+        }
+    }
+}

@@ -1906,6 +1906,54 @@ function refreshData() {
  * actually selected: history behind, as much room ahead, and rollAutoRange to move it on when
  * that room is used up.
  */
+/*
+ * The chosen width of the window, kept between visits.
+ *
+ * It went back to twenty four hours on every load, including the reload that closing a panel
+ * used to cause, so anyone who works in seven day views re-chose it several times a session.
+ * Twenty four is still what a browser that has never been here gets - it is the option marked
+ * selected in tracker.php, and nothing below touches the control unless there is a stored
+ * answer to put in it.
+ *
+ * Same storage as the stat groups above, for the same reason: store.js is not loaded on this
+ * page, and private browsing can refuse localStorage outright, in which case the choice
+ * simply does not carry over.
+ */
+var RANGE_HOURS_KEY = 'rangeHours';
+
+function rememberRange() {
+    var el = document.getElementById('hourCount');
+
+    try {
+        if (el) { window.localStorage.setItem(RANGE_HOURS_KEY, el.value); }
+    } catch (e) {
+        //not being able to remember it is not a reason to refuse the choice
+    }
+}
+
+function restoreRange() {
+    var el = document.getElementById('hourCount');
+    var stored = null;
+
+    if (!el) { return; }
+
+    try {
+        stored = window.localStorage.getItem(RANGE_HOURS_KEY);
+    } catch (e) {
+        return;
+    }
+
+    //only a value the control actually offers. a stored number that is no longer one of the
+    //options would set select.value to "" and leave the box blank, and selectedHours() would
+    //then fall back to 24 while the user looked at an empty picker
+    for (var i = 0; el.options && i < el.options.length; i++) {
+        if (el.options[i].value === stored) {
+            el.value = stored;
+            return;
+        }
+    }
+}
+
 function selectedHours() {
     var el = document.getElementById('hourCount');
     var v = el ? parseFloat(el.value) : 24;
@@ -1960,6 +2008,7 @@ function rangeEdited() {
  * them means it.
  */
 function durationEdited() {
+    rememberRange();
     autoRange = true;
     setBeginDate(autoRangeMinutes());
     searchdateChange();
@@ -2128,6 +2177,8 @@ setInterval(updateCurrentPosition, 10000);
 setInterval(refreshData, 80000);
 setInterval(fetchLogging, 280000);
 
+//before the first range is worked out, since autoRangeMinutes() reads the control
+restoreRange();
 setBeginDate(autoRangeMinutes());
 
 function setBeginDate(offsetMinutes) {
