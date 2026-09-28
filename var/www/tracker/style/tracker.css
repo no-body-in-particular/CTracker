@@ -611,7 +611,7 @@ section:target h1 {
     /* The panel reaches the top of the screen, but the range pickers float over that corner
        and stay above it, so the contents start below them. Padding rather than a top offset,
        so the panel is edge to edge and only what is written in it steps out of the way. */
-    padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
+    padding: calc(var(--pickers) + var(--banner, 0px) + 4px) 6pt 6pt 6pt;
     overflow: hidden;
 }
 
@@ -620,7 +620,11 @@ section:target h1 {
    being covered by it. Styled to match the panel instead of the pale inputs the tables use. */
 #rangeControls {
     position: absolute;
-    top: 4pt;
+    /* --banner is the height of the connection bar while it is up, and 0 the rest of the
+       time. Without this the bar covered the date, the time and the range - the three
+       controls nearest the top of the screen - so the first thing it did was hide the part
+       of the page someone would reach for on being told nothing is updating. */
+    top: calc(4pt + var(--banner, 0px));
     /* centred across the top rather than tucked into the right corner, and the three controls
        are centred against each other too - a date field, a time field and a select do not come
        out the same height on their own */
@@ -1086,7 +1090,7 @@ section {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: calc(var(--pickers) + 4px) 6pt 6pt 6pt;
+    padding: calc(var(--pickers) + var(--banner, 0px) + 4px) 6pt 6pt 6pt;
 }
 
 /* Two panels work on the map rather than instead of it, so a full height window is the wrong
@@ -1687,6 +1691,20 @@ nav {
 /* Above the panels and the rail, because it is the reason none of them are being filled in.
    Fixed to the top rather than dropped into the layout: there is no guarantee anything else
    on the page has rendered by the time this is needed. */
+/*
+ * hidden has to win, and by default it does not.
+ *
+ * "#connectionLost { display: flex }" is one id, and the browser's own "[hidden] { display:
+ * none }" is one attribute, so the id rule is the more specific of the two and the element
+ * stayed laid out whatever the attribute said. The bar was therefore on screen from the
+ * moment the page loaded - empty, except for the Log in link sitting in the markup - and it
+ * had nothing to do with whether anyone was logged in. Naming the attribute alongside the id
+ * puts the two back in the order the attribute is for.
+ */
+#connectionLost[hidden] {
+    display: none;
+}
+
 #connectionLost {
     position: fixed;
     top: 0;

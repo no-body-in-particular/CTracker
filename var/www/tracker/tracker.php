@@ -280,8 +280,11 @@ validateSession();
       <!-- Hidden until something actually goes wrong. Outside #around so that it is not
            inside the map's touch-action:none region and not affected by the panel layout. -->
       <div id="connectionLost" hidden>
+         <!-- Both filled in by showConnectionLost(), which knows which of the two went
+              wrong. Empty here so that a moment of being visible for any other reason shows
+              nothing rather than an invitation to log in again. -->
          <span id="connectionLostText"></span>
-         <a href="index.php" id="connectionLostAction">Log in</a>
+         <a href="index.php" id="connectionLostAction"></a>
       </div>
       <script type="text/javascript" src="js/map/helper.js"></script>
       <script type="text/javascript" src="js/map/map.js"></script>

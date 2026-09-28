@@ -2395,12 +2395,19 @@ function showConnectionLost(text, action, href) {
     link.textContent = action;
     link.href = href;
     bar.hidden = false;
+
+    //measured after it is shown, because a hidden element has no height. Everything anchored
+    //to the top of the page reads this and steps down by it.
+    document.documentElement.style.setProperty('--banner', bar.offsetHeight + 'px');
 }
 
 function clearConnectionLost() {
     var bar = document.getElementById('connectionLost');
 
-    if (bar) { bar.hidden = true; }
+    if (!bar || bar.hidden) { return; }
+
+    bar.hidden = true;
+    document.documentElement.style.setProperty('--banner', '0px');
 }
 
 $(document).ajaxError(function (event, jqxhr) {
