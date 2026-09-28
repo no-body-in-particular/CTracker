@@ -351,4 +351,25 @@
  */
 #define MIN_FENCE_SATELLITES 6
 
+/*
+ * How far past the edge of an inclusion zone counts as having left it, in kilometres, and how
+ * many fixes in a row have to say so.
+ *
+ * A fence has a hard edge and a GPS fix does not. A good fix still scatters ten to thirty
+ * metres, so a wearer standing near the boundary of their own zone crosses it and comes back
+ * several times without moving: two of this bracelet's alarms were raised at three metres and
+ * at zero metres outside a hundred and thirty metre circle, which is a fence measuring its own
+ * noise. Both were in the garden.
+ *
+ * The margin covers the scatter and the count covers the excursion that lasts one reading.
+ * Neither hides a real departure - walking out of a zone puts you tens of metres past it
+ * within one fix and keeps you there - and together they cost about twenty seconds of warning
+ * on a genuine one, against an alarm that meant nothing at all.
+ *
+ * MIN_FENCE_SATELLITES handles the other half of this: a fix too weak to place the device is
+ * kept out of the judgement entirely, rather than merely needing to be further out.
+ */
+#define FENCE_EXIT_MARGIN 0.025         //25 metres past the radius before it counts
+#define FENCE_OUTSIDE_FIXES 2           //consecutive fixes that have to agree
+
 #define FENCE_REPEAT_INTERVAL 600       //seconds before the same fence alert is logged again

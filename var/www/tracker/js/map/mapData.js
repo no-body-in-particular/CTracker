@@ -2169,6 +2169,57 @@ document.addEventListener('click', function(e) {
     window.location.replace(href);
 });
 
+/*
+ * Whether the page is still being answered, and whether it is still allowed to ask.
+ *
+ * Every panel here loads over ajax, and until now a request that failed did nothing visible:
+ * the handlers are all success-only, so a dead server and an expired session both came out as
+ * a map with no positions on it and no explanation. Two people hit exactly that - one when the
+ * server was restarted under an open tab, and one on an iPhone that had simply been logged out
+ * - and both reasonably read the grey map as the tracker having stopped working.
+ *
+ * jQuery raises ajaxError for every failed request on the page, so this is the one place that
+ * has to know. A 401 is validateIMEI() saying the session is gone; anything else at this level
+ * is the network or the server. They need different words and different offers, so they get
+ * them.
+ */
+function showConnectionLost(text, action, href) {
+    var bar = document.getElementById('connectionLost');
+    var link = document.getElementById('connectionLostAction');
+
+    if (!bar) { return; }
+
+    document.getElementById('connectionLostText').textContent = text;
+    link.textContent = action;
+    link.href = href;
+    bar.hidden = false;
+}
+
+function clearConnectionLost() {
+    var bar = document.getElementById('connectionLost');
+
+    if (bar) { bar.hidden = true; }
+}
+
+$(document).ajaxError(function (event, jqxhr) {
+    //a request cancelled because the page is going away is not a failure worth reporting
+    if (jqxhr.statusText === 'abort') { return; }
+
+    if (jqxhr.status === 401) {
+        showConnectionLost('Your session has ended, so nothing here is being updated.',
+                           'Log in again', 'index.php');
+        return;
+    }
+
+    showConnectionLost('The server is not answering, so nothing here is being updated.',
+                       'Try again', window.location.href);
+});
+
+//one request getting through means whatever it was has passed
+$(document).ajaxSuccess(function () {
+    clearConnectionLost();
+});
+
 //once, before anything is drawn: every time on the page is rendered in this zone
 fetchTimezone();
 

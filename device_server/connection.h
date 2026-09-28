@@ -106,6 +106,12 @@ typedef struct {
      * let a weak fix borrow the confidence of a good one.
      */
     int fix_sat_count;
+    /*
+     * Consecutive judged fixes that have found the device outside every active inclusion
+     * zone. Reset the moment one lands inside one, so it counts an excursion rather than a
+     * total. See FENCE_OUTSIDE_FIXES.
+     */
+    int outside_fence_count;
     time_t device_time;
     time_t since_last_locate;
     //assembly of an image arriving over several packets. The buffer is only allocated while

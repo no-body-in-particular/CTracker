@@ -448,8 +448,31 @@ bool move_to(connection * conn, time_t device_time, int position_type, double la
             }
         }
 
-        if (fence_mandatory && false == in_mandatory && false == got_alert) {
-            fence_alert(conn, allow_trigger, f_outside, "outside of inclusion zone", lat, lon, 0);
+        if (false == fence_mandatory || in_mandatory) {
+            //back inside one of them, so whatever was being counted is over
+            conn->outside_fence_count = 0;
+
+        } else {
+            conn->outside_fence_count++;
+
+            /*
+             * f_outside is the nearest zone the device is not in, so this is how far past its
+             * edge the fix sits. Under the margin it is the fix wandering rather than the
+             * wearer walking - see FENCE_EXIT_MARGIN.
+             */
+            double past_edge = haversineDistance(f_outside.lat, f_outside.lon, lat, lon) - f_outside.radius;
+
+            if (past_edge <= FENCE_EXIT_MARGIN) {
+                log_line(conn, "%.0f m outside %s, within the %.0f m margin - not alerting\n",
+                         past_edge * 1000, f_outside.name, FENCE_EXIT_MARGIN * 1000);
+
+            } else if (conn->outside_fence_count < FENCE_OUTSIDE_FIXES) {
+                log_line(conn, "%.0f m outside %s on fix %d of %d - waiting for the next one\n",
+                         past_edge * 1000, f_outside.name, conn->outside_fence_count, FENCE_OUTSIDE_FIXES);
+
+            } else if (false == got_alert) {
+                fence_alert(conn, allow_trigger, f_outside, "outside of inclusion zone", lat, lon, 0);
+            }
         }
     }
 

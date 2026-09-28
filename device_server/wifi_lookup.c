@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <errno.h>
 #include "string.h"
 #include "util.h"
 #include "wifi_lookup.h"
@@ -217,17 +218,35 @@ void wifi_initialise_database(wifi_db * database) {
 }
 
 
-void wifi_database_to_file(wifi_db * database, char * file) {
+/*
+ * Returns whether the database reached the disk.
+ *
+ * It used to return nothing, and the caller announced "Done writing WiFi database" either
+ * way. The file spent five days owned by root while the daemon runs as hiawatha - left that
+ * way by a tool that rewrote it - and every save for those five days printed the failure and
+ * the success one after the other, so the log read as though the learning was being kept.
+ * None of it was. A message that is printed whatever happened is not a report.
+ */
+bool wifi_database_to_file(wifi_db * database, char * file) {
+    //fopen returns a pointer; the old test compared it with <= 0, which is only accidentally
+    //the same question and is not one the language promises to answer
     FILE * fp = fopen(file, "w+b");
 
-    if (fp <= 0) {
-        fprintf(stdout, "Failed to open wifi database file for writing.\n");
-        return;
+    if (NULL == fp) {
+        fprintf(stdout, "Failed to open %s for writing: %s\n", file, strerror(errno));
+        return false;
     }
 
     fwrite(&database->network_count, sizeof(database->network_count), 1, fp);
     fwrite(database->network_buffer, database->network_count * sizeof(wifi_db_entry), 1, fp);
-    fclose(fp);
+
+    //a short write only shows up here, after the buffers are flushed
+    if (0 != fclose(fp)) {
+        fprintf(stdout, "Failed to finish writing %s: %s\n", file, strerror(errno));
+        return false;
+    }
+
+    return true;
 }
 
 void wifi_database_from_file(wifi_db * database, char * file) {
@@ -332,8 +351,16 @@ void wifi_cache_to_database(wifi_db * database) {
     memcpy(database->network_buffer + tower_idx, database->network_cache, database->cache_count * sizeof(wifi_db_entry));
     database->cache_count = 0;
     wifi_sort(database);
-    wifi_database_to_file(database, WIFIDB_FILE);
-    fprintf(stdout, "Done writing WiFi database. Old count: %u New count: %u\n", tower_idx, database->network_count);
+    if (wifi_database_to_file(database, WIFIDB_FILE)) {
+        fprintf(stdout, "Done writing WiFi database. Old count: %u New count: %u\n", tower_idx, database->network_count);
+
+    } else {
+        //the merged entries are in memory and will be offered again at the next save, so
+        //nothing is lost until the process ends - which is worth saying, because it is the
+        //difference between fixing this today and fixing it before the next restart
+        fprintf(stdout, "WiFi database NOT saved - %u entries are in memory only and will be lost on restart\n",
+                database->network_count);
+    }
 }
 
 static wifi_db wifi_database;

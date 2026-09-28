@@ -193,6 +193,18 @@ function validateIMEI($imei)
         return true;
     }
 
+    /*
+     * An empty body with a 200 on it is indistinguishable from a device that has no data,
+     * which is how a tab whose session had gone came to show a grey map and say nothing. A
+     * PHP session does not survive a restart of the server, so every tab that was open when
+     * it came back looked like a tracker that had stopped reporting - including on a phone,
+     * where there is no console to check and reloading is not the obvious thing to try.
+     *
+     * The body stays empty: nothing here should try to render a login page inside a data
+     * response. The status code is what carries the meaning, and the page acts on it.
+     */
+    http_response_code(401);
+
     exit('');
 }
 

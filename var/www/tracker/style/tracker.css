@@ -1648,6 +1648,29 @@ nav {
         flex-wrap: wrap;
     }
 
+    /*
+     * A pinch belongs to whatever is under it.
+     *
+     * OpenLayers sets no touch-action at all, so on iOS a pinch over the map was taken by the
+     * browser as a zoom of the whole page: the icon rail grew with everything else and slid
+     * off the side, and because html and body are overflow:hidden there was then nothing to
+     * scroll back with. Pinching out did not reliably undo it either, since by then the
+     * gesture might land on the map and zoom that instead. Hence "sometimes zooming does not
+     * work, or worse".
+     *
+     * none over the map and the rail hands those touches to the page's own code, which is
+     * what has a zoom to offer. The panels keep panning so their lists still scroll, but not
+     * pinch-zoom, which over a table of times does nothing anyone wants.
+     */
+    #aroundMap,
+    nav {
+        touch-action: none;
+    }
+
+    section {
+        touch-action: pan-x pan-y;
+    }
+
     /* the grey rectangle iOS paints over whatever was tapped, and the wait for a possible
        second tap - which came back when maximum-scale was dropped from the viewport */
     a,
@@ -1658,6 +1681,41 @@ nav {
     .table tr {
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
+    }
+}
+
+/* Above the panels and the rail, because it is the reason none of them are being filled in.
+   Fixed to the top rather than dropped into the layout: there is no guarantee anything else
+   on the page has rendered by the time this is needed. */
+#connectionLost {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    display: flex;
+    gap: 8pt;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 6pt 10pt;
+    background: #8a2f2f;
+    color: #fff;
+    font-family: Montserrat, sans-serif;
+    font-size: 10pt;
+    text-align: center;
+}
+
+#connectionLost a {
+    color: #fff;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+    #connectionLost {
+        font-size: 13pt;
+        padding: 9pt 10pt;
     }
 }
 

@@ -258,6 +258,7 @@ void init_imei(connection * conn) {
     init_position(conn);
     read_disabled_alarms(conn);
     conn->fix_sat_count = -1;
+    conn->outside_fence_count = 0;
     read_disabled_fences(conn);
     read_geofence(conn);
     //Only an absence worth noticing goes in the event log. This device re-opens its socket

@@ -273,6 +273,12 @@ validateSession();
             <div id="popup-content" style="width:20em;"></div>
          </div>
       </div>
+      <!-- Hidden until something actually goes wrong. Outside #around so that it is not
+           inside the map's touch-action:none region and not affected by the panel layout. -->
+      <div id="connectionLost" hidden>
+         <span id="connectionLostText"></span>
+         <a href="index.php" id="connectionLostAction">Log in</a>
+      </div>
       <script type="text/javascript" src="js/map/helper.js"></script>
       <script type="text/javascript" src="js/map/map.js"></script>
       <script type="text/javascript" src="js/map/trips.js"></script>
