@@ -99,6 +99,13 @@ typedef struct {
     float last_gps_lon;
     size_t current_position_type;
     size_t current_sat_count;
+    /*
+     * Satellites behind the fix being handled right now, or -1 when the protocol did not
+     * say. Set immediately before move_to() and cleared by it, so it always describes this
+     * fix and never the one before - a stale count would be worse than none, since it would
+     * let a weak fix borrow the confidence of a good one.
+     */
+    int fix_sat_count;
     time_t device_time;
     time_t since_last_locate;
     //assembly of an image arriving over several packets. The buffer is only allocated while

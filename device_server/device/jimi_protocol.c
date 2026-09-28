@@ -69,9 +69,14 @@ void print_gps_info(connection * conn, information_package package) {
                              package.date_time.minute,
                              package.date_time.second);
 
-    if ((info.num_satelites & 0x0f) >= 4 ) {
-        move_to(conn, dt, 0, lat, lon);
-    }
+    /*
+     * Record the fix whatever its quality, and let move_to() decide separately whether it is
+     * good enough to test against the fences. The old threshold of four threw the position
+     * away entirely, which lost the track without stopping the false alarms - four
+     * satellites was still enough to raise one.
+     */
+    conn->fix_sat_count = (int)(info.num_satelites & 0x0f);
+    move_to(conn, dt, 0, lat, lon);
 
     write_stat(conn, "gps_sats", info.num_satelites & 0x0f);
 }

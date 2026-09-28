@@ -643,6 +643,11 @@ void thinkrace_process_position(connection * conn, size_t parse_count, unsigned 
         //packet as a repeat of a fix already recorded, writing them again only files a second
         //copy under the original timestamp. the timeout is refreshed either way - a repeat is
         //still the device telling us it is there.
+        //so move_to() can tell a confident fix from a wandering one - see
+        //MIN_FENCE_SATELLITES. Only meaningful for a GPS fix; for the wifi and tower paths
+        //num_sats counts networks and towers, which say nothing about GPS quality.
+        conn->fix_sat_count = position_type == 0 ? num_sats : -1;
+
         if (move_to(conn, dt, position_type, lat, lng)) {
             write_stat(conn, "battery_level", battery_level);
             write_sat_count(conn, position_type, num_sats);

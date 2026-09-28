@@ -24,11 +24,14 @@ time_t time_on_day(int day, int hour, int minute) {
     struct tm tm = *gmtime(&t);
     tm.tm_mday += day - tm.tm_wday ;
 
-    if (tm.tm_mday > months[tm.tm_mon]) {
-        tm.tm_mday -= months[tm.tm_mon];
-        tm.tm_mon + 1;
-    }
-
+    /*
+     * No month correction here. There used to be one, and it was broken in two ways at
+     * once: "tm.tm_mon + 1;" is an expression with no effect, so the day was rolled back
+     * over the end of the month while the month itself never advanced - landing a month
+     * early - and February was hard coded to 28. timegm() normalises an out-of-range
+     * tm_mday on its own, across months and years and leap days, so the whole thing was
+     * unnecessary as well as wrong.
+     */
     tm.tm_wday = day;
     tm.tm_hour = hour;
     tm.tm_min = minute ;
@@ -138,12 +141,20 @@ geofence fence_from_str(char * str) {
         }
     }
 
-    //all day fence
-    if ((ret.start_hour * 60 + ret.start_minute) == ( ret.end_hour * 60 + ret.end_minute)) {
+    /*
+     * The same time twice means all day.
+     *
+     * This used to be written as 00:00 to 23:59, which is all day less a minute: the window
+     * is tested with "now > start && now < end", so every night between 23:59 and midnight
+     * the fence was not enforced. Midnight to midnight closes that, and says what is meant.
+     */
+    bool all_day = (ret.start_hour * 60 + ret.start_minute) == (ret.end_hour * 60 + ret.end_minute);
+
+    if (all_day) {
         ret.start_hour = 0;
         ret.start_minute = 0;
-        ret.end_hour = 23;
-        ret.end_minute = 59;
+        ret.end_hour = 0;
+        ret.end_minute = 0;
     }
 
     //every day fence, set the start date to today
@@ -154,7 +165,10 @@ geofence fence_from_str(char * str) {
     ret.fence_start_today = time_on_day(ret.day_of_week, ret.start_hour, ret.start_minute);
     ret.fence_end_today =  time_on_day(ret.day_of_week, ret.end_hour, ret.end_minute);
 
-    if (ret.fence_start_today > ret.fence_end_today) {
+    if (all_day) {
+        ret.fence_end_today = ret.fence_start_today + (24 * 60 * 60);
+
+    } else if (ret.fence_start_today > ret.fence_end_today) {
         ret.fence_start_today = time_on_day(ret.day_of_week - 1, ret.start_hour, ret.start_minute);
         ret.fence_end_today =  time_on_day(ret.day_of_week, ret.end_hour, ret.end_minute);
     }
@@ -242,7 +256,8 @@ void fence_alert(connection * conn, bool alarms, geofence fence, char * message,
     strcpy(buffer, fence.name);
     strcat(buffer, ": ");
     strcat(buffer, message);
-    log_event(conn, buffer);
+    //the position that broke the fence, not the one before it - see log_event_at()
+    log_event_at(conn, buffer, lat, lon);
 }
 
 /*
@@ -337,7 +352,28 @@ bool move_to(connection * conn, time_t device_time, int position_type, double la
         write_stat(conn, "speed", speed);
     }
 
-    if ( position_type != 1 && (conn->current_lat != 0 || conn->current_lon != 0) && conn->fence_count > 0) {
+    /*
+     * A fix too weak to place the device is not evidence about where it is.
+     *
+     * Tower fixes were already kept out of this - their error is kilometres. A GPS fix from
+     * three or four satellites is the same problem at a smaller scale: it wanders a couple
+     * of hundred metres, which is enough to cross a hundred metre fence and come back
+     * within two readings. See MIN_FENCE_SATELLITES.
+     *
+     * The position is still recorded above; this only decides whether it may raise an
+     * alarm. A protocol that reports no satellite count leaves fix_sat_count at -1 and is
+     * judged as before.
+     */
+    bool fix_can_judge = !(position_type == 0
+                           && conn->fix_sat_count >= 0
+                           && conn->fix_sat_count < MIN_FENCE_SATELLITES);
+
+    if (!fix_can_judge) {
+        log_line(conn, "fix has %d satellites, below %d - recorded, but not tested against the fences\n",
+                 conn->fix_sat_count, MIN_FENCE_SATELLITES);
+    }
+
+    if ( fix_can_judge && position_type != 1 && (conn->current_lat != 0 || conn->current_lon != 0) && conn->fence_count > 0) {
         bool fence_mandatory = false;
         bool in_mandatory = false;
         bool got_alert = false;
@@ -417,6 +453,8 @@ bool move_to(connection * conn, time_t device_time, int position_type, double la
         }
     }
 
+    //this fix has been dealt with; the next one says for itself how good it is
+    conn->fix_sat_count = -1;
     conn->current_lat = lat;
     conn->current_lon = lon;
     conn->current_speed = speed;

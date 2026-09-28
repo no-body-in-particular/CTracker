@@ -334,4 +334,21 @@
  * consecutive events ten seconds apart in the recorded history, one fence accounting for
  * 22143 of them - and a log nobody can read is a log that hides the next real alarm.
  */
+/*
+ * How many satellites a GPS fix needs before it is allowed to raise a fence alarm.
+ *
+ * Recording a position and judging a boundary with it are different claims. A fix from four
+ * satellites is worth keeping on the map; it is not worth waking someone at two in the
+ * morning over, because its error is comparable to the fence itself.
+ *
+ * From a week of this bracelet: every one of the fifteen false excursions lasted one to
+ * three fixes, never rose above five satellites, and never reached three hundred metres
+ * outside a hundred metre fence - the position wandered while the wearer slept. Every real
+ * outing ran for tens or hundreds of fixes with seven satellites or more. Six separates
+ * them with room on both sides.
+ *
+ * The position is still recorded either way. Only its vote on the fence is withheld.
+ */
+#define MIN_FENCE_SATELLITES 6
+
 #define FENCE_REPEAT_INTERVAL 600       //seconds before the same fence alert is logged again

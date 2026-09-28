@@ -410,6 +410,34 @@ void log_buffer(connection * conn) {
 }
 
 
+/*
+ * An event at a position the caller names, rather than at whatever the connection last
+ * stored.
+ *
+ * move_to() evaluates the fences before it adopts the new position - it has to, because a
+ * crossing is only visible by comparing where the device was against where it now is. So
+ * while a fence alert is being written, conn->current_lat still holds the PREVIOUS fix, and
+ * an alert logged through log_event() came out one position behind: the red dot on the map
+ * sat where the wearer was a minute before they crossed the line, which is exactly where
+ * they had not crossed it.
+ *
+ * fence_alert() already receives the position that broke the fence. This is how it gets to
+ * say so.
+ */
+void log_event_at(connection * conn, const unsigned char * response, float lat, float lon) {
+    time_t t = conn->device_time;
+    struct tm tm = *gmtime(&t);
+
+    if (!conn->current_speed_valid) {
+        eventprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,,%s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+                    lat, lon, response);
+        return;
+    }
+
+    eventprintf(conn, "%d-%02d-%02dT%02d:%02d:%02dZ,%f,%f,%.2f,%s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+                lat, lon, conn->current_speed, response);
+}
+
 void log_event(connection * conn, const unsigned char * response) {
     time_t t = conn->device_time;
     struct tm tm = *gmtime(&t);

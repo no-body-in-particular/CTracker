@@ -19,6 +19,7 @@ void log_fields(connection * conn, const char * prefix, unsigned char * fields[]
 void log_command_bytes(connection * conn, const unsigned char * buf, int start, int end, bool printable_only);
 void log_buffer(connection * conn);
 void log_event(connection * conn, const unsigned char * response) ;
+void log_event_at(connection * conn, const unsigned char * response, float lat, float lon);
 void write_stat(connection * conn, char * value_name, float value);
 void write_stat_at(connection * conn, char * value_name, float value, time_t when);
 void write_sat_count(connection * conn, int position_type, int num_sats);
