@@ -1759,3 +1759,72 @@ nav {
         }
     }
 }
+
+/* ---- what the fences are doing at this moment --------------------------- */
+
+/* Top of the panel, above the folder tree, because it answers the question the tree makes you
+   work out for yourself: of everything on file, what is awake right now and where does that
+   leave the wearer. */
+.fenceNow {
+    display: flex;
+    flex-direction: column;
+    gap: 2pt;
+    margin: 0 0 4pt 0;
+}
+
+.fenceNowLine {
+    padding: 4pt 7pt;
+    border-radius: 6pt;
+    border: 1px solid var(--line);
+    font-family: Montserrat, sans-serif;
+    font-size: 9pt;
+    color: var(--ink);
+}
+
+/* nothing is being enforced, so there is nothing to be right or wrong about */
+.fenceNow-quiet {
+    color: var(--ink-dim);
+}
+
+.fenceNow-ok {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* outside, but inside the margin the daemon allows for a fix's own scatter - a real state of
+   its own, and the one that used to come out as an alarm */
+.fenceNow-edge {
+    border-color: #f0b429;
+    color: #f0b429;
+}
+
+.fenceNow-alarm {
+    border-color: #e0796b;
+    color: #e0796b;
+}
+
+/* per fence, on its own row in the tree */
+.leafState {
+    font-size: 8pt;
+    border-radius: 5pt;
+    padding: 0 4pt;
+    white-space: nowrap;
+}
+
+.leafLive {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
+/* on file, in an enforced folder, and still doing nothing because of the clock or the day.
+   Stated rather than left blank: a blank says nothing about which of the two it is. */
+.leafAsleep {
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+}
+
+.folderLive {
+    color: var(--accent);
+    font-size: 8pt;
+    white-space: nowrap;
+}

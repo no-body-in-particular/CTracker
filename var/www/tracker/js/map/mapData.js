@@ -332,6 +332,164 @@ function folderDisabled(name) {
 var FENCE_DAYS = ['', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun', '', 'Every'];
 var FENCE_TYPES = ['In', 'Out', 'In+Out', 'Stay in', 'Exclusion zone'];
 
+var FENCE_STAY = 3;
+var FENCE_EXCLUDE = 4;
+
+//FENCE_EXIT_MARGIN in the daemon's config.h, in metres. Kept the same on both sides so the
+//page never says a fence is being broken while the daemon is deciding it is not.
+var FENCE_EXIT_MARGIN_M = 25;
+
+//where the device was last seen, so the panel can say where that is against each fence.
+//null until the first position arrives - a page opened before one has is honest about
+//knowing nothing rather than drawing conclusions from 0,0.
+var lastKnownLat = null;
+var lastKnownLon = null;
+
+/*
+ * When a fence applies, as the daemon works it out.
+ *
+ * A deliberate re-implementation of time_on_day() and the window handling in geofence.c,
+ * in UTC, because the stored times are UTC and the daemon compares them against UTC. Doing
+ * it in the viewer's clock, or even in the device's, would give a different answer at the
+ * edges and the page would contradict the thing it is describing.
+ *
+ * Returns [start, end] as epoch milliseconds for this week's occurrence.
+ */
+function fenceWindow(cols) {
+    var from = String(cols[0]).split(':');
+    var to = String(cols[1]).split(':');
+    var sh = parseInt(from[0], 10), sm = parseInt(from[1], 10);
+    var eh = parseInt(to[0], 10), em = parseInt(to[1], 10);
+    var day = parseInt(cols[2], 10);
+    var now = new Date();
+    var wday = now.getUTCDay();
+
+    if (!isFinite(sh) || !isFinite(sm) || !isFinite(eh) || !isFinite(em)) {
+        return null;
+    }
+
+    //convert_wday(): 1 to 7 fold to Monday through Sunday, and 8 or more means every day,
+    //which the daemon resolves to today
+    day = (!isFinite(day) || day >= 8 || day < 0) ? wday : (day % 7);
+
+    //the same time twice means all day - see the note in read_geofence()
+    var allDay = (sh * 60 + sm) === (eh * 60 + em);
+
+    if (allDay) { sh = 0; sm = 0; eh = 0; em = 0; }
+
+    //time_on_day(): today's UTC date walked to the named weekday of this same week
+    function onDay(d, h, m) {
+        return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(),
+                        now.getUTCDate() + (d - wday), h, m, 0);
+    }
+
+    var start = onDay(day, sh, sm);
+    var end = onDay(day, eh, em);
+
+    if (allDay) {
+        end = start + (24 * 60 * 60 * 1000);
+
+    } else if (start > end) {
+        //a window that crosses midnight began yesterday
+        start = onDay(day - 1, sh, sm);
+        end = onDay(day, eh, em);
+    }
+
+    return [start, end];
+}
+
+//being enforced at this moment: in a folder that is switched on, and inside its window
+function fenceLive(cols) {
+    if (folderDisabled(folderOf(cols))) {
+        return false;
+    }
+
+    var window = fenceWindow(cols);
+    var now = Date.now();
+
+    return window !== null && now > window[0] && now < window[1];
+}
+
+//how far the last known position is from this fence's edge, in metres: negative inside,
+//positive outside. null when nothing is known about where the device is.
+function fenceEdgeDistance(cols) {
+    if (lastKnownLat === null) {
+        return null;
+    }
+
+    var away = haversineDistance(parseFloat(cols[4]), parseFloat(cols[5]), lastKnownLat, lastKnownLon) * 1000;
+
+    return away - parseFloat(cols[6]);
+}
+
+/*
+ * The one line worth reading: what an arriving fix would be judged against right now.
+ *
+ * Inclusion zones are answered together, because the daemon answers them together - being
+ * inside any one of them is enough, and it is the combination that decides, not any single
+ * fence. Exclusion zones are separate: each one is broken on its own.
+ */
+function renderFenceNow() {
+    var box = document.getElementById('fenceNow');
+
+    if (!box) {
+        return;
+    }
+
+    var live = fenceRows.filter(fenceLive);
+    var stay = live.filter(rv => parseInt(rv[3], 10) === FENCE_STAY);
+    var breached = live.filter(rv => parseInt(rv[3], 10) === FENCE_EXCLUDE)
+        .filter(rv => { var d = fenceEdgeDistance(rv); return d !== null && d < 0; });
+
+    var parts = [];
+
+    if (!live.length) {
+        parts.push(['quiet', 'No fence is being enforced right now.']);
+
+    } else if (!stay.length) {
+        parts.push(['quiet', live.length + (live.length == 1 ? ' fence is' : ' fences are') +
+                    ' being enforced, none of them an inclusion zone.']);
+
+    } else if (lastKnownLat === null) {
+        parts.push(['quiet', stay.length + (stay.length == 1 ? ' inclusion zone is' : ' inclusion zones are') +
+                    ' being enforced. No position yet, so nothing to compare them against.']);
+
+    } else {
+        var withDistance = stay.map(rv => ({ rv: rv, past: fenceEdgeDistance(rv) }));
+        var inside = withDistance.filter(e => e.past <= 0);
+        var nearest = withDistance.reduce((best, e) => (best === null || e.past < best.past) ? e : best, null);
+
+        if (inside.length) {
+            //the daemon stops at the first zone that contains the device, so naming them all
+            //is more than it knows - but it is what answers "inside which one?". Three is
+            //enough to recognise the situation; a list of eleven is not read.
+            var named = inside.slice(0, 3).map(e => e.rv[8]).join(', ') +
+                        (inside.length > 3 ? ' and ' + (inside.length - 3) + ' more' : '');
+            //the reassuring half: the ones it is outside of do not matter, and that is the
+            //part people do not expect
+            var others = stay.length - inside.length;
+            parts.push(['ok', 'Inside ' + named + '.' +
+                        (others ? ' Outside ' + others +
+                         (others == 1 ? ' other, which raises nothing.' : ' others, which raise nothing.')
+                         : ' No inclusion alarm.')]);
+
+        } else if (nearest.past <= FENCE_EXIT_MARGIN_M) {
+            parts.push(['edge', 'Outside all ' + stay.length + ', but only ' + Math.round(nearest.past) +
+                        ' m past ' + nearest.rv[8] + ' - inside the ' + FENCE_EXIT_MARGIN_M +
+                        ' m margin, so no alarm.']);
+
+        } else {
+            parts.push(['alarm', 'Outside all ' + stay.length + '. Nearest is ' + nearest.rv[8] +
+                        ', ' + Math.round(nearest.past) + ' m past its edge.']);
+        }
+    }
+
+    breached.forEach(e => parts.push(['alarm', 'Inside the exclusion zone ' + e[8] + '.']));
+
+    box.innerHTML = parts.map(p =>
+        '<div class="fenceNowLine fenceNow-' + p[0] + '">' + escapeHtml(p[1]) + '</div>').join('');
+}
+
 /*
  * The fence exactly as it is written on disk, which is what the server matches on to delete
  * it. The folder is only appended when there is one: a row parsed out of a nine field line
@@ -853,9 +1011,33 @@ function fenceLeaf(cols, index) {
         //only worth saying when it is off. on is the default and the common case, and printing
         //it on every row was most of what made the table below noise.
         (cols[7] == 0 ? '<span class="leafSilent">silent</span>' : '') +
+        fenceLeafState(cols) +
         '<button type="button" class="leafDelete" title="delete this fence"' +
         ' onclick="event.stopPropagation(); deleteFenceAt(' + index + ')">delete</button>' +
         '</div>';
+}
+
+/*
+ * Whether this particular fence is doing anything at the moment, and where the wearer is
+ * against it. A list that shows nine fences with no way to tell which of them is awake is
+ * the reason an alarm naming one of them came as a surprise.
+ */
+function fenceLeafState(cols) {
+    if (!fenceLive(cols)) {
+        return '<span class="leafState leafAsleep">not now</span>';
+    }
+
+    var past = fenceEdgeDistance(cols);
+
+    if (past === null) {
+        return '<span class="leafState leafLive">live</span>';
+    }
+
+    if (past <= 0) {
+        return '<span class="leafState leafLive">live, inside</span>';
+    }
+
+    return '<span class="leafState leafLive">live, ' + Math.round(past) + ' m outside</span>';
 }
 
 /*
@@ -904,6 +1086,9 @@ function renderFolderTree() {
             '<span class="folderName">' + escapeHtml(name) + '</span>' +
             '<span class="folderCount">' + inside.length + (inside.length == 1 ? ' fence' : ' fences') + '</span>' +
             (off ? '<span class="folderBadge">not enforced</span>' : '') +
+            //how many of them are awake, which is not something a count of fences says
+            (off || !inside.length ? '' :
+             '<span class="folderLive">' + inside.filter(e => fenceLive(e.rv)).length + ' live now</span>') +
             '</span>' +
             '<label class="folderSwitch" title="whether the daemon enforces the fences in this folder">' +
             '<input type="checkbox"' + (off ? '' : ' checked') +
@@ -920,6 +1105,8 @@ function renderFolderTree() {
 
         return row + '<div class="folderChildren">' + children + '</div>';
     }).join('');
+
+    renderFenceNow();
 
     //a fence is added to the folder being looked at, which is almost always the intent
     var folderInput = document.getElementById("fenceFolder");
@@ -1808,6 +1995,10 @@ function statAt(name, dt, freshMs) {
 }
 
 function updateMarker(lat, lng, dt, forceMove = false) {
+    //the fence panel compares against this rather than reaching into the map's own layers
+    lastKnownLat = parseFloat(lat);
+    lastKnownLon = parseFloat(lng);
+
     var spd = findStat('speed', dt);
     var batlvl = findStat('battery_level', dt);
     var signal = findStat('signal', dt);
@@ -2029,6 +2220,17 @@ document.addEventListener('DOMContentLoaded', function () {
     //a minute is plenty: the window is twelve hours wide and nothing here needs to notice its
     //end to the second
     setInterval(rollAutoRange, 60000);
+
+    /*
+     * Fences come and go on the clock, so a panel left open goes stale on its own without
+     * anything having changed. Redrawn from what is already in memory - no request - and only
+     * while the panel is actually on screen, since the rest of the time nobody is reading it.
+     */
+    setInterval(function () {
+        if (window.location.hash === '#geofence') {
+            renderFolderTree();
+        }
+    }, 20000);
 });
 
 /*

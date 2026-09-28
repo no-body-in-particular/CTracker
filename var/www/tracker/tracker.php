@@ -118,6 +118,10 @@ validateSession();
                   the checkbox is what the daemon reads. A folder left unchecked keeps its
                   fences on file and simply stops them being enforced.
                -->
+               <!-- What the daemon would decide if a fix arrived this second. An alarm names
+                    only the nearest zone the wearer is not in, which is why "I was inside the
+                    fence" and "inside which one?" kept being different questions. -->
+               <div id="fenceNow" class="fenceNow" aria-live="polite"></div>
                <div class="fenceFolders">
                   <div id="folderTree" class="folderTree" role="tree" aria-label="Geofence folders"></div>
                </div>
