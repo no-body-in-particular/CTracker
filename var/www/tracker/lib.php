@@ -90,9 +90,42 @@ function validateName($code)
     return preg_match_all('/^[A-Za-z0-9\_\-\ ]{1,32}$/u', $code);
 }
 
+/*
+ * What counts as a password.
+ *
+ * The rule and the sentence shown next to it did not describe the same thing. It read
+ *
+ *     ^\S*(?=\S{8,31})(?=\S*[a-z])(?=\S*[A-Z])(?=\S*[\d])\S*$
+ *
+ * where \S is "anything that is not whitespace", so a space anywhere refused the password -
+ * silently, since the message said nothing about spaces and talked about a 32 character
+ * limit instead. There was no such limit: the lookahead only has to find eight characters,
+ * so the 31 never bound anything and a password of any length was accepted. Being told to
+ * use a name and a birthday and then having it rejected with a sentence about length is how
+ * that reads from the outside, and it is why a hyphen got the blame - a hyphen was always
+ * fine.
+ *
+ * So: spaces are allowed inside, because a passphrase is a good password and the people who
+ * recommend not banning characters are right. Not at either end, because whitespace that
+ * cannot be seen is a password nobody can retype. Seventy two is where bcrypt stops reading,
+ * so anything past it would be accepted here and then quietly ignored - a real limit, stated
+ * rather than discovered.
+ *
+ * Counted in bytes, like bcrypt counts, so an accented character costing two of them is
+ * measured the way the thing storing it measures.
+ */
 function validatePassword($pwd)
 {
-   return preg_match_all('/^\S*(?=\S{8,31})(?=\S*[a-z])(?=\S*[A-Z])(?=\S*[\d])\S*$/', $pwd);
+    if (!is_string($pwd) || strlen($pwd) < 8 || strlen($pwd) > 72) {
+        return false;
+    }
+
+    if ($pwd !== trim($pwd)) {
+        return false;
+    }
+
+    // no \s inside the character tests: a space is an ordinary character here
+    return 1 === preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/sD', $pwd);
 }
 
 function compareCaptcha($v1,$v2){

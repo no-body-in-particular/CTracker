@@ -26,7 +26,7 @@ if (isset($_GET['add']) && 'POST' === $_SERVER['REQUEST_METHOD']) {
                 // password. generate it here instead; the request can no longer choose it.
                 $ret = updateUser(uniqid(), $_POST['username'], $_POST['name'], $_POST['email'], $_POST['pwd']);
               }else{
-                $message = "Invalid password. Must be between 8 and 32 characters containing at least 1 uppercase, 1 lowercase letter and 1 number.";
+                $message = "Invalid password. Must be 8 to 72 characters with at least 1 uppercase letter, 1 lowercase letter and 1 number. Spaces are allowed inside it, but not at either end.";
               }
             }
         } else {

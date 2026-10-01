@@ -21,7 +21,7 @@ if ('POST' === $_SERVER['REQUEST_METHOD'] ) {
       updatePassword($user[0],$pwd);
       $message='Password changed. <meta http-equiv="Refresh" content="4; url=index.php"></meta>';
    }else{
-      $message='Invalid password. Must be between 8 and 32 characters containing at least 1 uppercase, 1 lowercase letter and 1 number.';
+      $message='Invalid password. Must be 8 to 72 characters with at least 1 uppercase letter, 1 lowercase letter and 1 number. Spaces are allowed inside it, but not at either end.';
    }
 }
 ?>

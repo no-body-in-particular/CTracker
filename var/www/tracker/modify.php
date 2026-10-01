@@ -43,7 +43,7 @@ if ('' === $pwd) {
 } elseif (!validatePassword($pwd)) {
     // modify.php never checked this, so the profile form could set a password that the
     // registration form would have rejected
-    exit('Invalid password. Must be between 8 and 32 characters containing at least 1 uppercase, 1 lowercase letter and 1 number.');
+    exit('Invalid password. Must be 8 to 72 characters with at least 1 uppercase letter, 1 lowercase letter and 1 number. Spaces are allowed inside it, but not at either end.');
 }
 
 $ret = updateUser($_SESSION['uid'], $_POST['username'], $_POST['name'], $_POST['email'], $pwd);
